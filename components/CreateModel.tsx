@@ -10,14 +10,15 @@ import { Compare } from './ui/compare';
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
 import Spinner from './Spinner';
 import { getFriendlyErrorMessage } from '../lib/utils';
-import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, BrandStyle, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem } from '../types';
+import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, BrandStyle, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem, User } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 import ResizeHandle from './ResizeHandle';
 import { useDebouncedEffect } from '../hooks/useDebouncedEffect';
-import { 
-    saveProjectState, 
+import {
+    saveProjectState,
     loadProjectState
 } from '../services/dbService';
+import { uploadBase64Image, isBase64Url } from '../services/storageService';
 import GlobalControls from './GlobalControls';
 import CollapsibleSection from './shared/CollapsibleSection';
 import OptionButton from './shared/OptionButton';
@@ -33,6 +34,7 @@ interface CreateModelProps {
   currentProjectId: string | null;
   onProjectChange: (id: string) => void;
   onOpenProjectModal: (mode: 'create' | 'edit') => void;
+  currentUser: User | null;
 }
 
 type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
@@ -167,13 +169,14 @@ const STYLE_PRESETS: { label: string, settings: Partial<GenerationSettings> }[] 
 ];
 
 
-const CreateModel: React.FC<CreateModelProps> = ({ 
-    onModelFinalized, 
+const CreateModel: React.FC<CreateModelProps> = ({
+    onModelFinalized,
     onSaveModelInstance,
     projectList,
     currentProjectId,
     onProjectChange,
-    onOpenProjectModal 
+    onOpenProjectModal,
+    currentUser
 }) => {
   // Loading & App State
   const [isLoaded, setIsLoaded] = useState(false);
@@ -330,19 +333,38 @@ const CreateModel: React.FC<CreateModelProps> = ({
     }
   }, [toastMessage]);
 
-  const addHistoryItem = useCallback((newItem: Omit<HistoryItem, 'id' | 'parentId' | 'isStarred' | 'imageUrl'>, imageUrl: string) => {
+  const addHistoryItem = useCallback(async (newItem: Omit<HistoryItem, 'id' | 'parentId' | 'isStarred' | 'imageUrl'>, imageUrl: string) => {
     const newId = `rev-${Date.now()}`;
+
+    // Upload to Firebase Storage if user is logged in and imageUrl is base64
+    let finalImageUrl = imageUrl;
+    if (currentUser && isBase64Url(imageUrl)) {
+        try {
+            finalImageUrl = await uploadBase64Image(
+                imageUrl,
+                currentUser.uid,
+                'models',
+                `model_${newId}.jpg`,
+                currentProjectId || undefined
+            );
+            console.log('Image uploaded to Firebase Storage:', finalImageUrl);
+        } catch (error) {
+            console.error('Failed to upload to Firebase Storage, using base64:', error);
+            // Fallback to base64 if upload fails
+        }
+    }
+
     const fullHistoryItem: HistoryItem = {
         ...newItem,
         id: newId,
         parentId: currentHistoryItemId,
-        imageUrl,
+        imageUrl: finalImageUrl,
         isStarred: false,
     };
     setGeneratedModelHistory(prev => [...prev, fullHistoryItem]);
     setCurrentHistoryItemId(newId);
     setRedoStack([]); // New generation creates a new branch, clearing any "redo" path.
-  }, [currentHistoryItemId]);
+  }, [currentHistoryItemId, currentUser, currentProjectId]);
 
   const restoreHistoryItem = useCallback((id: string, source: 'ui' | 'undo' | 'redo') => {
     const item = generatedModelHistory.find(h => h.id === id);
@@ -381,11 +403,11 @@ const CreateModel: React.FC<CreateModelProps> = ({
         const prompt = file ? "Model generated from uploaded photo" : modelDescription;
         const modelInfo = generationModels.find(m => m.name === selectedModelName);
         if (!modelInfo || !modelInfo.id) throw new Error("Invalid model selected.");
-        
-        const result = file 
+
+        const result = file
             ? await generateModelImage(file, generationSettings)
             : await generateModelFromDescription(modelDescription, generationSettings, modelInfo.id);
-        addHistoryItem({ prompt, settings: generationSettings, modelName: selectedModelName }, result);
+        await addHistoryItem({ prompt, settings: generationSettings, modelName: selectedModelName }, result);
     } catch (err) {
         setToastMessage(getFriendlyErrorMessage(err, 'Failed to create model'));
     } finally {
@@ -427,7 +449,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
             ? await reviseMaskedImage(generatedModelUrl, maskDataUrl!, revisionInstruction, currentSettings)
             : await reviseGeneratedImage(generatedModelUrl, revisionInstruction, currentSettings);
 
-        addHistoryItem({ prompt: promptForHistory, settings: currentSettings, modelName: selectedModelName }, result);
+        await addHistoryItem({ prompt: promptForHistory, settings: currentSettings, modelName: selectedModelName }, result);
         setRevisionPrompt('');
         if (isMaskingMode) {
             setIsMaskingMode(false);
@@ -449,7 +471,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
     setIsUpscaleMenuOpen(false);
     try {
         const result = await selectivelyEnhanceImage(generatedModelUrl, target);
-        addHistoryItem({ prompt: `Enhanced ${target}`, settings: generationSettings, modelName: selectedModelName }, result);
+        await addHistoryItem({ prompt: `Enhanced ${target}`, settings: generationSettings, modelName: selectedModelName }, result);
         setToastMessage(`${target.charAt(0).toUpperCase() + target.slice(1)} enhanced!`);
     } catch (err) {
         setToastMessage(getFriendlyErrorMessage(err, 'Enhancement failed'));
@@ -466,7 +488,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
     setIsUpscaleMenuOpen(false);
     try {
         const result = await upscaleImage(generatedModelUrl, resolution);
-        addHistoryItem({ prompt: `Upscaled to ${resolution}`, settings: generationSettings, modelName: selectedModelName }, result);
+        await addHistoryItem({ prompt: `Upscaled to ${resolution}`, settings: generationSettings, modelName: selectedModelName }, result);
         setToastMessage(`Image upscaled to ${resolution}!`);
     } catch (err) {
         setToastMessage(getFriendlyErrorMessage(err, 'Upscale failed'));

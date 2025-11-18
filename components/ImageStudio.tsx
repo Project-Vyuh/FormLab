@@ -14,17 +14,18 @@ import { UserIcon, ChevronRightIcon } from './icons';
 import WardrobeLibrary from './WardrobeLibrary';
 import ProductDetailsFlyout from './ProductDetailsFlyout';
 import VersionHistoryPanel from './VersionHistoryPanel';
-import { Model, WardrobeItem, OutfitLayer, GenerationSettings, HistoryItem, WardrobeCategory, BrandStyle, GarmentAnalysis, Light, LightRole, SceneAtmosphere, ImageProcessingSettings, ShutterSettings, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, PanelToggles, LightingRig, ApertureSettings, CameraPositionSettings, FocusPlaneSettings, Project } from '../types';
-import { 
-  generateVirtualTryOnImage, 
-  generatePoseVariation, 
-  regenerateFrame, 
+import { Model, WardrobeItem, OutfitLayer, GenerationSettings, HistoryItem, WardrobeCategory, BrandStyle, GarmentAnalysis, Light, LightRole, SceneAtmosphere, ImageProcessingSettings, ShutterSettings, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, PanelToggles, LightingRig, ApertureSettings, CameraPositionSettings, FocusPlaneSettings, Project, User } from '../types';
+import {
+  generateVirtualTryOnImage,
+  generatePoseVariation,
+  regenerateFrame,
   analyzeGarment,
   generateModelImage,
   reviseGeneratedImage,
   enhanceRevisionPrompt
 } from '../services/geminiService';
 import { getFriendlyErrorMessage } from '../lib/utils';
+import { uploadFile, uploadBase64Image, isBase64Url } from '../services/storageService';
 
 
 // Helper to convert data URL to File
@@ -153,6 +154,7 @@ interface ImageStudioProps {
   currentProjectId: string | null;
   onProjectChange: (id: string) => void;
   onOpenProjectModal: (mode: 'create' | 'edit') => void;
+  currentUser: User | null;
 }
 
 type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
@@ -176,6 +178,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   currentProjectId,
   onProjectChange,
   onOpenProjectModal,
+  currentUser,
 }) => {
   // Core State
   const [modelImageUrl, setModelImageUrl] = useState<string | null>(null);
@@ -380,18 +383,36 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         }
 
         let currentImageUrl = resolvedBaseImage;
-        
+
         for (let i = 0; i < visibleGarmentLayers.length; i++) {
             const layer = visibleGarmentLayers[i];
             setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
             const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
             currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings);
         }
-        
+
+        // Upload to Firebase Storage if user is logged in and result is base64
+        let finalImageUrl = currentImageUrl;
+        if (currentUser && isBase64Url(currentImageUrl)) {
+            try {
+                finalImageUrl = await uploadBase64Image(
+                    currentImageUrl,
+                    currentUser.uid,
+                    'tryons',
+                    `tryon_${Date.now()}.jpg`,
+                    currentProjectId || undefined
+                );
+                console.log('Try-on image uploaded to Firebase Storage:', finalImageUrl);
+            } catch (error) {
+                console.error('Failed to upload try-on image to Firebase Storage, using base64:', error);
+                // Fallback to base64 if upload fails
+            }
+        }
+
         const newHistoryItem: HistoryItem = {
             id: `hist-${Date.now()}`,
             parentId: currentHistoryItemId,
-            imageUrl: currentImageUrl,
+            imageUrl: finalImageUrl,
             prompt: "Applied " + visibleGarmentLayers.map(l => l.garment!.name).join(', '),
             settings: deepCopy(generationSettings),
             modelName: "gemini-2.5-flash-image",
@@ -616,12 +637,26 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     setFavorites(prev => prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]);
   };
   
-  const handleAddProduct = useCallback((productData: Omit<WardrobeItem, 'id' | 'url'> & { file: File }) => {
+  const handleAddProduct = useCallback(async (productData: Omit<WardrobeItem, 'id' | 'url'> & { file: File }) => {
     const { file, ...rest } = productData;
-    const newProduct: WardrobeItem = { id: `item-${Date.now()}`, url: URL.createObjectURL(file), ...rest };
+    const productId = `item-${Date.now()}`;
+
+    // Upload to Firebase Storage if user is logged in
+    let productUrl = URL.createObjectURL(file);
+    if (currentUser) {
+        try {
+            productUrl = await uploadFile(file, currentUser.uid, 'wardrobe');
+            console.log('Wardrobe item uploaded to Firebase Storage:', productUrl);
+        } catch (error) {
+            console.error('Failed to upload wardrobe item to Firebase Storage, using blob URL:', error);
+            // Fallback to blob URL if upload fails
+        }
+    }
+
+    const newProduct: WardrobeItem = { id: productId, url: productUrl, ...rest };
     setWardrobe(prev => [newProduct, ...prev]);
     setToastMessage(`'${newProduct.name}' added to library.`);
-  }, []);
+  }, [currentUser]);
 
   const handleCreateCategory = useCallback((name: string) => {
     if (name && name.trim()) {

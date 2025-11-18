@@ -9,8 +9,9 @@ import VideoRightPanel from './VideoRightPanel';
 import ResizeHandle from './ResizeHandle';
 import { generateVideoFromImage } from '../services/geminiService';
 import { getFriendlyErrorMessage } from '../lib/utils';
-import { VideoGenerationSettings, Project } from '../types';
+import { VideoGenerationSettings, Project, User } from '../types';
 import { DownloadIcon } from './icons';
+import { uploadVideoBlob } from '../services/storageService';
 
 interface VideoCreatorProps {
   referenceImageUrl: string | null;
@@ -18,6 +19,7 @@ interface VideoCreatorProps {
   currentProjectId: string | null;
   onProjectChange: (id: string) => void;
   onOpenProjectModal: (mode: 'create' | 'edit') => void;
+  currentUser: User | null;
 }
 
 const initialVideoSettings: VideoGenerationSettings = {
@@ -37,7 +39,8 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
   projectList,
   currentProjectId,
   onProjectChange,
-  onOpenProjectModal
+  onOpenProjectModal,
+  currentUser
 }) => {
   const [settings, setSettings] = useState<VideoGenerationSettings>(initialVideoSettings);
   const [isLoading, setIsLoading] = useState(false);
@@ -96,7 +99,28 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
     setVideoUrl(null);
     try {
       const resultUrl = await generateVideoFromImage(referenceImageUrl, settings);
-      setVideoUrl(resultUrl);
+
+      // Upload to Firebase Storage if user is logged in and result is a blob URL
+      let finalVideoUrl = resultUrl;
+      if (currentUser && resultUrl.startsWith('blob:')) {
+        try {
+          // Fetch the blob from the blob URL
+          const response = await fetch(resultUrl);
+          const blob = await response.blob();
+
+          // Upload to Firebase Storage
+          finalVideoUrl = await uploadVideoBlob(blob, currentUser.uid, `video_${Date.now()}.mp4`);
+          console.log('Video uploaded to Firebase Storage:', finalVideoUrl);
+
+          // Revoke the temporary blob URL to free memory
+          URL.revokeObjectURL(resultUrl);
+        } catch (uploadError) {
+          console.error('Failed to upload video to Firebase Storage, using blob URL:', uploadError);
+          // Fallback to blob URL if upload fails
+        }
+      }
+
+      setVideoUrl(finalVideoUrl);
     } catch (err) {
       if (err instanceof Error && err.message?.includes('Requested entity was not found')) {
         setError('API Key error. Please select a valid API key.');

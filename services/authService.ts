@@ -16,6 +16,7 @@ import {
     signInWithPopup,
 } from "firebase/auth";
 import { auth } from "./firebase";
+import { createUserDocument, checkUserExists, updateLastLogin } from "./userService";
 
 export interface AuthError {
     code: string;
@@ -42,6 +43,15 @@ export const signUpWithEmail = async (
                 photoURL: photoURL || null,
             });
         }
+
+        // Create user document in Firestore
+        await createUserDocument(userCredential.user.uid, {
+            email: email,
+            displayName: displayName || null,
+            photoURL: photoURL || null,
+            authProvider: "email",
+            emailVerified: false,
+        });
 
         // Send verification email
         await sendEmailVerification(userCredential.user);
@@ -114,6 +124,24 @@ export const signInWithGoogle = async (): Promise<FirebaseUser> => {
     try {
         const provider = new GoogleAuthProvider();
         const result = await signInWithPopup(auth, provider);
+
+        // Check if user document exists in Firestore
+        const userExists = await checkUserExists(result.user.uid);
+
+        if (!userExists) {
+            // Create user document for new Google users
+            await createUserDocument(result.user.uid, {
+                email: result.user.email,
+                displayName: result.user.displayName,
+                photoURL: result.user.photoURL,
+                authProvider: "google",
+                emailVerified: result.user.emailVerified,
+            });
+        } else {
+            // Update last login for existing users
+            await updateLastLogin(result.user.uid);
+        }
+
         return result.user;
     } catch (error: any) {
         if (error.code === 'auth/popup-closed-by-user') {

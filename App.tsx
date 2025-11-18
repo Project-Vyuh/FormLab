@@ -16,6 +16,7 @@ import ProjectModal from './components/ProjectModal';
 import { Model, Project, Notification, User } from './types';
 import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
+import { getUserDocument, updateLastLogin } from './services/userService';
 
 
 export type View = 'createModel' | 'imageStudio' | 'videoCreator' | 'projects';
@@ -48,7 +49,7 @@ const App: React.FC = () => {
 
   // Listen to authentication state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged((firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
         // Check if email is verified
         if (!firebaseUser.emailVerified) {
@@ -61,16 +62,36 @@ const App: React.FC = () => {
           return;
         }
 
-        // User is signed in and email is verified
-        const user: User = {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL,
-        };
-        setCurrentUser(user);
-        setUnverifiedEmail(null);
-        setAuthLoading(false);
+        try {
+          // Fetch user data from Firestore
+          const userData = await getUserDocument(firebaseUser.uid);
+
+          // Update last login timestamp
+          await updateLastLogin(firebaseUser.uid);
+
+          // Merge Firebase Auth data with Firestore data
+          const user: User = {
+            uid: firebaseUser.uid,
+            email: userData?.email || firebaseUser.email,
+            displayName: userData?.displayName || firebaseUser.displayName,
+            photoURL: userData?.photoURL || firebaseUser.photoURL,
+          };
+          setCurrentUser(user);
+          setUnverifiedEmail(null);
+          setAuthLoading(false);
+        } catch (error) {
+          console.error('Error fetching user data from Firestore:', error);
+          // Fallback to Firebase Auth data if Firestore fetch fails
+          const user: User = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+          };
+          setCurrentUser(user);
+          setUnverifiedEmail(null);
+          setAuthLoading(false);
+        }
       } else {
         // User is signed out
         setCurrentUser(null);
@@ -316,6 +337,7 @@ const App: React.FC = () => {
             currentProjectId={currentProjectId}
             onProjectChange={handleProjectChange}
             onOpenProjectModal={handleOpenProjectModal}
+            currentUser={currentUser}
           />
         </div>
         <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>
@@ -331,6 +353,7 @@ const App: React.FC = () => {
             currentProjectId={currentProjectId}
             onProjectChange={handleProjectChange}
             onOpenProjectModal={handleOpenProjectModal}
+            currentUser={currentUser}
           />
         </div>
         <div className={`${activeView === 'videoCreator' ? 'block' : 'hidden'} absolute inset-0`}>
@@ -340,6 +363,7 @@ const App: React.FC = () => {
             currentProjectId={currentProjectId}
             onProjectChange={handleProjectChange}
             onOpenProjectModal={handleOpenProjectModal}
+            currentUser={currentUser}
           />
         </div>
         <div className={`${activeView === 'projects' ? 'block' : 'hidden'} absolute inset-0`}>
