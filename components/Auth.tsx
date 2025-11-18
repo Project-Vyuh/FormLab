@@ -6,19 +6,36 @@
 import React, { useState } from 'react';
 import SignIn from './SignIn';
 import SignUp from './SignUp';
+import ForgotPassword from './ForgotPassword';
 import { CubeIcon } from './icons';
 import { SparklesCore } from './ui/sparkles';
 
 const Auth: React.FC = () => {
     const [isSignIn, setIsSignIn] = useState(true);
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
+    const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
 
     return (
         <div className="w-full h-screen flex items-center justify-center bg-[#111111]">
             <div className="w-full h-full flex flex-col lg:flex-row">
                 {/* Auth Form */}
                 <div className="w-full lg:w-1/2 h-auto lg:h-full flex items-center justify-center p-4">
-                    {isSignIn ? (
-                        <SignIn onSwitchToSignUp={() => setIsSignIn(false)} />
+                    {showForgotPassword ? (
+                        <ForgotPassword
+                            initialEmail={forgotPasswordEmail}
+                            onBackToSignIn={() => {
+                                setShowForgotPassword(false);
+                                setIsSignIn(true);
+                            }}
+                        />
+                    ) : isSignIn ? (
+                        <SignIn
+                            onSwitchToSignUp={() => setIsSignIn(false)}
+                            onForgotPassword={(email) => {
+                                setForgotPasswordEmail(email);
+                                setShowForgotPassword(true);
+                            }}
+                        />
                     ) : (
                         <SignUp onSwitchToSignIn={() => setIsSignIn(true)} />
                     )}

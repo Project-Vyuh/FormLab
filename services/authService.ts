@@ -11,6 +11,9 @@ import {
     User as FirebaseUser,
     updateProfile,
     sendEmailVerification,
+    sendPasswordResetEmail,
+    GoogleAuthProvider,
+    signInWithPopup,
 } from "firebase/auth";
 import { auth } from "./firebase";
 
@@ -88,4 +91,37 @@ export const signOutUser = async (): Promise<void> => {
  */
 export const onAuthStateChanged = (callback: (user: FirebaseUser | null) => void) => {
     return firebaseOnAuthStateChanged(auth, callback);
+};
+
+/**
+ * Send password reset email
+ */
+export const resetPassword = async (email: string): Promise<void> => {
+    try {
+        await sendPasswordResetEmail(auth, email);
+    } catch (error: any) {
+        if (error.code === 'auth/user-not-found') {
+            throw new Error('No account found with this email address');
+        }
+        throw error;
+    }
+};
+
+/**
+ * Sign in with Google
+ */
+export const signInWithGoogle = async (): Promise<FirebaseUser> => {
+    try {
+        const provider = new GoogleAuthProvider();
+        const result = await signInWithPopup(auth, provider);
+        return result.user;
+    } catch (error: any) {
+        if (error.code === 'auth/popup-closed-by-user') {
+            throw new Error('Sign-in cancelled');
+        }
+        if (error.code === 'auth/popup-blocked') {
+            throw new Error('Pop-up blocked. Please allow pop-ups for this site.');
+        }
+        throw error;
+    }
 };
