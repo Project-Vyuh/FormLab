@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { resetPassword } from '../services/authService';
 import Spinner from './Spinner';
-import PasswordResetSent from './PasswordResetSent';
+import PasswordResetSent from './PasswordResetSent.tsx';
 
 interface ForgotPasswordProps {
     initialEmail?: string;
