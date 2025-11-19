@@ -36,7 +36,8 @@ interface CreateModelProps {
   onOpenProjectModal: (mode: 'create' | 'edit') => void;
   currentUser: User | null;
   modelGallery: Model[];
-  onSelectModel: (url: string) => void;
+  onSelectModel: (model: Model) => void;
+  onModelAdded?: (model: Model) => void; // Callback when a new base model is created
 }
 
 type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
@@ -180,7 +181,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
     onOpenProjectModal,
     currentUser,
     modelGallery,
-    onSelectModel
+    onSelectModel,
+    onModelAdded
 }) => {
   // Loading & App State
   const [isLoaded, setIsLoaded] = useState(false);
@@ -291,7 +293,29 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
                 setGenerationSettings(mergedSettings);
                 setGeneratedModelHistory(savedState.generatedModelHistory || []);
-                setCurrentHistoryItemId(savedState.currentHistoryItemId === undefined ? null : savedState.currentHistoryItemId);
+
+                // Check if there's a selected history item ID from gallery selection
+                const selectedHistoryItemId = localStorage.getItem('formlab-selectedHistoryItemId');
+                if (selectedHistoryItemId) {
+                    // Verify the history item exists in this project
+                    const itemExists = savedState.generatedModelHistory?.some(item => item.id === selectedHistoryItemId);
+                    if (itemExists) {
+                        setCurrentHistoryItemId(selectedHistoryItemId);
+                        // Restore the history item's settings
+                        const historyItem = savedState.generatedModelHistory?.find(item => item.id === selectedHistoryItemId);
+                        if (historyItem) {
+                            setGenerationSettings(historyItem.settings);
+                            setSelectedModelName(historyItem.modelName);
+                        }
+                    } else {
+                        setCurrentHistoryItemId(savedState.currentHistoryItemId === undefined ? null : savedState.currentHistoryItemId);
+                    }
+                    // Clear the localStorage flag
+                    localStorage.removeItem('formlab-selectedHistoryItemId');
+                } else {
+                    setCurrentHistoryItemId(savedState.currentHistoryItemId === undefined ? null : savedState.currentHistoryItemId);
+                }
+
                 setRedoStack([]);
                 setModelDescription(savedState.modelDescription || '');
                 setRevisionPrompt(savedState.revisionPrompt || '');
@@ -368,7 +392,19 @@ const CreateModel: React.FC<CreateModelProps> = ({
     setGeneratedModelHistory(prev => [...prev, fullHistoryItem]);
     setCurrentHistoryItemId(newId);
     setRedoStack([]); // New generation creates a new branch, clearing any "redo" path.
-  }, [currentHistoryItemId, currentUser, currentProjectId]);
+
+    // If this is a base model (no parent) and we have a callback, notify App.tsx to update the gallery
+    if (currentHistoryItemId === null && onModelAdded && currentProjectId) {
+        const newModel: Model = {
+            id: `${currentProjectId}-${newId}`,
+            url: finalImageUrl,
+            source: 'user',
+            projectId: currentProjectId,
+            historyItemId: newId, // Store the history item ID
+        };
+        onModelAdded(newModel);
+    }
+  }, [currentHistoryItemId, currentUser, currentProjectId, onModelAdded]);
 
   const restoreHistoryItem = useCallback((id: string, source: 'ui' | 'undo' | 'redo') => {
     const item = generatedModelHistory.find(h => h.id === id);
@@ -814,30 +850,34 @@ const CreateModel: React.FC<CreateModelProps> = ({
             <UserIcon className="w-5 h-5" />
             Your Models
           </h2>
-          <div className="grid grid-cols-3 gap-3">
-            {modelGallery.map(model => {
-              const isSelected = model.url === generatedModelUrl;
-              return (
-                <div key={model.id}>
-                  <button
-                    onClick={() => onSelectModel(model.url)}
-                    disabled={isGenerating || isSelected}
-                    className={`w-full aspect-square rounded-lg overflow-hidden border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 group disabled:cursor-not-allowed ${
-                      isSelected
-                        ? 'border-gray-100 shadow-md'
-                        : 'border-gray-700 hover:border-gray-500'
-                    }`}
-                    aria-label={`Select model ${model.id}`}
-                  >
-                    <img src={model.url} alt={`Model ${model.id}`} className="w-full h-full object-cover" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+          {modelGallery.length === 0 ? (
+            <div className="text-sm text-gray-400 py-6 text-center">
+              When you create a model either through prompt or upload photo, the generated models will appear here.
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              {modelGallery.map(model => {
+                const isSelected = model.url === generatedModelUrl;
+                return (
+                  <div key={model.id}>
+                    <button
+                      onClick={() => onSelectModel(model)}
+                      disabled={isGenerating || isSelected}
+                      className={`w-full aspect-square rounded-lg overflow-hidden border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 group disabled:cursor-not-allowed ${
+                        isSelected
+                          ? 'border-gray-100 shadow-md'
+                          : 'border-gray-700 hover:border-gray-500'
+                      }`}
+                      aria-label={`Select model ${model.id}`}
+                    >
+                      <img src={model.url} alt={`Model ${model.id}`} className="w-full h-full object-cover" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-
-        <div className="border-t border-gray-800 pt-4"></div>
 
         <CollapsibleSection title={isResultView ? "Revision" : "Prompt"} icon={<PenLineIcon className="w-4 h-4 text-gray-400" />} isOpen={openSections.prompt} onToggle={() => setOpenSections(p => ({ ...p, prompt: !p.prompt }))}>
           <PromptPanel

@@ -12,6 +12,7 @@ export interface Model {
   tags?: string[]; // For filtering
   name?: string; // Display name
   projectId?: string; // Associated project ID for user-created models
+  historyItemId?: string; // History item ID for loading version history
 }
 
 export type WardrobeCategory = string;

@@ -141,21 +141,24 @@ const App: React.FC = () => {
 
           setCurrentProjectId(projectIdToLoad);
 
-          // Load ALL models from ALL projects into the gallery
+          // Load only BASE models (parentId === null) from ALL projects into the gallery
           const galleryModels: Model[] = [];
           for (const project of projects) {
             try {
               const state = await loadProjectState(project.id);
               if (state?.generatedModelHistory?.length > 0) {
-                // Get ALL images generated in that project
-                state.generatedModelHistory.forEach(historyItem => {
-                  galleryModels.push({
-                    id: `${project.id}-${historyItem.id}`,
-                    url: historyItem.imageUrl,
-                    source: 'user',
-                    projectId: project.id, // Associate model with project
+                // Get only BASE models (no parent) - these are unique model creations
+                state.generatedModelHistory
+                  .filter(historyItem => historyItem.parentId === null)
+                  .forEach(historyItem => {
+                    galleryModels.push({
+                      id: `${project.id}-${historyItem.id}`,
+                      url: historyItem.imageUrl,
+                      source: 'user',
+                      projectId: project.id, // Associate model with project
+                      historyItemId: historyItem.id, // Store history item ID for loading
+                    });
                   });
-                });
               }
             } catch (e) {
               console.error(`Failed to load state for project ${project.id}`, e);
@@ -260,6 +263,27 @@ const App: React.FC = () => {
     // This logic is now mostly deprecated.
     console.log("Legacy delete model called:", modelToDelete);
   }, []);
+
+  const handleModelAdded = useCallback((model: Model) => {
+    // Add the new model to the gallery immediately
+    setModelGallery(prevGallery => [model, ...prevGallery]);
+  }, []);
+
+  const handleSelectModelFromGallery = useCallback((model: Model) => {
+    // If the model is from a different project, switch to that project
+    if (model.projectId && model.projectId !== currentProjectId) {
+      setCurrentProjectId(model.projectId);
+      localStorage.setItem('formlab-lastProject', model.projectId);
+    }
+
+    // Store the history item ID in localStorage so CreateModel can load it
+    if (model.historyItemId) {
+      localStorage.setItem('formlab-selectedHistoryItemId', model.historyItemId);
+    }
+
+    // Set as active model
+    setActiveModelUrl(model.url);
+  }, [currentProjectId]);
 
   const handleModelCreated = useCallback(async (modelUrl: string, projectId: string) => {
     // Add/update the model in the gallery for ImageStudio
@@ -391,7 +415,8 @@ const App: React.FC = () => {
             onOpenProjectModal={handleOpenProjectModal}
             currentUser={currentUser}
             modelGallery={currentProjectModels}
-            onSelectModel={setActiveModelUrl}
+            onSelectModel={handleSelectModelFromGallery}
+            onModelAdded={handleModelAdded}
           />
         </div>
         <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>
