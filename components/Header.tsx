@@ -17,7 +17,7 @@ interface HeaderProps {
     onLogout: () => void;
 }
 
-const UserMenu: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
+const UserMenu: React.FC<{ user: User; onLogout: () => void; onNavigateToProjects: () => void }> = ({ user, onLogout, onNavigateToProjects }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -30,6 +30,11 @@ const UserMenu: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogo
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const handleProjectsClick = () => {
+        onNavigateToProjects();
+        setIsOpen(false);
+    };
 
     return (
         <div ref={menuRef} className="relative">
@@ -59,6 +64,12 @@ const UserMenu: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogo
                             <p className="text-sm font-semibold text-gray-200">{user.displayName}</p>
                             <p className="text-xs text-gray-400">{user.email}</p>
                         </div>
+                        <button
+                            onClick={handleProjectsClick}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 transition-colors"
+                        >
+                            Projects
+                        </button>
                         <button
                             onClick={onLogout}
                             className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10"
@@ -111,15 +122,9 @@ const Header: React.FC<HeaderProps> = ({ activeView, onNavigate, notifications, 
                 >
                     Templates
                 </button>
-                <button
-                    onClick={() => onNavigate('projects')}
-                    className={getButtonClasses('projects')}
-                >
-                    Projects
-                </button>
                 <NotificationDropdown notifications={notifications} />
                 <div className="w-px h-6 bg-gray-700 mx-2"></div>
-                <UserMenu user={currentUser} onLogout={onLogout} />
+                <UserMenu user={currentUser} onLogout={onLogout} onNavigateToProjects={() => onNavigate('projects')} />
             </nav>
         </header>
     );
