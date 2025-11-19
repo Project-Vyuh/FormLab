@@ -6,6 +6,11 @@
 export interface Model {
   id: string;
   url: string;
+  source?: 'user' | 'predefined'; // Source of the model
+  thumbnail?: string; // Preview image
+  gender?: 'male' | 'female' | 'non-binary'; // For pre-defined models
+  tags?: string[]; // For filtering
+  name?: string; // Display name
 }
 
 export type WardrobeCategory = string;
@@ -31,6 +36,7 @@ export interface WardrobeItem {
     campaign: string[]; // 'Lookbook 01'
   };
   notes?: string;
+  source?: 'user' | 'predefined'; // Source of the wardrobe item
 }
 
 

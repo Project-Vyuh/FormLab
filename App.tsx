@@ -18,6 +18,7 @@ import { Model, Project, Notification, User } from './types';
 import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
 import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
+import { loadPredefinedModels } from './services/firestoreService';
 
 
 export type View = 'createModel' | 'imageStudio' | 'videoCreator' | 'templates' | 'projects';
@@ -151,13 +152,31 @@ const App: React.FC = () => {
                 galleryModels.push({
                   id: `${project.id}-${lastHistoryItem.imageUrl.slice(-10)}`, // Make ID more unique
                   url: lastHistoryItem.imageUrl,
+                  source: 'user',
                 });
               }
             } catch (e) {
               console.error(`Failed to load state for project ${project.id}`, e);
             }
           }
-          setModelGallery(galleryModels.reverse()); // Show newest first
+
+          // Load pre-defined models
+          try {
+            const predefinedModels = await loadPredefinedModels();
+            console.log(`Loaded ${predefinedModels.length} pre-defined models`);
+
+            // Combine user models with pre-defined models
+            const allModels = [
+              ...galleryModels.reverse(), // User models first, newest first
+              ...predefinedModels, // Then pre-defined models
+            ];
+            setModelGallery(allModels);
+          } catch (error) {
+            console.error('Failed to load pre-defined models:', error);
+            // Fallback to just user models
+            setModelGallery(galleryModels.reverse());
+          }
+
           setActiveView('createModel');
         }
       } catch (e) {
@@ -387,7 +406,7 @@ const App: React.FC = () => {
           />
         </div>
         <div className={`${activeView === 'templates' ? 'block' : 'hidden'} absolute inset-0`}>
-          <Templates wardrobeCategories={wardrobeCategories} />
+          <Templates wardrobeCategories={wardrobeCategories} currentUser={currentUser} />
         </div>
         <div className={`${activeView === 'projects' ? 'block' : 'hidden'} absolute inset-0`}>
           <Projects />

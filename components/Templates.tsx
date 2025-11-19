@@ -9,6 +9,9 @@ import { PlusIcon, FolderPlusIcon, FilePlusIcon, ChevronDownIcon, ChevronUpIcon,
 import CreateTemplateModal from './CreateTemplateModal';
 import CreateFolderModal from './CreateFolderModal';
 import AddTemplateItemModal from './AddTemplateItemModal';
+import { loadPredefinedTemplates, loadUserTemplates, PredefinedTemplate, UserTemplate, loadPredefinedModels, PredefinedModel } from '../services/firestoreService';
+import { createTemplate } from '../services/templateService';
+import { User } from '../types';
 
 type TemplateCategory = 'models' | 'wardrobe';
 type ViewMode = 'grid' | 'list';
@@ -29,9 +32,10 @@ interface Template {
 
 interface TemplatesProps {
   wardrobeCategories?: string[]; // Categories from ImageStudio
+  currentUser?: User | null; // Current logged-in user
 }
 
-const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [] }) => {
+const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentUser = null }) => {
   const [activeCategory, setActiveCategory] = useState<TemplateCategory>('models');
   const [isUserDefinedExpanded, setIsUserDefinedExpanded] = useState(true);
   const [isPreDefinedExpanded, setIsPreDefinedExpanded] = useState(true);
@@ -45,6 +49,17 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [] }) => {
   // Quick filter state for Pre-Defined section
   const [selectedQuickFilter, setSelectedQuickFilter] = useState<string | null>(null);
 
+  // Template data states
+  const [predefinedTemplates, setPredefinedTemplates] = useState<(PredefinedTemplate | UserTemplate)[]>([]);
+  const [userTemplates, setUserTemplates] = useState<(PredefinedTemplate | UserTemplate)[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
+
+  // Pre-defined models state
+  const [predefinedModels, setPredefinedModels] = useState<PredefinedModel[]>([]);
+
+  // Modal state for model detail view
+  const [selectedModel, setSelectedModel] = useState<PredefinedModel | null>(null);
+
   // Modal states
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
   const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
@@ -52,8 +67,8 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [] }) => {
 
   const filterDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Mock data - would come from API/database
-  const templates: Template[] = [];
+  // Computed: Get current templates based on selected section
+  const templates = selectedSection === 'predefined' ? predefinedTemplates : userTemplates;
 
   // Click outside handler for filter dropdown
   useEffect(() => {
@@ -73,6 +88,37 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [] }) => {
     setSelectedQuickFilter(null);
   }, [activeCategory, selectedSection]);
 
+  // Load templates and models on mount
+  useEffect(() => {
+    const loadTemplates = async () => {
+      setIsLoadingTemplates(true);
+      try {
+        // Load pre-defined templates
+        const predefined = await loadPredefinedTemplates();
+        setPredefinedTemplates(predefined);
+        console.log(`Loaded ${predefined.length} pre-defined templates`);
+
+        // Load pre-defined models
+        const models = await loadPredefinedModels();
+        setPredefinedModels(models);
+        console.log(`Loaded ${models.length} pre-defined models for templates`);
+
+        // Load user templates if logged in
+        if (currentUser) {
+          const user = await loadUserTemplates(currentUser.uid);
+          setUserTemplates(user);
+          console.log(`Loaded ${user.length} user templates`);
+        }
+      } catch (error) {
+        console.error('Error loading templates:', error);
+      } finally {
+        setIsLoadingTemplates(false);
+      }
+    };
+
+    loadTemplates();
+  }, [currentUser]);
+
   const handleCreateTemplate = () => {
     setIsCreateTemplateModalOpen(true);
   };
@@ -85,10 +131,33 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [] }) => {
     setIsAddItemModalOpen(true);
   };
 
-  const handleSaveTemplate = (templateData: any) => {
-    console.log('Template created:', templateData);
-    // TODO: Save template to database/storage
-    // Add to templates list, upload thumbnail, etc.
+  const handleSaveTemplate = async (templateData: any) => {
+    if (!currentUser) {
+      console.error('User not logged in');
+      return;
+    }
+
+    try {
+      console.log('Creating template:', templateData);
+      const templateId = await createTemplate(currentUser.uid, {
+        name: templateData.name,
+        description: templateData.description,
+        type: templateData.type,
+        gender: templateData.gender,
+        category: templateData.category,
+        thumbnail: templateData.thumbnail,
+        modelId: templateData.modelId,
+        wardrobeItemIds: templateData.wardrobeItemIds,
+        tags: [],
+      });
+
+      // Reload user templates
+      const updatedTemplates = await loadUserTemplates(currentUser.uid);
+      setUserTemplates(updatedTemplates);
+      console.log('Template created successfully:', templateId);
+    } catch (error) {
+      console.error('Error creating template:', error);
+    }
   };
 
   const handleSaveFolder = (folderData: any) => {
@@ -135,6 +204,20 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [] }) => {
   const activeFilterCount = activeCategory === 'models'
     ? selectedGenderFilters.length
     : selectedWardrobeFilters.length;
+
+  // Filter pre-defined models based on selected quick filter
+  const filteredPredefinedModels = selectedSection === 'predefined' && activeCategory === 'models'
+    ? (selectedQuickFilter
+        ? predefinedModels.filter(model => {
+            const genderMap: { [key: string]: string } = {
+              'Male': 'male',
+              'Female': 'female',
+              'Non-Binary': 'non-binary'
+            };
+            return model.gender === genderMap[selectedQuickFilter];
+          })
+        : predefinedModels)
+    : [];
 
   return (
     <div className="w-full h-full flex flex-col relative bg-[#111111]">
@@ -442,56 +525,125 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [] }) => {
               )}
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-400">
-              <span>{templates.length} templates</span>
+              <span>
+                {selectedSection === 'predefined' && activeCategory === 'models'
+                  ? `${filteredPredefinedModels.length} models`
+                  : `${templates.length} templates`}
+              </span>
             </div>
           </div>
 
           {/* Template Grid/List */}
           <div className="flex-1 overflow-y-auto p-6">
-            {templates.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center mb-4">
-                  <LayoutIcon className="w-8 h-8 text-gray-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-300 mb-2">
-                  No {selectedSection === 'user' ? 'User-Defined' : 'Pre-Defined'} Templates Yet
-                </h3>
-                <p className="text-sm text-gray-500 max-w-sm mb-6">
-                  {selectedSection === 'user'
-                    ? 'Create your first custom template to get started. Templates help you reuse models and wardrobes across projects.'
-                    : 'Pre-defined templates from the library will appear here.'}
-                </p>
-                {selectedSection === 'user' && (
-                  <button
-                    onClick={handleCreateTemplate}
-                    className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    <PlusIcon className="w-4 h-4" />
-                    Create Your First Template
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div
-                className={
-                  viewMode === 'grid'
-                    ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
-                    : 'space-y-2'
-                }
-              >
-                {templates.map((template) => (
-                  <div
-                    key={template.id}
-                    className={`group relative ${
-                      viewMode === 'grid'
-                        ? 'aspect-[3/4] bg-gray-800/50 rounded-lg border border-gray-700 hover:border-gray-600 overflow-hidden cursor-pointer transition-all hover:scale-105'
-                        : 'flex items-center gap-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-gray-600 cursor-pointer transition-colors'
-                    }`}
-                  >
-                    {/* Template card content would go here */}
+            {/* Pre-Defined Models View */}
+            {selectedSection === 'predefined' && activeCategory === 'models' && (
+              <>
+                {filteredPredefinedModels.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center">
+                    <div className="w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center mb-4">
+                      <LayoutIcon className="w-8 h-8 text-gray-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-300 mb-2">
+                      No Pre-Defined Models Yet
+                    </h3>
+                    <p className="text-sm text-gray-500 max-w-sm mb-6">
+                      Pre-defined models from the library will appear here.
+                    </p>
                   </div>
-                ))}
-              </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Group models by base model (for now, each model is its own row) */}
+                    {filteredPredefinedModels.map((model) => (
+                      <div key={model.id} className="space-y-3">
+                        {/* Model Row */}
+                        <div className="flex items-start gap-4">
+                          {/* Model Thumbnail */}
+                          <div
+                            className="group relative cursor-pointer"
+                            onClick={() => setSelectedModel(model)}
+                          >
+                            <div className="w-32 h-48 bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-500 transition-all hover:shadow-lg">
+                              <img
+                                src={model.thumbnail || model.url}
+                                alt={model.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            {/* Tags below thumbnail */}
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {model.tags.slice(0, 2).map((tag, idx) => (
+                                <span
+                                  key={idx}
+                                  className="text-[10px] px-2 py-0.5 bg-gray-800 text-gray-400 rounded-full border border-gray-700"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                              {model.tags.length > 2 && (
+                                <span className="text-[10px] px-2 py-0.5 bg-gray-800 text-gray-400 rounded-full border border-gray-700">
+                                  +{model.tags.length - 2}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {/* Variations would go here in the future */}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Other sections (user templates, wardrobe, etc.) */}
+            {!(selectedSection === 'predefined' && activeCategory === 'models') && (
+              <>
+                {templates.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center">
+                    <div className="w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center mb-4">
+                      <LayoutIcon className="w-8 h-8 text-gray-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-300 mb-2">
+                      No {selectedSection === 'user' ? 'User-Defined' : 'Pre-Defined'} Templates Yet
+                    </h3>
+                    <p className="text-sm text-gray-500 max-w-sm mb-6">
+                      {selectedSection === 'user'
+                        ? 'Create your first custom template to get started. Templates help you reuse models and wardrobes across projects.'
+                        : 'Pre-defined templates from the library will appear here.'}
+                    </p>
+                    {selectedSection === 'user' && (
+                      <button
+                        onClick={handleCreateTemplate}
+                        className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <PlusIcon className="w-4 h-4" />
+                        Create Your First Template
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className={
+                      viewMode === 'grid'
+                        ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
+                        : 'space-y-2'
+                    }
+                  >
+                    {templates.map((template) => (
+                      <div
+                        key={template.id}
+                        className={`group relative ${
+                          viewMode === 'grid'
+                            ? 'aspect-[3/4] bg-gray-800/50 rounded-lg border border-gray-700 hover:border-gray-600 overflow-hidden cursor-pointer transition-all hover:scale-105'
+                            : 'flex items-center gap-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-gray-600 cursor-pointer transition-colors'
+                        }`}
+                      >
+                        {/* Template card content would go here */}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -515,6 +667,103 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [] }) => {
         onClose={() => setIsAddItemModalOpen(false)}
         onAdd={handleAddTemplateItem}
       />
+
+      {/* Model Detail Modal */}
+      <AnimatePresence>
+        {selectedModel && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+            onClick={() => setSelectedModel(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#1a1a1a] rounded-xl border border-gray-700 max-w-6xl w-full max-h-[90vh] overflow-hidden flex"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Main Image Area */}
+              <div className="flex-1 flex items-center justify-center bg-black p-8">
+                <img
+                  src={selectedModel.url}
+                  alt={selectedModel.name}
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
+
+              {/* Sidebar with Metadata */}
+              <div className="w-80 bg-[#1a1a1a] border-l border-gray-700 flex flex-col">
+                {/* Header */}
+                <div className="p-6 border-b border-gray-700">
+                  <h2 className="text-xl font-semibold text-white mb-2">{selectedModel.name}</h2>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs px-2 py-1 bg-gray-800 text-gray-300 rounded-full border border-gray-700 capitalize">
+                      {selectedModel.gender}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Metadata */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  {/* ID */}
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Model ID</h3>
+                    <p className="text-sm text-gray-300 font-mono">{selectedModel.id}</p>
+                  </div>
+
+                  {/* Gender */}
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Gender</h3>
+                    <p className="text-sm text-gray-300 capitalize">{selectedModel.gender}</p>
+                  </div>
+
+                  {/* Tags */}
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Tags</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedModel.tags.map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className="text-xs px-3 py-1.5 bg-gray-800 text-gray-300 rounded-full border border-gray-700"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* URL */}
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Image URL</h3>
+                    <p className="text-xs text-gray-400 break-all font-mono">{selectedModel.url}</p>
+                  </div>
+
+                  {/* Thumbnail URL if different */}
+                  {selectedModel.thumbnail && selectedModel.thumbnail !== selectedModel.url && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Thumbnail URL</h3>
+                      <p className="text-xs text-gray-400 break-all font-mono">{selectedModel.thumbnail}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="p-6 border-t border-gray-700">
+                  <button
+                    onClick={() => setSelectedModel(null)}
+                    className="w-full px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

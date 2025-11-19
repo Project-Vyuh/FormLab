@@ -26,6 +26,7 @@ import {
 } from '../services/geminiService';
 import { getFriendlyErrorMessage } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url } from '../services/storageService';
+import { loadPredefinedWardrobe } from '../services/firestoreService';
 
 
 // Helper to convert data URL to File
@@ -294,23 +295,53 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   
-  // --- Local Storage Persistence ---
+  // --- Local Storage Persistence + Pre-Defined Content ---
   useEffect(() => {
-    try {
-      const savedWardrobe = localStorage.getItem('formlab-wardrobe');
-      if (savedWardrobe) setWardrobe(JSON.parse(savedWardrobe));
-      const savedCategories = localStorage.getItem('formlab-categories');
-      if (savedCategories) setCategories(JSON.parse(savedCategories));
-      const savedFavorites = localStorage.getItem('formlab-favorites');
-      if(savedFavorites) setFavorites(JSON.parse(savedFavorites));
-      const savedRecentlyUsed = localStorage.getItem('formlab-recently-used');
-      if(savedRecentlyUsed) setRecentlyUsed(JSON.parse(savedRecentlyUsed));
-    } catch (e) { console.error("Failed to load data from localStorage", e); }
+    const loadWardrobeData = async () => {
+      try {
+        // Load user wardrobe from localStorage
+        const savedWardrobe = localStorage.getItem('formlab-wardrobe');
+        const userWardrobe: WardrobeItem[] = savedWardrobe ? JSON.parse(savedWardrobe) : [];
+
+        // Mark user items with source
+        userWardrobe.forEach(item => {
+          if (!item.source) item.source = 'user';
+        });
+
+        // Load pre-defined wardrobe
+        try {
+          const predefinedWardrobe = await loadPredefinedWardrobe();
+          console.log(`Loaded ${predefinedWardrobe.length} pre-defined wardrobe items`);
+
+          // Combine user wardrobe with pre-defined items
+          const allWardrobe = [...userWardrobe, ...predefinedWardrobe];
+          setWardrobe(allWardrobe);
+        } catch (error) {
+          console.error('Failed to load pre-defined wardrobe:', error);
+          // Fallback to just user wardrobe
+          setWardrobe(userWardrobe);
+        }
+
+        // Load other data from localStorage
+        const savedCategories = localStorage.getItem('formlab-categories');
+        if (savedCategories) setCategories(JSON.parse(savedCategories));
+        const savedFavorites = localStorage.getItem('formlab-favorites');
+        if(savedFavorites) setFavorites(JSON.parse(savedFavorites));
+        const savedRecentlyUsed = localStorage.getItem('formlab-recently-used');
+        if(savedRecentlyUsed) setRecentlyUsed(JSON.parse(savedRecentlyUsed));
+      } catch (e) {
+        console.error("Failed to load data from localStorage", e);
+      }
+    };
+
+    loadWardrobeData();
   }, []);
   
   useEffect(() => {
     try {
-      localStorage.setItem('formlab-wardrobe', JSON.stringify(wardrobe));
+      // Only save user wardrobe items to localStorage, not pre-defined ones
+      const userWardrobeOnly = wardrobe.filter(item => item.source !== 'predefined');
+      localStorage.setItem('formlab-wardrobe', JSON.stringify(userWardrobeOnly));
       localStorage.setItem('formlab-categories', JSON.stringify(categories));
       localStorage.setItem('formlab-favorites', JSON.stringify(favorites));
       localStorage.setItem('formlab-recently-used', JSON.stringify(recentlyUsed));
