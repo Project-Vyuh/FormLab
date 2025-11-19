@@ -5,7 +5,7 @@
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UploadCloudIcon, PenLineIcon, CubeIcon, UndoIcon, RedoIcon, BookmarkIcon, DownloadIcon, CameraIcon, ZapIcon, LayoutIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, LayersIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon } from './icons';
+import { UploadCloudIcon, PenLineIcon, CubeIcon, UndoIcon, RedoIcon, BookmarkIcon, DownloadIcon, CameraIcon, ZapIcon, LayoutIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, LayersIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon, Share2Icon } from './icons';
 import { Compare } from './ui/compare';
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
 import Spinner from './Spinner';
@@ -865,6 +865,19 @@ const CreateModel: React.FC<CreateModelProps> = ({
           <h1 className="text-lg font-sans font-semibold text-gray-200">Create Model</h1>
           <div className="flex items-center gap-4">
               {isResultView && <button onClick={() => { if(window.confirm("Start a new project? This will clear your current model creation.")) { reset(); } }} className="text-sm text-gray-400 hover:text-white">Start Over</button>}
+              <button
+                  onClick={() => {
+                      if (generatedModelUrl) {
+                          navigator.clipboard.writeText(window.location.href);
+                          setToastMessage('Link copied to clipboard!');
+                      }
+                  }}
+                  disabled={!generatedModelUrl}
+                  className="p-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Share model"
+              >
+                  <Share2Icon className="w-5 h-5" />
+              </button>
               <button onClick={() => onModelFinalized(generatedModelUrl!, currentProjectId!)} disabled={!generatedModelUrl} className="px-5 py-2 bg-gray-100 hover:bg-white text-gray-900 text-sm font-bold rounded-lg shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                   Proceed to Styling <ChevronRightIcon className="w-4 h-4" />
               </button>

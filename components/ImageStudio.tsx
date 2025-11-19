@@ -10,7 +10,7 @@ import ModelGalleryPanel from './ModelGalleryPanel';
 import RightPanelContent from './RightPanelContent';
 import ResizeHandle from './ResizeHandle';
 import ConfirmationModal from './ConfirmationModal';
-import { UserIcon, ChevronRightIcon } from './icons';
+import { UserIcon, ChevronRightIcon, Share2Icon } from './icons';
 import WardrobeLibrary from './WardrobeLibrary';
 import ProductDetailsFlyout from './ProductDetailsFlyout';
 import VersionHistoryPanel from './VersionHistoryPanel';
@@ -792,6 +792,19 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             <h1 className="text-lg font-sans font-semibold text-gray-200">Image Studio</h1>
             <div className="flex items-center gap-4">
                 <button onClick={handleStartOver} className="text-sm text-gray-400 hover:text-white">Start Over</button>
+                <button
+                    onClick={() => {
+                        if (displayImageUrl) {
+                            navigator.clipboard.writeText(window.location.href);
+                            setToastMessage('Link copied to clipboard!');
+                        }
+                    }}
+                    disabled={!displayImageUrl}
+                    className="p-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Share image"
+                >
+                    <Share2Icon className="w-5 h-5" />
+                </button>
                 <button onClick={handleUseAsVideoReference} disabled={!displayImageUrl} className="px-5 py-2 bg-gray-100 hover:bg-white text-gray-900 text-sm font-bold rounded-lg shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                     Proceed to Video Generation <ChevronRightIcon className="w-4 h-4" />
                 </button>
