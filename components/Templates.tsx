@@ -1,0 +1,522 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { PlusIcon, FolderPlusIcon, FilePlusIcon, ChevronDownIcon, ChevronUpIcon, SearchIcon, FilterIcon, LayoutIcon, BookmarkIcon, Trash2Icon, DownloadIcon, Share2Icon } from './icons';
+import CreateTemplateModal from './CreateTemplateModal';
+import CreateFolderModal from './CreateFolderModal';
+import AddTemplateItemModal from './AddTemplateItemModal';
+
+type TemplateCategory = 'models' | 'wardrobe';
+type ViewMode = 'grid' | 'list';
+type GenderFilter = 'male' | 'female' | 'lgbtq+';
+
+interface Template {
+  id: string;
+  name: string;
+  thumbnail: string;
+  category: TemplateCategory;
+  tags: string[];
+  isStarred: boolean;
+  downloads: number;
+  createdAt: string;
+  gender?: GenderFilter; // For model templates
+  wardrobeCategory?: string; // For wardrobe templates
+}
+
+interface TemplatesProps {
+  wardrobeCategories?: string[]; // Categories from ImageStudio
+}
+
+const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [] }) => {
+  const [activeCategory, setActiveCategory] = useState<TemplateCategory>('models');
+  const [isUserDefinedExpanded, setIsUserDefinedExpanded] = useState(true);
+  const [isPreDefinedExpanded, setIsPreDefinedExpanded] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSection, setSelectedSection] = useState<'user' | 'predefined'>('user');
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const [selectedGenderFilters, setSelectedGenderFilters] = useState<GenderFilter[]>([]);
+  const [selectedWardrobeFilters, setSelectedWardrobeFilters] = useState<string[]>([]);
+
+  // Quick filter state for Pre-Defined section
+  const [selectedQuickFilter, setSelectedQuickFilter] = useState<string | null>(null);
+
+  // Modal states
+  const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
+  const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
+  const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
+
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Mock data - would come from API/database
+  const templates: Template[] = [];
+
+  // Click outside handler for filter dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+        setIsFilterDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Reset filters when section or category changes
+  useEffect(() => {
+    setSelectedGenderFilters([]);
+    setSelectedWardrobeFilters([]);
+    setSelectedQuickFilter(null);
+  }, [activeCategory, selectedSection]);
+
+  const handleCreateTemplate = () => {
+    setIsCreateTemplateModalOpen(true);
+  };
+
+  const handleCreateFolder = () => {
+    setIsCreateFolderModalOpen(true);
+  };
+
+  const handleAddItem = () => {
+    setIsAddItemModalOpen(true);
+  };
+
+  const handleSaveTemplate = (templateData: any) => {
+    console.log('Template created:', templateData);
+    // TODO: Save template to database/storage
+    // Add to templates list, upload thumbnail, etc.
+  };
+
+  const handleSaveFolder = (folderData: any) => {
+    console.log('Folder created:', folderData);
+    // TODO: Save folder to database/storage
+  };
+
+  const handleAddTemplateItem = (templateData: any) => {
+    console.log('Template item added:', templateData);
+    // TODO: Process imported template
+  };
+
+  const handleGenderFilterToggle = (gender: GenderFilter) => {
+    setSelectedGenderFilters(prev =>
+      prev.includes(gender)
+        ? prev.filter(g => g !== gender)
+        : [...prev, gender]
+    );
+  };
+
+  const handleWardrobeFilterToggle = (category: string) => {
+    setSelectedWardrobeFilters(prev =>
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
+  };
+
+  // Determine if filter should be visible
+  const showFilter = selectedSection === 'user';
+
+  // Quick filter options for Pre-Defined section
+  const quickFilterOptions = selectedSection === 'predefined'
+    ? (activeCategory === 'models'
+        ? ['Male', 'Female', 'Non-Binary']
+        : ['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Footwear', 'Accessories'])
+    : [];
+
+  const handleQuickFilterToggle = (filter: string) => {
+    setSelectedQuickFilter(prev => prev === filter ? null : filter);
+  };
+
+  // Get active filters display
+  const activeFilterCount = activeCategory === 'models'
+    ? selectedGenderFilters.length
+    : selectedWardrobeFilters.length;
+
+  return (
+    <div className="w-full h-full flex flex-col relative bg-[#111111]">
+      {/* Header */}
+      <div className="h-16 border-b border-gray-800 bg-[#1a1a1a] flex items-center justify-between px-6 flex-shrink-0 z-20">
+        <h1 className="text-lg font-sans font-semibold text-gray-200">Templates</h1>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+            title={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view`}
+          >
+            <LayoutIcon className="w-5 h-5" />
+          </button>
+          <button
+            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+            title="Filter templates"
+          >
+            <FilterIcon className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-grow flex min-h-0">
+        {/* Sidebar */}
+        <div className="w-64 bg-[#1a1a1a] border-r border-gray-800 flex flex-col flex-shrink-0 h-full overflow-y-auto">
+          <div className="p-4 space-y-3">
+            {/* Create Template Button */}
+            <button
+              onClick={handleCreateTemplate}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-colors shadow-sm"
+            >
+              <PlusIcon className="w-4 h-4" />
+              Create Template
+            </button>
+
+            {/* Divider */}
+            <div className="h-px bg-gray-800"></div>
+
+            {/* USER DEFINED Section */}
+            <div className="space-y-1">
+              <button
+                onClick={() => setIsUserDefinedExpanded(!isUserDefinedExpanded)}
+                className="w-full flex items-center justify-between text-xs font-bold text-gray-500 uppercase tracking-wider px-2 py-2 hover:text-gray-400 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <span>User Defined</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCreateFolder();
+                    }}
+                    className="p-0.5 hover:bg-gray-800 rounded"
+                    title="Create folder"
+                  >
+                    <FolderPlusIcon className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAddItem();
+                    }}
+                    className="p-0.5 hover:bg-gray-800 rounded"
+                    title="Add item"
+                  >
+                    <FilePlusIcon className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {isUserDefinedExpanded ? (
+                  <ChevronUpIcon className="w-4 h-4" />
+                ) : (
+                  <ChevronDownIcon className="w-4 h-4" />
+                )}
+              </button>
+
+              {isUserDefinedExpanded && (
+                <div className="pl-3 space-y-1">
+                  <button
+                    onClick={() => {
+                      setActiveCategory('models');
+                      setSelectedSection('user');
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                      activeCategory === 'models' && selectedSection === 'user'
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    Models
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveCategory('wardrobe');
+                      setSelectedSection('user');
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                      activeCategory === 'wardrobe' && selectedSection === 'user'
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    Wardrobe
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="h-px bg-gray-800"></div>
+
+            {/* PRE-DEFINED Section */}
+            <div className="space-y-1">
+              <button
+                onClick={() => setIsPreDefinedExpanded(!isPreDefinedExpanded)}
+                className="w-full flex items-center justify-between text-xs font-bold text-gray-500 uppercase tracking-wider px-2 py-2 hover:text-gray-400 transition-colors"
+              >
+                <span>Pre-Defined</span>
+                {isPreDefinedExpanded ? (
+                  <ChevronUpIcon className="w-4 h-4" />
+                ) : (
+                  <ChevronDownIcon className="w-4 h-4" />
+                )}
+              </button>
+
+              {isPreDefinedExpanded && (
+                <div className="pl-3 space-y-1">
+                  <button
+                    onClick={() => {
+                      setActiveCategory('models');
+                      setSelectedSection('predefined');
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                      activeCategory === 'models' && selectedSection === 'predefined'
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    Models
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveCategory('wardrobe');
+                      setSelectedSection('predefined');
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                      activeCategory === 'wardrobe' && selectedSection === 'predefined'
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    Wardrobe
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 bg-[#111111] flex flex-col min-h-0">
+          {/* Toolbar */}
+          <div className="border-b border-gray-800 bg-[#1a1a1a] px-6 py-4 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-3 flex-1">
+              <div className="relative flex-1 max-w-md">
+                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search templates..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-black/30 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-200 focus:border-transparent"
+                />
+              </div>
+
+              {/* Quick Filter Pills - Only for Pre-Defined section */}
+              {selectedSection === 'predefined' && quickFilterOptions.length > 0 && (
+                <div className="flex items-center gap-2">
+                  {quickFilterOptions.map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => handleQuickFilterToggle(filter)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
+                        selectedQuickFilter === filter
+                          ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                          : 'bg-transparent border-gray-600 text-gray-400 hover:bg-gray-800 hover:border-gray-500 hover:text-gray-200'
+                      }`}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Filter Button - Only visible for User Defined section */}
+              {showFilter && (
+                <div ref={filterDropdownRef} className="relative">
+                  <button
+                    onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                    className={`p-2 rounded-lg transition-colors flex items-center gap-2 ${
+                      activeFilterCount > 0 || isFilterDropdownOpen
+                        ? 'bg-blue-500 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
+                    title="Filter templates"
+                  >
+                    <FilterIcon className="w-5 h-5" />
+                    {activeFilterCount > 0 && (
+                      <span className="text-xs font-semibold">{activeFilterCount}</span>
+                    )}
+                  </button>
+
+                  {/* Filter Dropdown */}
+                  <AnimatePresence>
+                    {isFilterDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        className="absolute right-0 mt-2 w-56 bg-[#2a2a2a] border border-gray-700 rounded-lg shadow-xl z-50 origin-top-right"
+                      >
+                        <div className="p-3 border-b border-gray-700">
+                          <h3 className="text-sm font-semibold text-gray-200">
+                            Filter by {activeCategory === 'models' ? 'Gender' : 'Category'}
+                          </h3>
+                        </div>
+                        <div className="p-3 space-y-2">
+                          {activeCategory === 'models' ? (
+                            // Gender filters for Models
+                            <>
+                              <button
+                                onClick={() => handleGenderFilterToggle('male')}
+                                className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                                  selectedGenderFilters.includes('male')
+                                    ? 'bg-blue-500 text-white border border-blue-500'
+                                    : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
+                                }`}
+                              >
+                                Male
+                              </button>
+                              <button
+                                onClick={() => handleGenderFilterToggle('female')}
+                                className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                                  selectedGenderFilters.includes('female')
+                                    ? 'bg-blue-500 text-white border border-blue-500'
+                                    : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
+                                }`}
+                              >
+                                Female
+                              </button>
+                              <button
+                                onClick={() => handleGenderFilterToggle('lgbtq+')}
+                                className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                                  selectedGenderFilters.includes('lgbtq+')
+                                    ? 'bg-blue-500 text-white border border-blue-500'
+                                    : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
+                                }`}
+                              >
+                                LGBTQ+
+                              </button>
+                            </>
+                          ) : (
+                            // Category filters for Wardrobe
+                            <>
+                              {wardrobeCategories.length > 0 ? (
+                                wardrobeCategories.map(category => (
+                                  <button
+                                    key={category}
+                                    onClick={() => handleWardrobeFilterToggle(category)}
+                                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                                      selectedWardrobeFilters.includes(category)
+                                        ? 'bg-blue-500 text-white border border-blue-500'
+                                        : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
+                                    }`}
+                                  >
+                                    {category}
+                                  </button>
+                                ))
+                              ) : (
+                                <p className="text-sm text-gray-400 px-3 py-2 text-center">
+                                  No categories available
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                        {activeFilterCount > 0 && (
+                          <div className="p-3 border-t border-gray-700">
+                            <button
+                              onClick={() => {
+                                setSelectedGenderFilters([]);
+                                setSelectedWardrobeFilters([]);
+                              }}
+                              className="w-full text-center text-sm text-gray-400 hover:text-white transition-colors"
+                            >
+                              Clear All Filters
+                            </button>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <span>{templates.length} templates</span>
+            </div>
+          </div>
+
+          {/* Template Grid/List */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {templates.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center mb-4">
+                  <LayoutIcon className="w-8 h-8 text-gray-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-300 mb-2">
+                  No {selectedSection === 'user' ? 'User-Defined' : 'Pre-Defined'} Templates Yet
+                </h3>
+                <p className="text-sm text-gray-500 max-w-sm mb-6">
+                  {selectedSection === 'user'
+                    ? 'Create your first custom template to get started. Templates help you reuse models and wardrobes across projects.'
+                    : 'Pre-defined templates from the library will appear here.'}
+                </p>
+                {selectedSection === 'user' && (
+                  <button
+                    onClick={handleCreateTemplate}
+                    className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <PlusIcon className="w-4 h-4" />
+                    Create Your First Template
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div
+                className={
+                  viewMode === 'grid'
+                    ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
+                    : 'space-y-2'
+                }
+              >
+                {templates.map((template) => (
+                  <div
+                    key={template.id}
+                    className={`group relative ${
+                      viewMode === 'grid'
+                        ? 'aspect-[3/4] bg-gray-800/50 rounded-lg border border-gray-700 hover:border-gray-600 overflow-hidden cursor-pointer transition-all hover:scale-105'
+                        : 'flex items-center gap-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-gray-600 cursor-pointer transition-colors'
+                    }`}
+                  >
+                    {/* Template card content would go here */}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Modals */}
+      <CreateTemplateModal
+        isOpen={isCreateTemplateModalOpen}
+        onClose={() => setIsCreateTemplateModalOpen(false)}
+        onSave={handleSaveTemplate}
+        templateType={activeCategory}
+        wardrobeCategories={wardrobeCategories}
+      />
+      <CreateFolderModal
+        isOpen={isCreateFolderModalOpen}
+        onClose={() => setIsCreateFolderModalOpen(false)}
+        onSave={handleSaveFolder}
+      />
+      <AddTemplateItemModal
+        isOpen={isAddItemModalOpen}
+        onClose={() => setIsAddItemModalOpen(false)}
+        onAdd={handleAddTemplateItem}
+      />
+    </div>
+  );
+};
+
+export default Templates;

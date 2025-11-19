@@ -104,6 +104,13 @@ const Header: React.FC<HeaderProps> = ({ activeView, onNavigate, notifications, 
                 >
                     Video Creator
                 </button>
+                <div className="w-px h-6 bg-gray-700 mx-2"></div>
+                <button
+                    onClick={() => onNavigate('templates')}
+                    className={getButtonClasses('templates')}
+                >
+                    Templates
+                </button>
                 <button
                     onClick={() => onNavigate('projects')}
                     className={getButtonClasses('projects')}

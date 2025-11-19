@@ -155,6 +155,7 @@ interface ImageStudioProps {
   onProjectChange: (id: string) => void;
   onOpenProjectModal: (mode: 'create' | 'edit') => void;
   currentUser: User | null;
+  onCategoriesChange?: (categories: string[]) => void;
 }
 
 type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
@@ -179,6 +180,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   onProjectChange,
   onOpenProjectModal,
   currentUser,
+  onCategoriesChange,
 }) => {
   // Core State
   const [modelImageUrl, setModelImageUrl] = useState<string | null>(null);
@@ -233,6 +235,13 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   // NEW: Revision Prompt State
   const [revisionPrompt, setRevisionPrompt] = useState('');
   const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
+
+  // Notify parent when categories change
+  useEffect(() => {
+    if (onCategoriesChange) {
+      onCategoriesChange(categories);
+    }
+  }, [categories, onCategoriesChange]);
 
   const currentHistoryItem = useMemo(() => generatedModelHistory.find(item => item.id === currentHistoryItemId), [generatedModelHistory, currentHistoryItemId]);
   const displayImageUrl = useMemo(() => currentHistoryItem?.imageUrl || modelImageUrl, [currentHistoryItem, modelImageUrl]);

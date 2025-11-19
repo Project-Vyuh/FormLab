@@ -8,6 +8,7 @@ import Header from './components/Header';
 import CreateModel from './components/CreateModel';
 import ImageStudio from './components/ImageStudio';
 import VideoCreator from './components/VideoCreator';
+import Templates from './components/Templates';
 import Projects from './components/Projects';
 import Auth from './components/Auth';
 import EmailVerification from './components/EmailVerification';
@@ -19,7 +20,7 @@ import { onAuthStateChanged, signOutUser } from './services/authService';
 import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
 
 
-export type View = 'createModel' | 'imageStudio' | 'videoCreator' | 'projects';
+export type View = 'createModel' | 'imageStudio' | 'videoCreator' | 'templates' | 'projects';
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<View>('createModel');
@@ -45,6 +46,11 @@ const App: React.FC = () => {
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectModalMode, setProjectModalMode] = useState<'create' | 'edit'>('create');
+
+  // Wardrobe Categories State (shared between ImageStudio and Templates)
+  const [wardrobeCategories, setWardrobeCategories] = useState<string[]>([
+    'Uncategorized', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Footwear', 'Accessories'
+  ]);
 
 
   // Listen to authentication state changes
@@ -367,6 +373,7 @@ const App: React.FC = () => {
             onProjectChange={handleProjectChange}
             onOpenProjectModal={handleOpenProjectModal}
             currentUser={currentUser}
+            onCategoriesChange={setWardrobeCategories}
           />
         </div>
         <div className={`${activeView === 'videoCreator' ? 'block' : 'hidden'} absolute inset-0`}>
@@ -378,6 +385,9 @@ const App: React.FC = () => {
             onOpenProjectModal={handleOpenProjectModal}
             currentUser={currentUser}
           />
+        </div>
+        <div className={`${activeView === 'templates' ? 'block' : 'hidden'} absolute inset-0`}>
+          <Templates wardrobeCategories={wardrobeCategories} />
         </div>
         <div className={`${activeView === 'projects' ? 'block' : 'hidden'} absolute inset-0`}>
           <Projects />
