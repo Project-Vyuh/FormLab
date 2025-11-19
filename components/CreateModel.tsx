@@ -5,7 +5,7 @@
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UploadCloudIcon, PenLineIcon, CubeIcon, UndoIcon, RedoIcon, BookmarkIcon, DownloadIcon, CameraIcon, ZapIcon, LayoutIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, LayersIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon, Share2Icon } from './icons';
+import { UploadCloudIcon, PenLineIcon, CubeIcon, UndoIcon, RedoIcon, BookmarkIcon, DownloadIcon, CameraIcon, ZapIcon, LayoutIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, LayersIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon, Share2Icon, UserIcon } from './icons';
 import { Compare } from './ui/compare';
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
 import Spinner from './Spinner';
@@ -35,6 +35,8 @@ interface CreateModelProps {
   onProjectChange: (id: string) => void;
   onOpenProjectModal: (mode: 'create' | 'edit') => void;
   currentUser: User | null;
+  modelGallery: Model[];
+  onSelectModel: (url: string) => void;
 }
 
 type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
@@ -176,7 +178,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
     currentProjectId,
     onProjectChange,
     onOpenProjectModal,
-    currentUser
+    currentUser,
+    modelGallery,
+    onSelectModel
 }) => {
   // Loading & App State
   const [isLoaded, setIsLoaded] = useState(false);
@@ -801,9 +805,40 @@ const CreateModel: React.FC<CreateModelProps> = ({
   const renderLeftPanelContent = () => {
     const activePreset = STYLE_PRESETS.find(p => JSON.stringify(p.settings) === JSON.stringify(Object.keys(p.settings).reduce((acc, key) => ({ ...acc, [key]: generationSettings[key as keyof GenerationSettings] }), {})));
     const isUploadDisabled = selectedModelName === 'Imagen 4';
-    
+
     return (
       <div className="flex-grow p-6 space-y-4 overflow-y-auto">
+        {/* Your Models Section */}
+        <div className="flex-shrink-0">
+          <h2 className="text-base font-sans font-semibold text-gray-200 flex items-center gap-2 mb-3">
+            <UserIcon className="w-5 h-5" />
+            Your Models
+          </h2>
+          <div className="grid grid-cols-3 gap-3">
+            {modelGallery.map(model => {
+              const isSelected = model.url === generatedModelUrl;
+              return (
+                <div key={model.id}>
+                  <button
+                    onClick={() => onSelectModel(model.url)}
+                    disabled={isGenerating || isSelected}
+                    className={`w-full aspect-square rounded-lg overflow-hidden border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 group disabled:cursor-not-allowed ${
+                      isSelected
+                        ? 'border-gray-100 shadow-md'
+                        : 'border-gray-700 hover:border-gray-500'
+                    }`}
+                    aria-label={`Select model ${model.id}`}
+                  >
+                    <img src={model.url} alt={`Model ${model.id}`} className="w-full h-full object-cover" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="border-t border-gray-800 pt-4"></div>
+
         <CollapsibleSection title={isResultView ? "Revision" : "Prompt"} icon={<PenLineIcon className="w-4 h-4 text-gray-400" />} isOpen={openSections.prompt} onToggle={() => setOpenSections(p => ({ ...p, prompt: !p.prompt }))}>
           <PromptPanel
             prompt={isResultView ? revisionPrompt : modelDescription}
@@ -834,26 +869,24 @@ const CreateModel: React.FC<CreateModelProps> = ({
             </div>
           </div>
         </CollapsibleSection>
-        
-        <div className="pt-4 border-t border-gray-800">
-            <h2 className="text-base font-sans font-semibold text-gray-200 mb-4">
-                Global Controls
-            </h2>
-            <div className="space-y-4">
-                <GlobalControls
-                    generationSettings={generationSettings}
-                    onSettingsChange={setGenerationSettings}
-                    isGenerating={isGenerating}
-                    openSections={openSections}
-                    onToggleSection={(section) => setOpenSections(p => ({ ...p, [section]: !p[section] }))}
-                    selectedLightId={selectedLightId}
-                    onSelectLightId={setSelectedLightId}
-                    onAddLight={handleAddLight}
-                    onUpdateLight={updateLight}
-                    onRemoveLight={removeLight}
-                    onPanelToggle={handlePanelToggle}
-                />
-            </div>
+
+        <h2 className="text-base font-sans font-semibold text-gray-200 mb-4 mt-4">
+            Global Controls
+        </h2>
+        <div className="space-y-4">
+            <GlobalControls
+                generationSettings={generationSettings}
+                onSettingsChange={setGenerationSettings}
+                isGenerating={isGenerating}
+                openSections={openSections}
+                onToggleSection={(section) => setOpenSections(p => ({ ...p, [section]: !p[section] }))}
+                selectedLightId={selectedLightId}
+                onSelectLightId={setSelectedLightId}
+                onAddLight={handleAddLight}
+                onUpdateLight={updateLight}
+                onRemoveLight={removeLight}
+                onPanelToggle={handlePanelToggle}
+            />
         </div>
       </div>
     );

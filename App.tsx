@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Header from './components/Header';
 import CreateModel from './components/CreateModel';
 import ImageStudio from './components/ImageStudio';
@@ -141,18 +141,20 @@ const App: React.FC = () => {
 
           setCurrentProjectId(projectIdToLoad);
 
-          // Load latest model from each project into the gallery
+          // Load ALL models from ALL projects into the gallery
           const galleryModels: Model[] = [];
           for (const project of projects) {
             try {
               const state = await loadProjectState(project.id);
               if (state?.generatedModelHistory?.length > 0) {
-                // Get the very last image generated in that project
-                const lastHistoryItem = state.generatedModelHistory[state.generatedModelHistory.length - 1];
-                galleryModels.push({
-                  id: `${project.id}-${lastHistoryItem.imageUrl.slice(-10)}`, // Make ID more unique
-                  url: lastHistoryItem.imageUrl,
-                  source: 'user',
+                // Get ALL images generated in that project
+                state.generatedModelHistory.forEach(historyItem => {
+                  galleryModels.push({
+                    id: `${project.id}-${historyItem.id}`,
+                    url: historyItem.imageUrl,
+                    source: 'user',
+                    projectId: project.id, // Associate model with project
+                  });
                 });
               }
             } catch (e) {
@@ -231,14 +233,22 @@ const App: React.FC = () => {
     }
   }, [projectList, handleProjectsUpdate]);
 
+  // Filter models for current project only (user models + predefined models)
+  const currentProjectModels = useMemo(() => {
+    if (!currentProjectId) return modelGallery;
+    return modelGallery.filter(model =>
+      model.source === 'predefined' || model.projectId === currentProjectId
+    );
+  }, [modelGallery, currentProjectId]);
+
   const handleNavigate = useCallback((view: View) => {
     // If navigating to Image Studio and no model is active, but models exist,
     // select the first one to avoid showing an unnecessary empty state.
-    if (view === 'imageStudio' && !activeModelUrl && modelGallery.length > 0) {
-      setActiveModelUrl(modelGallery[0].url);
+    if (view === 'imageStudio' && !activeModelUrl && currentProjectModels.length > 0) {
+      setActiveModelUrl(currentProjectModels[0].url);
     }
     setActiveView(view);
-  }, [activeModelUrl, modelGallery]);
+  }, [activeModelUrl, currentProjectModels]);
 
   const handleSaveModel = useCallback(async (modelUrl: string) => {
     // This logic is now mostly deprecated in favor of project-based saves,
@@ -254,10 +264,14 @@ const App: React.FC = () => {
   const handleModelCreated = useCallback(async (modelUrl: string, projectId: string) => {
     // Add/update the model in the gallery for ImageStudio
     setModelGallery(prevGallery => {
-      const newModel: Model = { id: `${projectId}-${Date.now()}`, url: modelUrl };
-      // Remove any old model from the same project to avoid duplicates in the gallery
-      const filteredGallery = prevGallery.filter(m => !m.id.startsWith(projectId));
-      return [newModel, ...filteredGallery];
+      const newModel: Model = {
+        id: `${projectId}-${Date.now()}`,
+        url: modelUrl,
+        source: 'user',
+        projectId: projectId, // Associate with current project
+      };
+      // Add the new model to the gallery
+      return [newModel, ...prevGallery];
     });
 
     // Set it as the active model for immediate use
@@ -376,12 +390,14 @@ const App: React.FC = () => {
             onProjectChange={handleProjectChange}
             onOpenProjectModal={handleOpenProjectModal}
             currentUser={currentUser}
+            modelGallery={currentProjectModels}
+            onSelectModel={setActiveModelUrl}
           />
         </div>
         <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>
           <ImageStudio
             initialModelUrl={activeModelUrl}
-            modelGallery={modelGallery}
+            modelGallery={currentProjectModels}
             onSelectModel={setActiveModelUrl}
             onDeleteModel={handleDeleteModel}
             onUploadNewModel={handleSaveModel}

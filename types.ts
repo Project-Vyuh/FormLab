@@ -11,6 +11,7 @@ export interface Model {
   gender?: 'male' | 'female' | 'non-binary'; // For pre-defined models
   tags?: string[]; // For filtering
   name?: string; // Display name
+  projectId?: string; // Associated project ID for user-created models
 }
 
 export type WardrobeCategory = string;
