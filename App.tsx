@@ -16,7 +16,7 @@ import ProjectModal from './components/ProjectModal';
 import { Model, Project, Notification, User } from './types';
 import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
-import { getUserDocument, updateLastLogin } from './services/userService';
+import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
 
 
 export type View = 'createModel' | 'imageStudio' | 'videoCreator' | 'projects';
@@ -64,10 +64,23 @@ const App: React.FC = () => {
 
         try {
           // Fetch user data from Firestore
-          const userData = await getUserDocument(firebaseUser.uid);
+          let userData = await getUserDocument(firebaseUser.uid);
 
-          // Update last login timestamp
-          await updateLastLogin(firebaseUser.uid);
+          // If user document doesn't exist, create it (for existing users who signed up before this feature)
+          if (!userData) {
+            console.log('No user document found, creating one...');
+            await createUserDocument(firebaseUser.uid, {
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+              authProvider: firebaseUser.providerData[0]?.providerId === 'google.com' ? 'google' : 'email',
+              emailVerified: firebaseUser.emailVerified,
+            });
+            userData = await getUserDocument(firebaseUser.uid);
+          } else {
+            // Update last login timestamp for existing users
+            await updateLastLogin(firebaseUser.uid);
+          }
 
           // Merge Firebase Auth data with Firestore data
           const user: User = {

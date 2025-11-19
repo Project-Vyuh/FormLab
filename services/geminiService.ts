@@ -5,6 +5,8 @@
 
 import { GoogleGenAI, GenerateContentResponse, Modality, Type } from "@google/genai";
 import { GenerationSettings, VideoGenerationSettings, AspectRatio, GarmentAnalysis, UpscaleResolution, Light, LightingRig, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, DigitalDarkroomSettings } from "../types";
+import { storage } from "./firebase";
+import { ref, getBlob } from "firebase/storage";
 
 const fileToPart = async (file: File) => {
     const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -25,7 +27,68 @@ const dataUrlToParts = (dataUrl: string) => {
     return { mimeType: mimeMatch[1], data: arr[1] };
 }
 
-const dataUrlToPart = (dataUrl: string) => {
+// Convert any URL (data URL, blob URL, or Firebase Storage URL) to base64 data URL
+const urlToDataUrl = async (url: string): Promise<string> => {
+    // If already a data URL, return as-is
+    if (url.startsWith('data:')) {
+        return url;
+    }
+
+    try {
+        let blob: Blob;
+
+        // Check if this is a Firebase Storage URL
+        if (url.includes('firebasestorage.googleapis.com')) {
+            console.log('Detected Firebase Storage URL, using SDK to bypass CORS');
+
+            // Extract the storage path from the URL
+            // URL format: https://firebasestorage.googleapis.com/v0/b/bucket/o/path?alt=media&token=...
+            // We need to extract just the path part (between /o/ and ?)
+            const urlObj = new URL(url);
+            const pathMatch = urlObj.pathname.match(/\/o\/(.+?)(?:\?|$)/);
+
+            if (pathMatch && pathMatch[1]) {
+                // Decode the URL-encoded path
+                const storagePath = decodeURIComponent(pathMatch[1]);
+                console.log('Extracted storage path:', storagePath);
+
+                try {
+                    // Use Firebase Storage SDK to get the blob (bypasses CORS)
+                    const storageRef = ref(storage, storagePath);
+                    blob = await getBlob(storageRef);
+                    console.log('Successfully fetched blob from Firebase Storage SDK');
+                } catch (storageError) {
+                    console.error('Firebase Storage SDK error:', storageError);
+                    throw storageError;
+                }
+            } else {
+                console.error('Failed to extract storage path from URL:', url);
+                throw new Error('Invalid Firebase Storage URL format');
+            }
+        } else {
+            // For non-Firebase URLs (blob URLs, etc.), use regular fetch
+            console.log('Non-Firebase URL, using regular fetch');
+            const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            blob = await response.blob();
+        }
+
+        // Convert blob to data URL
+        return new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error('Failed to fetch and convert URL to data URL:', error);
+        throw new Error('Failed to load image from URL');
+    }
+}
+
+const dataUrlToPart = async (url: string) => {
+    // Convert any URL type to data URL first
+    const dataUrl = await urlToDataUrl(url);
     const { mimeType, data } = dataUrlToParts(dataUrl);
     return { inlineData: { mimeType, data } };
 }
@@ -900,7 +963,7 @@ Attire: The model is wearing simple, plain, neutral-colored, form-fitting athlet
 
 export const upscaleImage = async (baseImageUrl: string, resolution: UpscaleResolution): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
-    const baseImagePart = dataUrlToPart(baseImageUrl);
+    const baseImagePart = await dataUrlToPart(baseImageUrl);
     
     const prompt = `You are a high-end image restoration and upscaling AI.
 **Input:** A digital fashion model image.
@@ -926,7 +989,7 @@ Return ONLY the upscaled image.` + FINAL_OUTFIT_RULE;
 
 export const selectivelyEnhanceImage = async (baseImageUrl: string, enhancementTarget: 'face' | 'fabric' | 'accessories'): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
-    const baseImagePart = dataUrlToPart(baseImageUrl);
+    const baseImagePart = await dataUrlToPart(baseImageUrl);
     const prompt = `You are a high-end image restoration AI.
     **Input:** A digital fashion model image.
     **Task:** Sharpen and enhance ONLY the ${enhancementTarget} in the image.
@@ -976,7 +1039,7 @@ Focus on these elements:
 
 export const enhanceRevisionPrompt = async (baseImageUrl: string, userInput: string, originalDescription?: string): Promise<string> => {
     const model = 'gemini-2.5-flash';
-    const baseImagePart = dataUrlToPart(baseImageUrl);
+    const baseImagePart = await dataUrlToPart(baseImageUrl);
     const textPart = { text: '' };
     let promptText: string;
 
@@ -1025,7 +1088,7 @@ Output: Return ONLY the enhanced prompt.`;
 
 export const generateVirtualTryOnImage = async (modelImageUrl: string, garmentImage: File, settings: GenerationSettings): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
-    const modelImagePart = dataUrlToPart(modelImageUrl);
+    const modelImagePart = await dataUrlToPart(modelImageUrl);
     const garmentImagePart = await fileToPart(garmentImage);
     
     const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any] });
@@ -1065,7 +1128,7 @@ export const generateVirtualTryOnWithPoseReference = async (
     settings: GenerationSettings
 ): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
-    const modelImagePart = dataUrlToPart(modelImageUrl);
+    const modelImagePart = await dataUrlToPart(modelImageUrl);
     const garmentImagePart = await fileToPart(garmentImage);
     const poseReferenceImagePart = await fileToPart(poseReferenceImage);
     
@@ -1102,7 +1165,7 @@ ${promptSuffix}`
 
 export const generatePoseVariation = async (tryOnImageUrl: string, poseInstruction: string, settings: GenerationSettings): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
-    const tryOnImagePart = dataUrlToPart(tryOnImageUrl);
+    const tryOnImagePart = await dataUrlToPart(tryOnImageUrl);
     const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any, 'posePrompt'] });
 
     const backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
@@ -1132,7 +1195,7 @@ ${promptSuffix}`;
 
 export const reviseGeneratedImage = async (baseImageUrl: string, revisionPrompt: string, settings: GenerationSettings): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
-    const baseImagePart = dataUrlToPart(baseImageUrl);
+    const baseImagePart = await dataUrlToPart(baseImageUrl);
     const prompt = `You are a specialized AI fashion editor.
 **Input Image:** A digital fashion model wearing neutral athletic clothing.
 **User Request:** "${revisionPrompt}"
@@ -1162,8 +1225,8 @@ Return ONLY the final image.` + FINAL_OUTFIT_RULE;
 
 export const reviseMaskedImage = async (baseImageUrl: string, maskDataUrl: string, revisionPrompt: string, settings: GenerationSettings): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
-    const baseImagePart = dataUrlToPart(baseImageUrl);
-    const maskImagePart = dataUrlToPart(maskDataUrl);
+    const baseImagePart = await dataUrlToPart(baseImageUrl);
+    const maskImagePart = await dataUrlToPart(maskDataUrl);
 
     const prompt = `You are a specialized AI fashion editor performing a masked inpainting task.
     **Inputs:**
@@ -1195,7 +1258,7 @@ export const reviseMaskedImage = async (baseImageUrl: string, maskDataUrl: strin
 
 export const regenerateFrame = async (baseImageUrl: string, settings: GenerationSettings): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
-    const baseImagePart = dataUrlToPart(baseImageUrl);
+    const baseImagePart = await dataUrlToPart(baseImageUrl);
     const { aspectRatio } = settings;
     const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['aspectRatio' as any, 'shotFraming'] });
 
