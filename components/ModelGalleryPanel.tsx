@@ -74,91 +74,93 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
   
   return (
     <aside className="h-full flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-r border-gray-200/60 dark:border-gray-700/60 flex flex-col">
-       <ProjectSelectorPanel
-          projects={projectList}
-          currentProjectId={currentProjectId}
-          onProjectChange={onProjectChange}
-          onEditProject={() => onOpenProjectModal('edit')}
-          onCreateProject={() => onOpenProjectModal('create')}
-          isCreateDisabled={true}
+      {/* --- FIXED TOP: Project Section --- */}
+      <ProjectSelectorPanel
+        projects={projectList}
+        currentProjectId={currentProjectId}
+        onProjectChange={onProjectChange}
+        onEditProject={() => onOpenProjectModal('edit')}
+        onCreateProject={() => onOpenProjectModal('create')}
+        isCreateDisabled={true}
       />
 
-      {/* --- Your Selected Model (Fixed Section) --- */}
-      <div className="flex-shrink-0 p-4 border-b border-gray-700/60">
-        <h2 className="text-base font-sans font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2 mb-3">
-          <UserIcon className="w-5 h-5" />
-          Your Selected Model
-        </h2>
-        {selectedStylingModel ? (
-          <div className="space-y-3">
-            <div className="w-full aspect-square rounded-lg overflow-hidden border-2 border-blue-500 shadow-md">
-              <img
-                src={selectedStylingModel.url}
-                alt={selectedStylingModel.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              <p className="font-medium text-gray-800 dark:text-gray-200 truncate">
-                {selectedStylingModel.name}
-              </p>
-              <p className="text-xs mt-1">
-                Selected from Create Model
-              </p>
-            </div>
-            <button
-              onClick={onNavigateToCreateModel}
-              className="w-full py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-            >
-              Change Model
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="w-full aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-gray-900/50">
-              <div className="text-center p-4">
-                <UserIcon className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-600 mb-2" />
-                <p className="text-xs text-gray-500 dark:text-gray-500">
-                  No model selected
+      {/* --- SCROLLABLE MIDDLE: All Content Sections --- */}
+      <div className="flex-grow min-h-0 overflow-y-auto">
+        {/* Your Selected Model */}
+        <div className="p-4 border-b border-gray-700/60">
+          <h2 className="text-base font-sans font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2 mb-3">
+            <UserIcon className="w-5 h-5" />
+            Your Selected Model
+          </h2>
+          {selectedStylingModel ? (
+            <div className="space-y-3">
+              <div className="w-full aspect-square rounded-lg overflow-hidden border-2 border-blue-500 shadow-md">
+                <img
+                  src={selectedStylingModel.url}
+                  alt={selectedStylingModel.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="font-medium text-gray-800 dark:text-gray-200 truncate">
+                  {selectedStylingModel.name}
+                </p>
+                <p className="text-xs mt-1">
+                  Selected from Create Model
                 </p>
               </div>
+              <button
+                onClick={onNavigateToCreateModel}
+                className="w-full py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                Change Model
+              </button>
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-500 text-center p-3 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-900">
-              The base model or its version you selected in Create Model will appear here.
+          ) : (
+            <div className="space-y-3">
+              <div className="w-full aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-gray-900/50">
+                <div className="text-center p-4">
+                  <UserIcon className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-600 mb-2" />
+                  <p className="text-xs text-gray-500 dark:text-gray-500">
+                    No model selected
+                  </p>
+                </div>
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-500 text-center p-3 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-900">
+                The base model or its version you selected in Create Model will appear here.
+              </div>
+              <button
+                onClick={onNavigateToCreateModel}
+                className="w-full py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Go to Create Model
+              </button>
             </div>
-            <button
-              onClick={onNavigateToCreateModel}
-              className="w-full py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-            >
-              Go to Create Model
-            </button>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* --- Text Revision Section --- */}
-      <div className="p-4 border-b border-gray-700/60">
-        <h3 className="text-base font-sans font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2 mb-3">
+        {/* Text Revision */}
+        <div className="p-4 border-b border-gray-700/60">
+          <h3 className="text-base font-sans font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2 mb-3">
             <PenLineIcon className="w-5 h-5" />
             Text Revision
-        </h3>
-        <PromptPanel
-          prompt={revisionPrompt}
-          onPromptChange={onRevisionPromptChange}
-          placeholder="e.g., Change hair to blonde..."
-          rows={3}
-          isGenerating={isLoading}
-          showEnhanceButton={true}
-          onEnhance={onEnhanceRevisionPrompt}
-          isEnhancing={isEnhancingPrompt}
-          enhanceButtonText={revisionPrompt.trim() ? 'Enhance' : 'Suggest'}
-          showUploadButton={false}
-        />
-        <button onClick={onApplyRevision} disabled={isLoading || !revisionPrompt.trim()} className="w-full mt-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">Apply Prompt</button>
-      </div>
+          </h3>
+          <PromptPanel
+            prompt={revisionPrompt}
+            onPromptChange={onRevisionPromptChange}
+            placeholder="e.g., Change hair to blonde..."
+            rows={3}
+            isGenerating={isLoading}
+            showEnhanceButton={true}
+            onEnhance={onEnhanceRevisionPrompt}
+            isEnhancing={isEnhancingPrompt}
+            enhanceButtonText={revisionPrompt.trim() ? 'Enhance' : 'Suggest'}
+            showUploadButton={false}
+          />
+          <button onClick={onApplyRevision} disabled={isLoading || !revisionPrompt.trim()} className="w-full mt-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">Apply Prompt</button>
+        </div>
 
-      {/* --- Scrollable area for Library and Controls --- */}
-      <div className="flex-grow min-h-0 overflow-y-auto">
+        {/* Wardrobe Library */}
         <WardrobeLibrary 
           wardrobe={props.wardrobe}
           onSelectItem={props.onWardrobeItemSelect}
@@ -200,8 +202,8 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
         </div>
       </div>
       
-       {/* --- Fixed bottom section for model switcher --- */}
-       <div className="flex-shrink-0 p-4 border-t border-gray-800">
+       {/* --- FIXED BOTTOM: Generation Model Switcher --- */}
+       <div className="flex-shrink-0 p-4 border-t border-gray-200/60 dark:border-gray-700/60">
         <label className="text-xs font-medium text-gray-400 mb-2 block flex items-center gap-2">
             <CubeIcon className="w-4 h-4 text-gray-500" />
             Generation Model
