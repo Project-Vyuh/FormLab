@@ -35,7 +35,7 @@ interface ModelGalleryPanelProps {
   favorites: string[];
   onToggleFavorite: (itemId: string) => void;
   recentlyUsed: WardrobeItem[];
-  filters: Record<string, string[]>; 
+  filters: Record<string, string[]>;
   onFilterChange: (filterType: string, value: string) => void;
   onClearFilters: () => void;
   onAddProduct: (productData: Omit<WardrobeItem, 'id' | 'url'> & { file: File }) => void;
@@ -71,7 +71,7 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
     projectList, currentProjectId, onProjectChange, onOpenProjectModal,
     revisionPrompt, onRevisionPromptChange, onEnhanceRevisionPrompt, onApplyRevision, isEnhancingPrompt
   } = props;
-  
+
   return (
     <aside className="h-full flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-r border-gray-200/60 dark:border-gray-700/60 flex flex-col">
       {/* --- FIXED TOP: Project Section --- */}
@@ -94,21 +94,26 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
           </h2>
           {selectedStylingModel ? (
             <div className="space-y-3">
-              <div className="w-full aspect-square rounded-lg overflow-hidden border-2 border-blue-500 shadow-md">
-                <img
-                  src={selectedStylingModel.url}
-                  alt={selectedStylingModel.name}
-                  className="w-full h-full object-cover"
-                />
+              {/* Inline thumbnail and name */}
+              <div className="flex items-center gap-3">
+                <div className="w-[60px] h-[60px] flex-shrink-0 rounded-lg overflow-hidden border-2 border-blue-500 shadow-md">
+                  <img
+                    src={selectedStylingModel.url}
+                    alt={selectedStylingModel.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-800 dark:text-gray-200 truncate text-sm">
+                    {selectedStylingModel.name}
+                  </p>
+                </div>
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                <p className="font-medium text-gray-800 dark:text-gray-200 truncate">
-                  {selectedStylingModel.name}
-                </p>
-                <p className="text-xs mt-1">
-                  Selected from Create Model
-                </p>
-              </div>
+              {/* Selected from text */}
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                Selected from Create Model
+              </p>
+              {/* Change Model button */}
               <button
                 onClick={onNavigateToCreateModel}
                 className="w-full py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
@@ -139,11 +144,11 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
           )}
         </div>
 
-        {/* Text Revision */}
+        {/* Create Model Revision */}
         <div className="p-4 border-b border-gray-700/60">
           <h3 className="text-base font-sans font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2 mb-3">
             <PenLineIcon className="w-5 h-5" />
-            Text Revision
+            Create Model Revision
           </h3>
           <PromptPanel
             prompt={revisionPrompt}
@@ -157,11 +162,11 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
             enhanceButtonText={revisionPrompt.trim() ? 'Enhance' : 'Suggest'}
             showUploadButton={false}
           />
-          <button onClick={onApplyRevision} disabled={isLoading || !revisionPrompt.trim()} className="w-full mt-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">Apply Prompt</button>
+          <button onClick={onApplyRevision} disabled={isLoading || !revisionPrompt.trim()} className="w-full mt-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">Apply Revision</button>
         </div>
 
         {/* Wardrobe Library */}
-        <WardrobeLibrary 
+        <WardrobeLibrary
           wardrobe={props.wardrobe}
           onSelectItem={props.onWardrobeItemSelect}
           searchQuery={props.searchQuery}
@@ -184,45 +189,45 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
         <div className="border-t border-gray-700/60 my-4 mx-4"></div>
         <div className="px-4 pb-4">
           <h2 className="text-base font-sans font-semibold text-gray-200 mb-4">
-              Global Controls
+            Global Controls
           </h2>
           <GlobalControls
-              generationSettings={generationSettings}
-              onSettingsChange={onSettingsChange}
-              isGenerating={isGenerating}
-              openSections={openSections}
-              onToggleSection={onToggleSection}
-              selectedLightId={selectedLightId}
-              onSelectLightId={onSelectLightId}
-              onAddLight={onAddLight}
-              onUpdateLight={onUpdateLight}
-              onRemoveLight={onRemoveLight}
-              onPanelToggle={onPanelToggle}
+            generationSettings={generationSettings}
+            onSettingsChange={onSettingsChange}
+            isGenerating={isGenerating}
+            openSections={openSections}
+            onToggleSection={onToggleSection}
+            selectedLightId={selectedLightId}
+            onSelectLightId={onSelectLightId}
+            onAddLight={onAddLight}
+            onUpdateLight={onUpdateLight}
+            onRemoveLight={onRemoveLight}
+            onPanelToggle={onPanelToggle}
           />
         </div>
       </div>
-      
-       {/* --- FIXED BOTTOM: Generation Model Switcher --- */}
-       <div className="flex-shrink-0 p-4 border-t border-gray-200/60 dark:border-gray-700/60">
+
+      {/* --- FIXED BOTTOM: Generation Model Switcher --- */}
+      <div className="flex-shrink-0 p-4 border-t border-gray-200/60 dark:border-gray-700/60">
         <label className="text-xs font-medium text-gray-400 mb-2 block flex items-center gap-2">
-            <CubeIcon className="w-4 h-4 text-gray-500" />
-            Generation Model
+          <CubeIcon className="w-4 h-4 text-gray-500" />
+          Generation Model
         </label>
         <div className="grid grid-cols-3 gap-2">
-            {generationModels.map(model => (
-                <button
-                    key={model.name}
-                    onClick={() => !model.disabled && onSelectGenerationModel(model.name)}
-                    title={model.title}
-                    disabled={isGenerating || model.disabled}
-                    className={`w-full text-center text-xs font-semibold py-1.5 px-2 rounded-md transition-all duration-200 border
+          {generationModels.map(model => (
+            <button
+              key={model.name}
+              onClick={() => !model.disabled && onSelectGenerationModel(model.name)}
+              title={model.title}
+              disabled={isGenerating || model.disabled}
+              className={`w-full text-center text-xs font-semibold py-1.5 px-2 rounded-md transition-all duration-200 border
                         ${selectedGenerationModel === model.name ? 'bg-gray-100 text-gray-900 border-gray-100' : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'}
                         ${model.disabled ? 'opacity-50 cursor-not-allowed' : ''}
                         disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                    {model.name}
-                </button>
-            ))}
+            >
+              {model.name}
+            </button>
+          ))}
         </div>
       </div>
     </aside>

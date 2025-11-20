@@ -323,7 +323,7 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
     return (
         <>
             <div className="flex-shrink-0 px-4 pt-4 pb-2">
-                <h2 className="text-base font-sans font-semibold text-gray-200 mb-3">The Library</h2>
+                <h2 className="text-base font-sans font-semibold text-gray-200 mb-3">Wardrobe</h2>
                 <div className="relative">
                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input 
