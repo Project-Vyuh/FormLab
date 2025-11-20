@@ -681,15 +681,21 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     const { file, ...rest } = productData;
     const productId = `item-${Date.now()}`;
 
+    // Create a temporary blob URL for immediate preview
+    const tempBlobUrl = URL.createObjectURL(file);
+
     // Upload to Firebase Storage if user is logged in
-    let productUrl = URL.createObjectURL(file);
+    let productUrl = tempBlobUrl;
     if (currentUser) {
         try {
             productUrl = await uploadFile(file, currentUser.uid, 'wardrobe');
             console.log('Wardrobe item uploaded to Firebase Storage:', productUrl);
+
+            // Revoke the temporary blob URL to free memory
+            URL.revokeObjectURL(tempBlobUrl);
         } catch (error) {
             console.error('Failed to upload wardrobe item to Firebase Storage, using blob URL:', error);
-            // Fallback to blob URL if upload fails
+            // Keep blob URL if upload fails (tempBlobUrl is already assigned to productUrl)
         }
     }
 

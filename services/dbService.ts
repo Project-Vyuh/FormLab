@@ -97,3 +97,41 @@ export const deleteProjectMetadata = async (id: string) => {
         request.onerror = () => reject(request.error);
     });
 };
+
+/**
+ * Migration: Clean up invalid blob URLs from wardrobe items
+ * This removes wardrobe items that have blob: URLs which are no longer valid
+ */
+export const cleanupBlobUrls = async (): Promise<void> => {
+    if (!db) await initDB();
+
+    try {
+        // Get all project metadata
+        const projects = await getAllProjectMetadata();
+
+        for (const project of projects) {
+            // Load project state
+            const state = await loadProjectState(project.id);
+
+            if (state?.wardrobe && Array.isArray(state.wardrobe)) {
+                // Filter out wardrobe items with blob URLs
+                const originalCount = state.wardrobe.length;
+                state.wardrobe = state.wardrobe.filter((item: any) => {
+                    return !item.url || !item.url.startsWith('blob:');
+                });
+
+                const removedCount = originalCount - state.wardrobe.length;
+
+                // Save back if we removed any items
+                if (removedCount > 0) {
+                    await saveProjectState(project.id, state);
+                    console.log(`Cleaned up ${removedCount} blob URL(s) from project ${project.id}`);
+                }
+            }
+        }
+
+        console.log('Blob URL cleanup completed');
+    } catch (error) {
+        console.error('Error during blob URL cleanup:', error);
+    }
+};

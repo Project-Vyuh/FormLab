@@ -15,7 +15,7 @@ import EmailVerification from './components/EmailVerification';
 import ProjectOnboarding from './components/ProjectOnboarding';
 import ProjectModal from './components/ProjectModal';
 import { Model, Project, Notification, User } from './types';
-import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata } from './services/dbService';
+import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, cleanupBlobUrls } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
 import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
 import { loadPredefinedModels } from './services/firestoreService';
@@ -123,6 +123,11 @@ const App: React.FC = () => {
     });
 
     return () => unsubscribe();
+  }, []);
+
+  // Run blob URL cleanup on app mount (one-time migration)
+  useEffect(() => {
+    cleanupBlobUrls();
   }, []);
 
   // Check for persisted user session on initial load
