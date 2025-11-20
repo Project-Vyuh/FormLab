@@ -38,6 +38,8 @@ interface CreateModelProps {
   modelGallery: Model[];
   onSelectModel: (model: Model) => void;
   onModelAdded?: (model: Model) => void; // Callback when a new base model is created
+  selectedHistoryItemId?: string | null; // History item to load from gallery selection
+  onHistoryItemLoaded?: () => void; // Callback when history item has been loaded
 }
 
 type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
@@ -182,7 +184,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
     currentUser,
     modelGallery,
     onSelectModel,
-    onModelAdded
+    onModelAdded,
+    selectedHistoryItemId,
+    onHistoryItemLoaded
 }) => {
   // Loading & App State
   const [isLoaded, setIsLoaded] = useState(false);
@@ -199,6 +203,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
   // History & Settings State
   const [generatedModelHistory, setGeneratedModelHistory] = useState<HistoryItem[]>([]);
   const [currentHistoryItemId, setCurrentHistoryItemId] = useState<string | null>(null);
+  const [pendingHistoryItemId, setPendingHistoryItemId] = useState<string | null>(null); // For gallery selection
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(initialGenerationSettings);
   const [openSections, setOpenSections] = useState({ project: true, prompt: true, presets: true, composition: false, camera: false, lighting: false, environment: false, finishing: false, advanced: false });
@@ -281,6 +286,40 @@ const CreateModel: React.FC<CreateModelProps> = ({
     } catch (err) { console.error("Failed to load brand styles", err); }
   }, []);
 
+  // Watch for gallery selection from props (works for both same-project and cross-project)
+  useEffect(() => {
+    if (selectedHistoryItemId) {
+      setPendingHistoryItemId(selectedHistoryItemId);
+      // Don't call onHistoryItemLoaded here - it will be called after successfully loading
+    }
+  }, [selectedHistoryItemId]);
+
+  // FAST PATH: Handle same-project model selection without reloading entire project
+  useEffect(() => {
+    if (!selectedHistoryItemId || !currentProjectId || !isLoaded) return;
+
+    // Check if this history item exists in the ALREADY LOADED history
+    const historyItem = generatedModelHistory.find(item => item.id === selectedHistoryItemId);
+
+    if (historyItem) {
+      // FAST PATH: Project already loaded, just switch to this history item
+      setCurrentHistoryItemId(selectedHistoryItemId);
+      setGenerationSettings(historyItem.settings);
+      setSelectedModelName(historyItem.modelName);
+      setRevisionPrompt('');
+      setRedoStack([]);
+      setIsMaskingMode(false);
+      setMaskDataUrl(null);
+      setIsCompareMode(false);
+      // Clear the pending ID since we handled it
+      setPendingHistoryItemId(null);
+      // Notify parent that we've loaded the model
+      onHistoryItemLoaded?.();
+    }
+    // If item not found, pendingHistoryItemId is already set by previous effect
+    // and the project loading effect will handle it
+  }, [selectedHistoryItemId, currentProjectId, isLoaded, generatedModelHistory, onHistoryItemLoaded]);
+
   useEffect(() => {
     if (!currentProjectId || !isLoaded) return;
     
@@ -294,24 +333,28 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 setGenerationSettings(mergedSettings);
                 setGeneratedModelHistory(savedState.generatedModelHistory || []);
 
-                // Check if there's a selected history item ID from gallery selection
-                const selectedHistoryItemId = localStorage.getItem('formlab-selectedHistoryItemId');
-                if (selectedHistoryItemId) {
+                // Check if there's a pending history item ID from gallery selection
+                if (pendingHistoryItemId) {
                     // Verify the history item exists in this project
-                    const itemExists = savedState.generatedModelHistory?.some(item => item.id === selectedHistoryItemId);
+                    const itemExists = savedState.generatedModelHistory?.some(item => item.id === pendingHistoryItemId);
                     if (itemExists) {
-                        setCurrentHistoryItemId(selectedHistoryItemId);
+                        setCurrentHistoryItemId(pendingHistoryItemId);
                         // Restore the history item's settings
-                        const historyItem = savedState.generatedModelHistory?.find(item => item.id === selectedHistoryItemId);
+                        const historyItem = savedState.generatedModelHistory?.find(item => item.id === pendingHistoryItemId);
                         if (historyItem) {
                             setGenerationSettings(historyItem.settings);
                             setSelectedModelName(historyItem.modelName);
                         }
+                        // Clear the pending selection after applying it
+                        setPendingHistoryItemId(null);
+                        // Notify parent that history item has been successfully loaded
+                        onHistoryItemLoaded?.();
                     } else {
                         setCurrentHistoryItemId(savedState.currentHistoryItemId === undefined ? null : savedState.currentHistoryItemId);
+                        setPendingHistoryItemId(null);
+                        // Also notify parent if item not found (to clear selection)
+                        onHistoryItemLoaded?.();
                     }
-                    // Clear the localStorage flag
-                    localStorage.removeItem('formlab-selectedHistoryItemId');
                 } else {
                     setCurrentHistoryItemId(savedState.currentHistoryItemId === undefined ? null : savedState.currentHistoryItemId);
                 }
@@ -319,7 +362,12 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 setRedoStack([]);
                 setModelDescription(savedState.modelDescription || '');
                 setRevisionPrompt(savedState.revisionPrompt || '');
-                setSelectedModelName(savedState.selectedModelName || 'Nano Banana');
+
+                // Only override selectedModelName if not loading from gallery (already set above)
+                if (!pendingHistoryItemId) {
+                    setSelectedModelName(savedState.selectedModelName || 'Nano Banana');
+                }
+
                 setHasSavedInstance(savedState.hasSavedInstance || false);
             } else {
                 resetProjectState();
@@ -332,14 +380,24 @@ const CreateModel: React.FC<CreateModelProps> = ({
             }
         }
     };
-    
+
     loadProject();
-  }, [currentProjectId, resetProjectState, isLoaded]);
+  }, [currentProjectId, resetProjectState, isLoaded, pendingHistoryItemId]);
   
-  const reset = useCallback(() => { 
+  const reset = useCallback(() => {
     resetProjectState();
     onOpenProjectModal('create');
   }, [resetProjectState, onOpenProjectModal]);
+
+  const handleStartNewModel = useCallback(() => {
+    // Reset to create a new model in the current project
+    setCurrentHistoryItemId(null);
+    setModelDescription('');
+    setRevisionPrompt('');
+    setIsCompareMode(false);
+    setIsMaskingMode(false);
+    setMaskDataUrl(null);
+  }, []);
 
   useEffect(() => {
     setZoom(1); setPan({ x: 0, y: 0 });
@@ -850,31 +908,41 @@ const CreateModel: React.FC<CreateModelProps> = ({
             <UserIcon className="w-5 h-5" />
             Your Models
           </h2>
-          {modelGallery.length === 0 ? (
-            <div className="text-sm text-gray-400 py-6 text-center">
-              When you create a model either through prompt or upload photo, the generated models will appear here.
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-3">
-              {modelGallery.map(model => {
-                const isSelected = model.url === generatedModelUrl;
-                return (
-                  <div key={model.id}>
-                    <button
-                      onClick={() => onSelectModel(model)}
-                      disabled={isGenerating || isSelected}
-                      className={`w-full aspect-square rounded-lg overflow-hidden border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 group disabled:cursor-not-allowed ${
-                        isSelected
-                          ? 'border-gray-100 shadow-md'
-                          : 'border-gray-700 hover:border-gray-500'
-                      }`}
-                      aria-label={`Select model ${model.id}`}
-                    >
-                      <img src={model.url} alt={`Model ${model.id}`} className="w-full h-full object-cover" />
-                    </button>
-                  </div>
-                );
-              })}
+          <div className="grid grid-cols-3 gap-3">
+            {/* Add New Model Card */}
+            <button
+              onClick={handleStartNewModel}
+              disabled={isGenerating}
+              className="w-full aspect-square rounded-lg border-2 border-dashed border-gray-600 hover:border-gray-400 transition-all duration-200 flex items-center justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Create new model"
+            >
+              <PlusIcon className="w-10 h-10 text-gray-500 group-hover:text-gray-300 transition-colors" />
+            </button>
+
+            {/* Existing Models */}
+            {modelGallery.map(model => {
+              const isSelected = model.url === generatedModelUrl;
+              return (
+                <div key={model.id}>
+                  <button
+                    onClick={() => onSelectModel(model)}
+                    disabled={isGenerating || isSelected}
+                    className={`w-full aspect-square rounded-lg overflow-hidden border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 group disabled:cursor-not-allowed ${
+                      isSelected
+                        ? 'border-gray-100 shadow-md'
+                        : 'border-gray-700 hover:border-gray-500'
+                    }`}
+                    aria-label={`Select model ${model.id}`}
+                  >
+                    <img src={model.url} alt={`Model ${model.id}`} className="w-full h-full object-cover" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {modelGallery.length === 0 && (
+            <div className="text-sm text-gray-400 py-3 text-center">
+              Create a model through prompt or upload photo
             </div>
           )}
         </div>

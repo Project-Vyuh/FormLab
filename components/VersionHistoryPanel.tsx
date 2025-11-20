@@ -34,6 +34,57 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
 
   const currentHistoryItem = useMemo(() => history.find(item => item.id === currentHistoryItemId), [history, currentHistoryItemId]);
 
+  // Find the root ancestor (base model) of a given history item
+  const findRootAncestor = useCallback((itemId: string | null, historyItems: HistoryItem[]): string | null => {
+    if (!itemId) return null;
+
+    let current = historyItems.find(item => item.id === itemId);
+    if (!current) return null;
+
+    // Traverse up the tree until we find a node with no parent (base model)
+    while (current && current.parentId) {
+      const parent = historyItems.find(item => item.id === current!.parentId);
+      if (!parent) break;
+      current = parent;
+    }
+
+    return current.id;
+  }, []);
+
+  // Get all descendants of a given history item (children, grandchildren, etc.)
+  const getAllDescendants = useCallback((itemId: string, historyItems: HistoryItem[]): Set<string> => {
+    const descendants = new Set<string>();
+    const queue: string[] = [itemId];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      descendants.add(currentId);
+
+      // Find all children of this item
+      const children = historyItems.filter(item => item.parentId === currentId);
+      children.forEach(child => queue.push(child.id));
+    }
+
+    return descendants;
+  }, []);
+
+  // Filter history to show only the lineage of the current model
+  const lineageFilteredHistory = useMemo(() => {
+    if (!currentHistoryItemId || history.length === 0) {
+      return history;
+    }
+
+    // Find the root ancestor of the current item
+    const rootId = findRootAncestor(currentHistoryItemId, history);
+    if (!rootId) return history;
+
+    // Get all descendants of the root (including the root itself)
+    const lineageIds = getAllDescendants(rootId, history);
+
+    // Filter history to only include items in this lineage
+    return history.filter(item => lineageIds.has(item.id));
+  }, [history, currentHistoryItemId, findRootAncestor, getAllDescendants]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
@@ -84,12 +135,12 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
   }, [panelHeight]);
 
   const { historyNodes, connections, activePath } = useMemo(() => {
-    if (!history.length) return { historyNodes: [], connections: [], activePath: new Set() };
+    if (!lineageFilteredHistory.length) return { historyNodes: [], connections: [], activePath: new Set() };
 
-    const itemsById = new Map(history.map(item => [item.id, { ...item, children: [] as HistoryItem[] }]));
+    const itemsById = new Map(lineageFilteredHistory.map(item => [item.id, { ...item, children: [] as HistoryItem[] }]));
     const nodePositions = new Map<string, { x: number, y: number }>();
-    const sortedHistory = [...history].sort((a, b) => parseInt(a.id.split('-')[1]) - parseInt(b.id.split('-')[1]));
-    
+    const sortedHistory = [...lineageFilteredHistory].sort((a, b) => parseInt(a.id.split('-')[1]) - parseInt(b.id.split('-')[1]));
+
     sortedHistory.forEach((item, index) => {
       let depth = 0;
       let current: HistoryItem | (HistoryItem & { children: HistoryItem[] }) | undefined = item;
@@ -99,13 +150,13 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
       }
       nodePositions.set(item.id, { x: index, y: depth });
     });
-    
-    const finalNodes = history.map(item => ({
+
+    const finalNodes = lineageFilteredHistory.map(item => ({
       ...item,
       position: nodePositions.get(item.id) || { x: 0, y: 0 },
     }));
-    
-    const finalConnections = history
+
+    const finalConnections = lineageFilteredHistory
       .filter(item => item.parentId && nodePositions.has(item.parentId) && nodePositions.has(item.id))
       .map(item => ({ from: item.parentId!, to: item.id }));
 
@@ -113,18 +164,18 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
     let currentItemInPath: HistoryItem | undefined = currentHistoryItem;
     while(currentItemInPath) {
       path.add(currentItemInPath.id);
-      currentItemInPath = currentItemInPath.parentId ? history.find(item => item.id === currentItemInPath!.parentId) : undefined;
+      currentItemInPath = currentItemInPath.parentId ? lineageFilteredHistory.find(item => item.id === currentItemInPath!.parentId) : undefined;
     }
 
     return { historyNodes: finalNodes, connections: finalConnections, activePath: path };
-  }, [history, currentHistoryItem]);
+  }, [lineageFilteredHistory, currentHistoryItem]);
 
   const filteredHistory = useMemo(() => {
     if (filter === 'starred') {
-      return history.filter(item => item.isStarred);
+      return lineageFilteredHistory.filter(item => item.isStarred);
     }
-    return [...history].sort((a, b) => parseInt(a.id.split('-')[1]) - parseInt(b.id.split('-')[1]));
-  }, [history, filter]);
+    return [...lineageFilteredHistory].sort((a, b) => parseInt(a.id.split('-')[1]) - parseInt(b.id.split('-')[1]));
+  }, [lineageFilteredHistory, filter]);
 
   if (history.length === 0) {
     return null;

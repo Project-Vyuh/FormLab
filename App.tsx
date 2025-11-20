@@ -48,6 +48,9 @@ const App: React.FC = () => {
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectModalMode, setProjectModalMode] = useState<'create' | 'edit'>('create');
 
+  // Model selection state for CreateModel
+  const [selectedHistoryItemId, setSelectedHistoryItemId] = useState<string | null>(null);
+
   // Wardrobe Categories State (shared between ImageStudio and Templates)
   const [wardrobeCategories, setWardrobeCategories] = useState<string[]>([
     'Uncategorized', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Footwear', 'Accessories'
@@ -276,14 +279,19 @@ const App: React.FC = () => {
       localStorage.setItem('formlab-lastProject', model.projectId);
     }
 
-    // Store the history item ID in localStorage so CreateModel can load it
+    // Set the selected history item ID in state (works for both same-project and cross-project)
     if (model.historyItemId) {
-      localStorage.setItem('formlab-selectedHistoryItemId', model.historyItemId);
+      setSelectedHistoryItemId(model.historyItemId);
     }
 
     // Set as active model
     setActiveModelUrl(model.url);
   }, [currentProjectId]);
+
+  const handleHistoryItemLoaded = useCallback(() => {
+    // Clear the selection after CreateModel has loaded it
+    setSelectedHistoryItemId(null);
+  }, []);
 
   const handleModelCreated = useCallback(async (modelUrl: string, projectId: string) => {
     // Add/update the model in the gallery for ImageStudio
@@ -417,6 +425,8 @@ const App: React.FC = () => {
             modelGallery={currentProjectModels}
             onSelectModel={handleSelectModelFromGallery}
             onModelAdded={handleModelAdded}
+            selectedHistoryItemId={selectedHistoryItemId}
+            onHistoryItemLoaded={handleHistoryItemLoaded}
           />
         </div>
         <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>
