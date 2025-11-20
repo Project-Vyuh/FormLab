@@ -74,7 +74,7 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
   
   return (
     <aside className="h-full flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-r border-gray-200/60 dark:border-gray-700/60 flex flex-col">
-       <ProjectSelectorPanel 
+       <ProjectSelectorPanel
           projects={projectList}
           currentProjectId={currentProjectId}
           onProjectChange={onProjectChange}
@@ -82,27 +82,9 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
           onCreateProject={() => onOpenProjectModal('create')}
           isCreateDisabled={true}
       />
-      <div className="p-4 border-b border-gray-700/60">
-        <h3 className="text-base font-sans font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2 mb-3">
-            <PenLineIcon className="w-5 h-5" />
-            Text Revision
-        </h3>
-        <PromptPanel
-          prompt={revisionPrompt}
-          onPromptChange={onRevisionPromptChange}
-          placeholder="e.g., Change hair to blonde..."
-          rows={3}
-          isGenerating={isLoading}
-          showEnhanceButton={true}
-          onEnhance={onEnhanceRevisionPrompt}
-          isEnhancing={isEnhancingPrompt}
-          enhanceButtonText={revisionPrompt.trim() ? 'Enhance' : 'Suggest'}
-          showUploadButton={false}
-        />
-        <button onClick={onApplyRevision} disabled={isLoading || !revisionPrompt.trim()} className="w-full mt-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">Apply Prompt</button>
-      </div>
+
       {/* --- Your Selected Model (Fixed Section) --- */}
-      <div className="flex-shrink-0 p-4">
+      <div className="flex-shrink-0 p-4 border-b border-gray-700/60">
         <h2 className="text-base font-sans font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2 mb-3">
           <UserIcon className="w-5 h-5" />
           Your Selected Model
@@ -154,7 +136,26 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
         )}
       </div>
 
-      <div className="border-t border-gray-700/60 mx-4"></div>
+      {/* --- Text Revision Section --- */}
+      <div className="p-4 border-b border-gray-700/60">
+        <h3 className="text-base font-sans font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2 mb-3">
+            <PenLineIcon className="w-5 h-5" />
+            Text Revision
+        </h3>
+        <PromptPanel
+          prompt={revisionPrompt}
+          onPromptChange={onRevisionPromptChange}
+          placeholder="e.g., Change hair to blonde..."
+          rows={3}
+          isGenerating={isLoading}
+          showEnhanceButton={true}
+          onEnhance={onEnhanceRevisionPrompt}
+          isEnhancing={isEnhancingPrompt}
+          enhanceButtonText={revisionPrompt.trim() ? 'Enhance' : 'Suggest'}
+          showUploadButton={false}
+        />
+        <button onClick={onApplyRevision} disabled={isLoading || !revisionPrompt.trim()} className="w-full mt-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">Apply Prompt</button>
+      </div>
 
       {/* --- Scrollable area for Library and Controls --- */}
       <div className="flex-grow min-h-0 overflow-y-auto">
