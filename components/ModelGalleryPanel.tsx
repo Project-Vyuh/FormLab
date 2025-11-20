@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState, useEffect, useRef } from 'react';
-import { Model, GenerationSettings, Light, LightRole, PanelToggles, WardrobeItem, Project } from '../types';
+import { Model, GenerationSettings, Light, LightRole, PanelToggles, WardrobeItem, Project, SelectedStylingModel } from '../types';
 import { UploadCloudIcon, UserIcon, CubeIcon, PenLineIcon } from './icons';
 import GlobalControls from './GlobalControls';
 import WardrobeLibrary from './WardrobeLibrary';
@@ -11,11 +11,8 @@ import ProjectSelectorPanel from './ProjectSelectorPanel';
 import PromptPanel from './PromptPanel';
 
 interface ModelGalleryPanelProps {
-  models: Model[];
-  selectedModelUrl: string | null;
-  onSelectModel: (url: string) => void;
-  onUploadModel: (file: File) => void;
-  onDeleteModel: (model: Model) => void;
+  selectedStylingModel: SelectedStylingModel | null;
+  onNavigateToCreateModel: () => void;
   isLoading: boolean;
   generationSettings: GenerationSettings;
   onSettingsChange: React.Dispatch<React.SetStateAction<GenerationSettings>>;
@@ -66,7 +63,7 @@ interface ModelGalleryPanelProps {
 
 const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
   const {
-    models, selectedModelUrl, onSelectModel, onUploadModel, onDeleteModel, isLoading,
+    selectedStylingModel, onNavigateToCreateModel, isLoading,
     generationSettings, onSettingsChange, openSections, onToggleSection, onPanelToggle, isGenerating,
     selectedLightId, onSelectLightId, onAddLight, onUpdateLight, onRemoveLight,
     categories, onCreateCategory, onRenameCategory, onDeleteCategory, onDeleteProduct,
@@ -74,29 +71,6 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
     projectList, currentProjectId, onProjectChange, onOpenProjectModal,
     revisionPrompt, onRevisionPromptChange, onEnhanceRevisionPrompt, onApplyRevision, isEnhancingPrompt
   } = props;
-    
-  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, model: Model } | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) setContextMenu(null);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-  
-  const handleContextMenu = (e: React.MouseEvent, model: Model) => {
-    e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, model });
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      onUploadModel(e.target.files[0]);
-      e.target.value = '';
-    }
-  };
   
   return (
     <aside className="h-full flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-r border-gray-200/60 dark:border-gray-700/60 flex flex-col">
@@ -127,31 +101,57 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
         />
         <button onClick={onApplyRevision} disabled={isLoading || !revisionPrompt.trim()} className="w-full mt-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">Apply Prompt</button>
       </div>
-      {/* --- Your Models (Fixed Section) --- */}
+      {/* --- Your Selected Model (Fixed Section) --- */}
       <div className="flex-shrink-0 p-4">
         <h2 className="text-base font-sans font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2 mb-3">
           <UserIcon className="w-5 h-5" />
-          Your Models
+          Your Selected Model
         </h2>
-        <div className="grid grid-cols-3 gap-3">
-          {models.map(model => {
-            const isSelected = model.url === selectedModelUrl;
-            return (
-              <div key={model.id} onContextMenu={(e) => handleContextMenu(e, model)}>
-                <button onClick={() => onSelectModel(model.url)} disabled={isLoading || isSelected}
-                  className={`w-full aspect-square rounded-lg overflow-hidden border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 dark:focus:ring-gray-200 group disabled:cursor-not-allowed ${isSelected ? 'border-gray-900 dark:border-gray-100 shadow-md' : 'border-gray-300/80 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'}`}
-                  aria-label={`Select model ${model.id}`} >
-                  <img src={model.url} alt={`Model ${model.id}`} className="w-full h-full object-cover" />
-                </button>
+        {selectedStylingModel ? (
+          <div className="space-y-3">
+            <div className="w-full aspect-square rounded-lg overflow-hidden border-2 border-blue-500 shadow-md">
+              <img
+                src={selectedStylingModel.url}
+                alt={selectedStylingModel.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              <p className="font-medium text-gray-800 dark:text-gray-200 truncate">
+                {selectedStylingModel.name}
+              </p>
+              <p className="text-xs mt-1">
+                Selected from Create Model
+              </p>
+            </div>
+            <button
+              onClick={onNavigateToCreateModel}
+              className="w-full py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            >
+              Change Model
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="w-full aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-gray-900/50">
+              <div className="text-center p-4">
+                <UserIcon className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-600 mb-2" />
+                <p className="text-xs text-gray-500 dark:text-gray-500">
+                  No model selected
+                </p>
               </div>
-            );
-          })}
-        </div>
-        <label htmlFor="new-model-upload" className={`mt-4 w-full h-20 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 transition-colors ${isLoading ? 'cursor-not-allowed bg-gray-100 dark:bg-white/5' : 'hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer'}`}>
-          <UploadCloudIcon className="w-6 h-6 mb-1"/>
-          <span className="text-sm text-center font-medium">Upload New Model</span>
-          <input id="new-model-upload" type="file" className="hidden" accept="image/png, image/jpeg, image/webp, image/avif, image/heic, image/heif" onChange={handleFileChange} disabled={isLoading}/>
-        </label>
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-500 text-center p-3 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-900">
+              The base model or its version you selected in Create Model will appear here.
+            </div>
+            <button
+              onClick={onNavigateToCreateModel}
+              className="w-full py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Go to Create Model
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-gray-700/60 mx-4"></div>
@@ -222,12 +222,6 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
             ))}
         </div>
       </div>
-       
-      {contextMenu && (
-        <div ref={contextMenuRef} style={{ top: contextMenu.y, left: contextMenu.x }} className="absolute z-50 bg-white dark:bg-gray-800 rounded-md shadow-lg border dark:border-gray-700 py-1">
-            <button onClick={() => { onDeleteModel(contextMenu.model); setContextMenu(null); }} className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10">Delete Model</button>
-        </div>
-      )}
     </aside>
   );
 };

@@ -311,6 +311,8 @@ export interface GenerationSettings {
   panelToggles: PanelToggles;
 }
 
+export type HistoryItemType = 'model-generation' | 'model-revision' | 'try-on';
+
 export interface HistoryItem {
   id: string;
   parentId: string | null;
@@ -320,6 +322,8 @@ export interface HistoryItem {
   modelName: string;
   name?: string; // User-defined name
   isStarred: boolean;
+  type?: HistoryItemType; // Type of history item
+  baseModelId?: string; // For try-ons: references the root model from Create Model
 }
 
 export interface GarmentAnalysis {
@@ -365,6 +369,13 @@ export interface ClientDetails {
   location: string;
 }
 
+export interface SelectedStylingModel {
+  url: string;
+  name: string;
+  historyItemId: string;
+  baseModelId: string;
+}
+
 export interface Project {
   id: string;
   title: string;
@@ -375,6 +386,8 @@ export interface Project {
   deadline?: string;
   tags: string[];
   status: 'Draft' | 'In Progress' | 'In Review' | 'On Hold' | 'Completed';
+  selectedForStyling?: string | null; // History item ID selected for Image Studio
+  stylingHistory?: Record<string, HistoryItem[]>; // Try-on history indexed by baseModelId
 }
 
 export interface Notification {

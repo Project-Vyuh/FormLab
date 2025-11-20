@@ -14,7 +14,7 @@ import { UserIcon, ChevronRightIcon, Share2Icon } from './icons';
 import WardrobeLibrary from './WardrobeLibrary';
 import ProductDetailsFlyout from './ProductDetailsFlyout';
 import VersionHistoryPanel from './VersionHistoryPanel';
-import { Model, WardrobeItem, OutfitLayer, GenerationSettings, HistoryItem, WardrobeCategory, BrandStyle, GarmentAnalysis, Light, LightRole, SceneAtmosphere, ImageProcessingSettings, ShutterSettings, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, PanelToggles, LightingRig, ApertureSettings, CameraPositionSettings, FocusPlaneSettings, Project, User } from '../types';
+import { Model, WardrobeItem, OutfitLayer, GenerationSettings, HistoryItem, WardrobeCategory, BrandStyle, GarmentAnalysis, Light, LightRole, SceneAtmosphere, ImageProcessingSettings, ShutterSettings, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, PanelToggles, LightingRig, ApertureSettings, CameraPositionSettings, FocusPlaneSettings, Project, User, SelectedStylingModel } from '../types';
 import {
   generateVirtualTryOnImage,
   generatePoseVariation,
@@ -27,6 +27,7 @@ import {
 import { getFriendlyErrorMessage } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url } from '../services/storageService';
 import { loadPredefinedWardrobe } from '../services/firestoreService';
+import { loadStylingHistory, saveStylingHistory } from '../services/dbService';
 
 
 // Helper to convert data URL to File
@@ -144,11 +145,7 @@ const initialGenerationSettings: GenerationSettings = {
 };
 
 interface ImageStudioProps {
-  initialModelUrl: string | null;
-  modelGallery: Model[];
-  onSelectModel: (url: string) => void;
-  onDeleteModel: (model: Model) => void;
-  onUploadNewModel: (modelUrl: string) => void;
+  selectedStylingModel: SelectedStylingModel | null;
   onNavigateToVideoCreator: (imageUrl: string) => void;
   onNavigateToCreateModel: () => void;
   projectList: Project[];
@@ -157,6 +154,7 @@ interface ImageStudioProps {
   onOpenProjectModal: (mode: 'create' | 'edit') => void;
   currentUser: User | null;
   onCategoriesChange?: (categories: string[]) => void;
+  onSaveStylingHistory: (baseModelId: string, history: HistoryItem[]) => void;
 }
 
 type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
@@ -169,11 +167,7 @@ const generationModels: { name: string, id: GenerationModel | null, disabled?: b
 
 
 const ImageStudio: React.FC<ImageStudioProps> = ({
-  initialModelUrl,
-  modelGallery,
-  onSelectModel,
-  onDeleteModel,
-  onUploadNewModel,
+  selectedStylingModel,
   onNavigateToVideoCreator,
   onNavigateToCreateModel,
   projectList,
@@ -182,6 +176,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   onOpenProjectModal,
   currentUser,
   onCategoriesChange,
+  onSaveStylingHistory,
 }) => {
   // Core State
   const [modelImageUrl, setModelImageUrl] = useState<string | null>(null);
@@ -253,33 +248,74 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
   // --- Initialize State ---
   useEffect(() => {
-    setModelImageUrl(initialModelUrl);
-    if (initialModelUrl) {
-        const baseLayer: OutfitLayer = { id: 'base-model', garment: null, isVisible: true };
-        const rootHistoryItem: HistoryItem = { 
-            id: `hist-${Date.now()}`, 
-            parentId: null, 
-            imageUrl: initialModelUrl, 
-            prompt: "Initial Model", 
-            settings: initialGenerationSettings, 
-            modelName: "gemini-2.5-flash-image", 
+    const initializeImageStudio = async () => {
+      if (selectedStylingModel && currentProjectId) {
+        setModelImageUrl(selectedStylingModel.url);
+
+        // Try to load existing styling history for this base model
+        const existingHistory = await loadStylingHistory(currentProjectId, selectedStylingModel.baseModelId);
+
+        if (existingHistory && existingHistory.length > 0) {
+          // Load existing history
+          setGeneratedModelHistory(existingHistory);
+          // Set current to the last item in history
+          const lastItem = existingHistory[existingHistory.length - 1];
+          setCurrentHistoryItemId(lastItem.id);
+          setGenerationSettings(lastItem.settings);
+        } else {
+          // Create new root history item for this model
+          const baseLayer: OutfitLayer = { id: 'base-model', garment: null, isVisible: true };
+          const rootHistoryItem: HistoryItem = {
+            id: `hist-${Date.now()}`,
+            parentId: null,
+            imageUrl: selectedStylingModel.url,
+            prompt: "Initial Model",
+            settings: initialGenerationSettings,
+            modelName: "gemini-2.5-flash-image",
             isStarred: true,
-            name: "Base Model"
-        };
-        setOutfitStack([baseLayer]);
-        setGeneratedModelHistory([rootHistoryItem]);
-        setCurrentHistoryItemId(rootHistoryItem.id);
+            name: selectedStylingModel.name,
+            type: 'try-on',
+            baseModelId: selectedStylingModel.baseModelId,
+          };
+          setOutfitStack([baseLayer]);
+          setGeneratedModelHistory([rootHistoryItem]);
+          setCurrentHistoryItemId(rootHistoryItem.id);
+        }
+
         setRedoStack([]);
-        setGenerationSettings(initialGenerationSettings);
         setHasPendingStackChanges(false);
         setSelectedLayerId(null);
         setError(null);
-    } else {
+      } else {
+        // No model selected - reset to empty state
+        setModelImageUrl(null);
         setOutfitStack([]);
         setGeneratedModelHistory([]);
         setCurrentHistoryItemId(null);
-    }
-  }, [initialModelUrl]);
+      }
+    };
+
+    initializeImageStudio();
+  }, [selectedStylingModel, currentProjectId]);
+
+  // --- Auto-save styling history ---
+  useEffect(() => {
+    const autoSave = async () => {
+      if (
+        selectedStylingModel &&
+        currentProjectId &&
+        generatedModelHistory.length > 0 &&
+        generatedModelHistory[0]?.type === 'try-on' // Only save if this is styling history
+      ) {
+        await saveStylingHistory(currentProjectId, selectedStylingModel.baseModelId, generatedModelHistory);
+        onSaveStylingHistory(selectedStylingModel.baseModelId, generatedModelHistory);
+      }
+    };
+
+    // Debounce to avoid too frequent saves
+    const timeoutId = setTimeout(autoSave, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [generatedModelHistory, selectedStylingModel, currentProjectId, onSaveStylingHistory]);
 
   // --- Toast & Layout Effects ---
   useEffect(() => {
@@ -509,22 +545,6 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     onNavigateToVideoCreator(displayImageUrl);
   }, [displayImageUrl, onNavigateToVideoCreator]);
   
-  const handleUploadModel = useCallback(async (file: File) => {
-    setIsLoading(true);
-    setLoadingMessage('Creating new model from your photo...');
-    setError(null);
-    try {
-        const newModelUrl = await generateModelImage(file, initialGenerationSettings);
-        onUploadNewModel(newModelUrl);
-        setToastMessage('New model created and saved successfully!');
-    } catch (err) {
-        setError(getFriendlyErrorMessage(err, 'Failed to create new model'));
-    } finally {
-        setIsLoading(false);
-        setLoadingMessage('');
-    }
-  }, [onUploadNewModel]);
-
   const handleLeftDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -813,14 +833,16 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       }
   }, [displayImageUrl, revisionPrompt, generationSettings, currentHistoryItemId]);
 
-  if (!initialModelUrl && modelGallery.length === 0) {
+  if (!selectedStylingModel) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-white dark:bg-[#1a1a1a] text-center p-4">
           <UserIcon className="w-16 h-16 text-gray-400 dark:text-gray-500 mb-6"/>
-          <h2 className="text-3xl font-sans font-semibold text-gray-800 dark:text-gray-200">Welcome to the Image Studio</h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400 mt-2 max-w-md">To begin styling, you need a model.</p>
-          <button onClick={onNavigateToCreateModel} className="mt-8 px-8 py-3 text-base font-semibold text-gray-900 bg-gray-200 dark:bg-gray-800 dark:text-gray-100 rounded-md hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors">
-              Create Your First Model
+          <h2 className="text-3xl font-sans font-semibold text-gray-800 dark:text-gray-200">No Model Selected</h2>
+          <p className="text-lg text-gray-600 dark:text-gray-400 mt-2 max-w-md">
+            Select a model in Create Model and click "Proceed to Styling" to begin.
+          </p>
+          <button onClick={onNavigateToCreateModel} className="mt-8 px-8 py-3 text-base font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors">
+              Go to Create Model
           </button>
       </div>
     );
@@ -862,18 +884,38 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             <>
               <div style={{ width: `${leftPanelWidth}px` }} className="flex-shrink-0 h-full relative">
                 <ModelGalleryPanel
-                  models={modelGallery} selectedModelUrl={modelImageUrl} onSelectModel={onSelectModel}
-                  onUploadModel={handleUploadModel} onDeleteModel={onDeleteModel} isLoading={isLoading}
-                  generationSettings={generationSettings} onSettingsChange={setGenerationSettings}
-                  openSections={openSections} onToggleSection={(section) => setOpenSections(prev => ({...prev, [section]: !prev[section]}))}
-                  onPanelToggle={handlePanelToggle} isGenerating={isLoading} selectedLightId={selectedLightId} onSelectLightId={setSelectedLightId}
-                  onAddLight={handleAddLight} onUpdateLight={updateLight} onRemoveLight={removeLight}
-                  wardrobe={wardrobe} onWardrobeItemSelect={handleSelectProduct} searchQuery={librarySearchQuery}
-                  onSearchChange={setLibrarySearchQuery} selectedCategories={selectedCategories} onCategoryToggle={handleCategoryToggle}
-                  favorites={favorites} onToggleFavorite={handleToggleFavorite} recentlyUsed={recentlyUsed}
-                  filters={activeFilters} onFilterChange={handleFilterChange} onClearFilters={handleClearFilters}
-                  onAddProduct={handleAddProduct} categories={categories} onCreateCategory={handleCreateCategory}
-                  onRenameCategory={handleRenameCategory} onDeleteCategory={handleDeleteCategoryRequest} onDeleteProduct={handleDeleteProductRequest}
+                  selectedStylingModel={selectedStylingModel}
+                  onNavigateToCreateModel={onNavigateToCreateModel}
+                  isLoading={isLoading}
+                  generationSettings={generationSettings}
+                  onSettingsChange={setGenerationSettings}
+                  openSections={openSections}
+                  onToggleSection={(section) => setOpenSections(prev => ({...prev, [section]: !prev[section]}))}
+                  onPanelToggle={handlePanelToggle}
+                  isGenerating={isLoading}
+                  selectedLightId={selectedLightId}
+                  onSelectLightId={setSelectedLightId}
+                  onAddLight={handleAddLight}
+                  onUpdateLight={updateLight}
+                  onRemoveLight={removeLight}
+                  wardrobe={wardrobe}
+                  onWardrobeItemSelect={handleSelectProduct}
+                  searchQuery={librarySearchQuery}
+                  onSearchChange={setLibrarySearchQuery}
+                  selectedCategories={selectedCategories}
+                  onCategoryToggle={handleCategoryToggle}
+                  favorites={favorites}
+                  onToggleFavorite={handleToggleFavorite}
+                  recentlyUsed={recentlyUsed}
+                  filters={activeFilters}
+                  onFilterChange={handleFilterChange}
+                  onClearFilters={handleClearFilters}
+                  onAddProduct={handleAddProduct}
+                  categories={categories}
+                  onCreateCategory={handleCreateCategory}
+                  onRenameCategory={handleRenameCategory}
+                  onDeleteCategory={handleDeleteCategoryRequest}
+                  onDeleteProduct={handleDeleteProductRequest}
                   generationModels={generationModels}
                   selectedGenerationModel={selectedGenerationModel}
                   onSelectGenerationModel={setSelectedGenerationModel}

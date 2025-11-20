@@ -14,8 +14,8 @@ import Auth from './components/Auth';
 import EmailVerification from './components/EmailVerification';
 import ProjectOnboarding from './components/ProjectOnboarding';
 import ProjectModal from './components/ProjectModal';
-import { Model, Project, Notification, User } from './types';
-import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, cleanupBlobUrls } from './services/dbService';
+import { Model, Project, Notification, User, SelectedStylingModel } from './types';
+import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
 import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
 import { loadPredefinedModels } from './services/firestoreService';
@@ -50,6 +50,9 @@ const App: React.FC = () => {
 
   // Model selection state for CreateModel
   const [selectedHistoryItemId, setSelectedHistoryItemId] = useState<string | null>(null);
+
+  // Selected styling model state for Image Studio
+  const [selectedStylingModel, setSelectedStylingModel] = useState<SelectedStylingModel | null>(null);
 
   // Wardrobe Categories State (shared between ImageStudio and Templates)
   const [wardrobeCategories, setWardrobeCategories] = useState<string[]>([
@@ -125,9 +128,13 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Run blob URL cleanup on app mount (one-time migration)
+  // Run migrations on app mount (one-time)
   useEffect(() => {
-    cleanupBlobUrls();
+    const runMigrations = async () => {
+      await cleanupBlobUrls();
+      await migrateHistoryItemTypes();
+    };
+    runMigrations();
   }, []);
 
   // Check for persisted user session on initial load
@@ -298,25 +305,31 @@ const App: React.FC = () => {
     setSelectedHistoryItemId(null);
   }, []);
 
-  const handleModelCreated = useCallback(async (modelUrl: string, projectId: string) => {
-    // Add/update the model in the gallery for ImageStudio
+  const handleModelCreated = useCallback(async (stylingModelData: SelectedStylingModel) => {
+    // Set the selected styling model for Image Studio
+    setSelectedStylingModel(stylingModelData);
+
+    // Keep the gallery updated (for backward compatibility if needed)
     setModelGallery(prevGallery => {
       const newModel: Model = {
-        id: `${projectId}-${Date.now()}`,
-        url: modelUrl,
+        id: `${stylingModelData.baseModelId}-${Date.now()}`,
+        url: stylingModelData.url,
         source: 'user',
-        projectId: projectId, // Associate with current project
+        projectId: currentProjectId || undefined,
+        historyItemId: stylingModelData.historyItemId,
       };
-      // Add the new model to the gallery
       return [newModel, ...prevGallery];
     });
 
-    // Set it as the active model for immediate use
-    setActiveModelUrl(modelUrl);
-
     // Navigate to Image Studio
     setActiveView('imageStudio');
-  }, []);
+  }, [currentProjectId]);
+
+  const handleSaveStylingHistory = useCallback(async (baseModelId: string, history: any[]) => {
+    if (currentProjectId) {
+      await saveStylingHistory(currentProjectId, baseModelId, history);
+    }
+  }, [currentProjectId]);
 
   const handleUseAsVideoReference = useCallback((imageUrl: string) => {
     setVideoReferenceImageUrl(imageUrl);
@@ -346,10 +359,17 @@ const App: React.FC = () => {
 
 
 
-  const handleProjectChange = useCallback((id: string) => {
+  const handleProjectChange = useCallback(async (id: string) => {
+    // If switching from Image Studio, auto-save current work and navigate to Create Model
+    if (activeView === 'imageStudio' && selectedStylingModel && currentProjectId) {
+      // Auto-save is already handled by ImageStudio's useEffect, but we'll clear the selection
+      setSelectedStylingModel(null);
+      setActiveView('createModel');
+    }
+
     setCurrentProjectId(id);
     localStorage.setItem('formlab-lastProject', id);
-  }, []);
+  }, [activeView, selectedStylingModel, currentProjectId]);
 
   const handleOpenProjectModal = useCallback((mode: 'create' | 'edit') => {
     setProjectModalMode(mode);
@@ -436,11 +456,7 @@ const App: React.FC = () => {
         </div>
         <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>
           <ImageStudio
-            initialModelUrl={activeModelUrl}
-            modelGallery={currentProjectModels}
-            onSelectModel={setActiveModelUrl}
-            onDeleteModel={handleDeleteModel}
-            onUploadNewModel={handleSaveModel}
+            selectedStylingModel={selectedStylingModel}
             onNavigateToVideoCreator={handleUseAsVideoReference}
             onNavigateToCreateModel={() => handleNavigate('createModel')}
             projectList={projectList}
@@ -449,6 +465,7 @@ const App: React.FC = () => {
             onOpenProjectModal={handleOpenProjectModal}
             currentUser={currentUser}
             onCategoriesChange={setWardrobeCategories}
+            onSaveStylingHistory={handleSaveStylingHistory}
           />
         </div>
         <div className={`${activeView === 'videoCreator' ? 'block' : 'hidden'} absolute inset-0`}>

@@ -135,3 +135,128 @@ export const cleanupBlobUrls = async (): Promise<void> => {
         console.error('Error during blob URL cleanup:', error);
     }
 };
+
+/**
+ * Save styling history (try-ons) for a specific base model in a project
+ */
+export const saveStylingHistory = async (
+    projectId: string,
+    baseModelId: string,
+    history: any[]
+): Promise<void> => {
+    if (!projectId.trim() || !baseModelId.trim()) return;
+    if (!db) await initDB();
+
+    try {
+        const state = await loadProjectState(projectId);
+        if (!state) {
+            console.error(`Project ${projectId} not found`);
+            return;
+        }
+
+        // Initialize stylingHistory if it doesn't exist
+        if (!state.stylingHistory) {
+            state.stylingHistory = {};
+        }
+
+        // Save the history for this base model
+        state.stylingHistory[baseModelId] = history;
+
+        await saveProjectState(projectId, state);
+    } catch (error) {
+        console.error('Error saving styling history:', error);
+    }
+};
+
+/**
+ * Load styling history (try-ons) for a specific base model in a project
+ */
+export const loadStylingHistory = async (
+    projectId: string,
+    baseModelId: string
+): Promise<any[] | null> => {
+    if (!projectId.trim() || !baseModelId.trim()) return null;
+    if (!db) await initDB();
+
+    try {
+        const state = await loadProjectState(projectId);
+        if (!state || !state.stylingHistory) {
+            return null;
+        }
+
+        return state.stylingHistory[baseModelId] || null;
+    } catch (error) {
+        console.error('Error loading styling history:', error);
+        return null;
+    }
+};
+
+/**
+ * Delete styling history for a specific base model (used when model is deleted)
+ */
+export const deleteStylingHistory = async (
+    projectId: string,
+    baseModelId: string
+): Promise<void> => {
+    if (!projectId.trim() || !baseModelId.trim()) return;
+    if (!db) await initDB();
+
+    try {
+        const state = await loadProjectState(projectId);
+        if (!state || !state.stylingHistory) {
+            return;
+        }
+
+        delete state.stylingHistory[baseModelId];
+        await saveProjectState(projectId, state);
+    } catch (error) {
+        console.error('Error deleting styling history:', error);
+    }
+};
+
+/**
+ * Migration: Add type field to existing history items
+ * Base models (parentId === null) get type 'model-generation'
+ * All other models get type 'model-revision'
+ */
+export const migrateHistoryItemTypes = async (): Promise<void> => {
+    if (!db) await initDB();
+
+    try {
+        const projects = await getAllProjectMetadata();
+        let totalMigrated = 0;
+
+        for (const project of projects) {
+            const state = await loadProjectState(project.id);
+
+            if (state?.generatedModelHistory && Array.isArray(state.generatedModelHistory)) {
+                let needsUpdate = false;
+
+                // Update history items that don't have a type field
+                state.generatedModelHistory = state.generatedModelHistory.map((item: any) => {
+                    if (!item.type) {
+                        needsUpdate = true;
+                        totalMigrated++;
+
+                        // Base models (no parent) are 'model-generation'
+                        // Everything else is 'model-revision'
+                        return {
+                            ...item,
+                            type: item.parentId === null ? 'model-generation' : 'model-revision',
+                        };
+                    }
+                    return item;
+                });
+
+                if (needsUpdate) {
+                    await saveProjectState(project.id, state);
+                    console.log(`Migrated ${totalMigrated} history item(s) in project ${project.id}`);
+                }
+            }
+        }
+
+        console.log(`History item type migration completed. Total items migrated: ${totalMigrated}`);
+    } catch (error) {
+        console.error('Error during history item type migration:', error);
+    }
+};

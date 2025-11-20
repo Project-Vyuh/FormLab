@@ -10,7 +10,7 @@ import { Compare } from './ui/compare';
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
 import Spinner from './Spinner';
 import { getFriendlyErrorMessage } from '../lib/utils';
-import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, BrandStyle, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem, User } from '../types';
+import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, BrandStyle, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem, User, SelectedStylingModel } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 import ResizeHandle from './ResizeHandle';
 import { useDebouncedEffect } from '../hooks/useDebouncedEffect';
@@ -28,7 +28,7 @@ import PromptPanel from './PromptPanel';
 
 
 interface CreateModelProps {
-  onModelFinalized: (modelUrl: string, projectId: string) => void;
+  onModelFinalized: (stylingModelData: SelectedStylingModel) => void;
   onSaveModelInstance: (modelUrl: string) => void;
   projectList: Project[];
   currentProjectId: string | null;
@@ -257,6 +257,22 @@ const CreateModel: React.FC<CreateModelProps> = ({
     if (!currentHistoryItem) return false;
     return JSON.stringify(generationSettings) !== JSON.stringify(currentHistoryItem.settings);
   }, [generationSettings, currentHistoryItem]);
+
+  // Helper to find the root ancestor (base model) of a history item
+  const findRootAncestor = useCallback((itemId: string | null): string | null => {
+    if (!itemId) return null;
+    let current = generatedModelHistory.find(item => item.id === itemId);
+    if (!current) return null;
+
+    // Traverse up the tree until we find a node with no parent (base model)
+    while (current && current.parentId) {
+      const parent = generatedModelHistory.find(item => item.id === current!.parentId);
+      if (!parent) break;
+      current = parent;
+    }
+
+    return current.id;
+  }, [generatedModelHistory]);
 
   const resetProjectState = useCallback(() => {
     setGeneratedModelHistory([]);
@@ -1019,7 +1035,22 @@ const CreateModel: React.FC<CreateModelProps> = ({
               >
                   <Share2Icon className="w-5 h-5" />
               </button>
-              <button onClick={() => onModelFinalized(generatedModelUrl!, currentProjectId!)} disabled={!generatedModelUrl} className="px-5 py-2 bg-gray-100 hover:bg-white text-gray-900 text-sm font-bold rounded-lg shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              <button
+                  onClick={() => {
+                      if (generatedModelUrl && currentProjectId && currentHistoryItemId) {
+                          const baseModelId = findRootAncestor(currentHistoryItemId) || currentHistoryItemId;
+                          const stylingModelData: SelectedStylingModel = {
+                              url: generatedModelUrl,
+                              name: currentHistoryItem?.name || `Model ${currentHistoryItemId.slice(-4)}`,
+                              historyItemId: currentHistoryItemId,
+                              baseModelId: baseModelId,
+                          };
+                          onModelFinalized(stylingModelData);
+                      }
+                  }}
+                  disabled={!generatedModelUrl}
+                  className="px-5 py-2 bg-gray-100 hover:bg-white text-gray-900 text-sm font-bold rounded-lg shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                   Proceed to Styling <ChevronRightIcon className="w-4 h-4" />
               </button>
           </div>
