@@ -309,14 +309,26 @@ const App: React.FC = () => {
     // Set the selected styling model for Image Studio
     setSelectedStylingModel(stylingModelData);
 
-    // Keep the gallery updated (for backward compatibility if needed)
+    // Add base model to gallery only if it doesn't already exist (prevent duplicates)
+    // Use baseModelId to ensure only base models appear in "Your Models", not revisions
     setModelGallery(prevGallery => {
+      const existingModel = prevGallery.find(
+        model => model.historyItemId === stylingModelData.baseModelId &&
+                 model.projectId === currentProjectId
+      );
+
+      // If base model already exists in gallery, don't add duplicate
+      if (existingModel) {
+        return prevGallery;
+      }
+
+      // Only add base model to gallery (not revisions)
       const newModel: Model = {
-        id: `${stylingModelData.baseModelId}-${Date.now()}`,
+        id: `${currentProjectId}-${stylingModelData.baseModelId}`,
         url: stylingModelData.url,
         source: 'user',
         projectId: currentProjectId || undefined,
-        historyItemId: stylingModelData.historyItemId,
+        historyItemId: stylingModelData.baseModelId,
       };
       return [newModel, ...prevGallery];
     });
