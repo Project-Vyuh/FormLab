@@ -10,7 +10,7 @@ import { Compare } from './ui/compare';
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
 import Spinner from './Spinner';
 import { getFriendlyErrorMessage } from '../lib/utils';
-import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, BrandStyle, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem, User, SelectedStylingModel } from '../types';
+import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, BrandStyle, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem, HistoryItemType, User, SelectedStylingModel } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 import ResizeHandle from './ResizeHandle';
 import { useDebouncedEffect } from '../hooks/useDebouncedEffect';
@@ -435,7 +435,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
     }
   }, [toastMessage]);
 
-  const addHistoryItem = useCallback(async (newItem: Omit<HistoryItem, 'id' | 'parentId' | 'isStarred' | 'imageUrl'>, imageUrl: string) => {
+  const addHistoryItem = useCallback(async (newItem: Omit<HistoryItem, 'id' | 'parentId' | 'isStarred' | 'imageUrl' | 'type' | 'baseModelId'>, imageUrl: string) => {
     const newId = `rev-${Date.now()}`;
 
     // Upload to Firebase Storage if user is logged in and imageUrl is base64
@@ -456,12 +456,27 @@ const CreateModel: React.FC<CreateModelProps> = ({
         }
     }
 
+    // Determine type: base model (no parent) = 'model-generation', revision = 'model-revision'
+    const isBaseModel = currentHistoryItemId === null;
+    const historyType: HistoryItemType = isBaseModel ? 'model-generation' : 'model-revision';
+
+    // Find the root base model ID (for revisions, trace back to root; for base models, use own ID)
+    const findRootAncestor = (itemId: string | null): string => {
+        if (!itemId) return newId; // This is a base model, use its own ID
+        const item = generatedModelHistory.find(h => h.id === itemId);
+        if (!item || !item.parentId) return itemId; // Found root
+        return findRootAncestor(item.parentId); // Keep tracing
+    };
+    const baseModelId = findRootAncestor(currentHistoryItemId);
+
     const fullHistoryItem: HistoryItem = {
         ...newItem,
         id: newId,
         parentId: currentHistoryItemId,
         imageUrl: finalImageUrl,
         isStarred: false,
+        type: historyType,
+        baseModelId: baseModelId,
     };
     setGeneratedModelHistory(prev => [...prev, fullHistoryItem]);
     setCurrentHistoryItemId(newId);

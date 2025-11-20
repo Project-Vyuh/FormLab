@@ -154,15 +154,50 @@ export const saveStylingHistory = async (
             return;
         }
 
-        // Initialize stylingHistory if it doesn't exist
+        // Initialize history objects if they don't exist
         if (!state.stylingHistory) {
             state.stylingHistory = {};
         }
+        if (!state.generatedModelHistory) {
+            state.generatedModelHistory = [];
+        }
 
-        // Save the history for this base model
-        state.stylingHistory[baseModelId] = history;
+        // Split unified history back into separate storage locations
+        // Create Model history: model-generation, model-revision
+        // Image Studio history: try-on, try-on-revision
+        const createModelHistory = history.filter((item: any) =>
+            item.type === 'model-generation' || item.type === 'model-revision'
+        );
+        const stylingOnlyHistory = history.filter((item: any) =>
+            item.type === 'try-on' || item.type === 'try-on-revision'
+        );
+
+        console.log('[saveStylingHistory] baseModelId:', baseModelId);
+        console.log('[saveStylingHistory] total history items:', history.length);
+        console.log('[saveStylingHistory] createModelHistory:', createModelHistory.map(h => ({ id: h.id, type: h.type })));
+        console.log('[saveStylingHistory] stylingOnlyHistory:', stylingOnlyHistory.map(h => ({ id: h.id, type: h.type })));
+
+        // Update Create Model history (merge with existing, deduplicate by ID)
+        const existingCreateModelIds = new Set(state.generatedModelHistory.map((item: any) => item.id));
+        createModelHistory.forEach((item: any) => {
+            if (!existingCreateModelIds.has(item.id)) {
+                state.generatedModelHistory.push(item);
+            } else {
+                // Update existing item
+                const index = state.generatedModelHistory.findIndex((h: any) => h.id === item.id);
+                if (index !== -1) {
+                    state.generatedModelHistory[index] = item;
+                }
+            }
+        });
+
+        // Save Image Studio history for this base model
+        state.stylingHistory[baseModelId] = stylingOnlyHistory;
+
+        console.log('[saveStylingHistory] Saving stylingHistory[' + baseModelId + '] with', stylingOnlyHistory.length, 'items');
 
         await saveProjectState(projectId, state);
+        console.log('[saveStylingHistory] Saved successfully');
     } catch (error) {
         console.error('Error saving styling history:', error);
     }
@@ -187,6 +222,72 @@ export const loadStylingHistory = async (
         return state.stylingHistory[baseModelId] || null;
     } catch (error) {
         console.error('Error loading styling history:', error);
+        return null;
+    }
+};
+
+/**
+ * Load unified history for a base model (Create Model + Image Studio history merged)
+ * Returns chronologically sorted history including all workflow stages
+ */
+export const loadUnifiedHistory = async (
+    projectId: string,
+    baseModelId: string
+): Promise<any[] | null> => {
+    if (!projectId.trim() || !baseModelId.trim()) return null;
+    if (!db) await initDB();
+
+    try {
+        const state = await loadProjectState(projectId);
+        if (!state) {
+            return null;
+        }
+
+        const createModelHistory: any[] = [];
+        const stylingHistory: any[] = [];
+
+        // Get Create Model history for this base model tree
+        if (state.generatedModelHistory && Array.isArray(state.generatedModelHistory)) {
+            // Helper function to find root ancestor
+            const findRootAncestor = (itemId: string, historyArray: any[]): string => {
+                const item = historyArray.find((h: any) => h.id === itemId);
+                if (!item || !item.parentId) return itemId;
+                return findRootAncestor(item.parentId, historyArray);
+            };
+
+            // Get all history items that belong to this base model tree
+            createModelHistory.push(
+                ...state.generatedModelHistory.filter((item: any) => {
+                    const rootId = findRootAncestor(item.id, state.generatedModelHistory);
+                    return rootId === baseModelId;
+                })
+            );
+        }
+
+        // Get Image Studio styling history for this base model
+        if (state.stylingHistory && state.stylingHistory[baseModelId]) {
+            stylingHistory.push(...state.stylingHistory[baseModelId]);
+        }
+
+        console.log('[loadUnifiedHistory] baseModelId:', baseModelId);
+        console.log('[loadUnifiedHistory] createModelHistory count:', createModelHistory.length);
+        console.log('[loadUnifiedHistory] stylingHistory count:', stylingHistory.length);
+        console.log('[loadUnifiedHistory] createModelHistory:', createModelHistory.map(h => ({ id: h.id, type: h.type })));
+        console.log('[loadUnifiedHistory] stylingHistory:', stylingHistory.map(h => ({ id: h.id, type: h.type })));
+
+        // Merge and sort chronologically by timestamp in ID
+        const unifiedHistory = [...createModelHistory, ...stylingHistory].sort((a, b) => {
+            const aTime = parseInt(a.id.split('-').pop() || '0');
+            const bTime = parseInt(b.id.split('-').pop() || '0');
+            return aTime - bTime;
+        });
+
+        console.log('[loadUnifiedHistory] unifiedHistory count:', unifiedHistory.length);
+        console.log('[loadUnifiedHistory] unifiedHistory:', unifiedHistory.map(h => ({ id: h.id, type: h.type })));
+
+        return unifiedHistory.length > 0 ? unifiedHistory : null;
+    } catch (error) {
+        console.error('Error loading unified history:', error);
         return null;
     }
 };

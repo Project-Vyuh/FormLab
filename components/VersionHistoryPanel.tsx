@@ -5,8 +5,24 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { HistoryItem } from '../types';
-import { StarIcon, ChevronUpIcon, GitBranchIcon, PenLineIcon, ChevronRightIcon, Trash2Icon } from './icons';
+import { HistoryItem, HistoryItemType } from '../types';
+import { StarIcon, ChevronUpIcon, GitBranchIcon, PenLineIcon, ChevronRightIcon, Trash2Icon, UserIcon, WandIcon, ShirtIcon } from './icons';
+
+// Helper function to get icon and color for history item type
+const getTypeInfo = (type: HistoryItemType) => {
+  switch (type) {
+    case 'model-generation':
+      return { icon: UserIcon, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', label: 'Base Model' };
+    case 'model-revision':
+      return { icon: WandIcon, color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', label: 'Model Revision' };
+    case 'try-on':
+      return { icon: ShirtIcon, color: 'bg-green-500/20 text-green-400 border-green-500/30', label: 'Try-On' };
+    case 'try-on-revision':
+      return { icon: PenLineIcon, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', label: 'Try-On Revision' };
+    default:
+      return { icon: GitBranchIcon, color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', label: 'Unknown' };
+  }
+};
 
 interface VersionHistoryPanelProps {
   history: HistoryItem[];
@@ -202,31 +218,44 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
         <div className="overflow-auto flex-grow px-4 pb-2">
           {panelHeight <= 120 ? (
             <div className="flex items-center gap-3 h-full overflow-x-auto overflow-y-hidden pb-1">
-              {filteredHistory.map(item => (
-                <div key={item.id} className="h-full flex flex-col items-center justify-center group/history flex-shrink-0" onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, item }); }}>
-                  <button 
-                    onClick={() => onSelectVersion(item.id)} 
-                    title={item.name || `Version ${item.id.slice(-4)}`}
-                    className={`relative block w-12 h-12 rounded-md overflow-hidden border-2 transition-colors ${item.id === currentHistoryItemId ? 'border-blue-500' : 'border-gray-700 hover:border-gray-500'}`}>
-                    <img src={item.imageUrl} alt={item.name || item.prompt} className="w-full h-full object-cover" />
-                    {item.isStarred && <StarIcon className="absolute bottom-1 right-1 w-3 h-3 fill-yellow-400 stroke-yellow-500" />}
-                  </button>
-                </div>
-              ))}
+              {filteredHistory.map(item => {
+                const typeInfo = getTypeInfo(item.type);
+                const TypeIcon = typeInfo.icon;
+                return (
+                  <div key={item.id} className="h-full flex flex-col items-center justify-center group/history flex-shrink-0" onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, item }); }}>
+                    <button
+                      onClick={() => onSelectVersion(item.id)}
+                      title={`${typeInfo.label}: ${item.name || item.prompt}`}
+                      className={`relative block w-12 h-12 rounded-md overflow-hidden border-2 transition-colors ${item.id === currentHistoryItemId ? 'border-blue-500' : 'border-gray-700 hover:border-gray-500'}`}>
+                      <img src={item.imageUrl} alt={item.name || item.prompt} className="w-full h-full object-cover" />
+                      <div className={`absolute top-0.5 left-0.5 p-0.5 rounded ${typeInfo.color} border`}>
+                        <TypeIcon className="w-2.5 h-2.5" />
+                      </div>
+                      {item.isStarred && <StarIcon className="absolute bottom-1 right-1 w-3 h-3 fill-yellow-400 stroke-yellow-500" />}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="relative h-full w-full">
-              {historyNodes.map(node => (
-                <div key={node.id} className="absolute group/history transition-all duration-300" style={{ left: `${node.position.x * 140}px`, top: `${node.position.y * 130}px`, width: '120px' }}>
-                  <div className="flex flex-col items-center">
-                    <div className="relative" onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, item: node }); }}>
-                      <button onClick={() => onSelectVersion(node.id)} className={`relative block w-24 h-24 rounded-lg overflow-hidden border-2 transition-all duration-200 ${node.id === currentHistoryItemId ? 'border-blue-500 scale-105 shadow-lg shadow-blue-500/20' : 'border-gray-700 hover:border-gray-500'} ${activePath.has(node.id) && node.id !== currentHistoryItemId ? 'border-blue-400/50' : ''}`}>
-                        <img src={node.imageUrl} alt={node.name || node.prompt} className="w-full h-full object-cover" />
-                      </button>
-                      <button onClick={() => onToggleStar(node.id)} className={`absolute top-1 right-1 p-1 bg-black/40 rounded-full text-white transition-opacity ${node.isStarred ? 'opacity-100' : 'opacity-0 group-hover/history:opacity-100'}`} title="Star version">
-                        <StarIcon className={`w-4 h-4 transition-colors ${node.isStarred ? 'fill-yellow-400 stroke-yellow-400' : 'fill-transparent stroke-white'}`} />
-                      </button>
-                    </div>
+              {historyNodes.map(node => {
+                const typeInfo = getTypeInfo(node.type);
+                const TypeIcon = typeInfo.icon;
+                return (
+                  <div key={node.id} className="absolute group/history transition-all duration-300" style={{ left: `${node.position.x * 140}px`, top: `${node.position.y * 130}px`, width: '120px' }}>
+                    <div className="flex flex-col items-center">
+                      <div className="relative" onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, item: node }); }}>
+                        <button onClick={() => onSelectVersion(node.id)} className={`relative block w-24 h-24 rounded-lg overflow-hidden border-2 transition-all duration-200 ${node.id === currentHistoryItemId ? 'border-blue-500 scale-105 shadow-lg shadow-blue-500/20' : 'border-gray-700 hover:border-gray-500'} ${activePath.has(node.id) && node.id !== currentHistoryItemId ? 'border-blue-400/50' : ''}`}>
+                          <img src={node.imageUrl} alt={node.name || node.prompt} className="w-full h-full object-cover" />
+                          <div className={`absolute top-1 left-1 p-1 rounded ${typeInfo.color} border`}>
+                            <TypeIcon className="w-3 h-3" />
+                          </div>
+                        </button>
+                        <button onClick={() => onToggleStar(node.id)} className={`absolute top-1 right-1 p-1 bg-black/40 rounded-full text-white transition-opacity ${node.isStarred ? 'opacity-100' : 'opacity-0 group-hover/history:opacity-100'}`} title="Star version">
+                          <StarIcon className={`w-4 h-4 transition-colors ${node.isStarred ? 'fill-yellow-400 stroke-yellow-400' : 'fill-transparent stroke-white'}`} />
+                        </button>
+                      </div>
                     {renamingVersionId === node.id ? (
                       <input type="text" value={renameValue} onChange={e => setRenameValue(e.target.value)} onBlur={commitRename} onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenamingVersionId(null); }} autoFocus className="w-full text-xs bg-gray-900 border border-blue-500 text-white rounded px-1 py-0.5 mt-1" />
                     ) : (
@@ -234,7 +263,8 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
               <svg className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ minWidth: `${(Math.max(...historyNodes.map(n => n.position.x)) + 2) * 140}px`, minHeight: `${(Math.max(...historyNodes.map(n => n.position.y)) + 2) * 130}px` }}>
                 {connections.map(({ from, to }) => {
                   const fromNode = historyNodes.find(n => n.id === from)?.position;

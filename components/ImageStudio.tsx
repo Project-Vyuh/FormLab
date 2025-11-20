@@ -27,7 +27,7 @@ import {
 import { getFriendlyErrorMessage } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url } from '../services/storageService';
 import { loadPredefinedWardrobe } from '../services/firestoreService';
-import { loadStylingHistory, saveStylingHistory } from '../services/dbService';
+import { loadUnifiedHistory, saveStylingHistory } from '../services/dbService';
 
 
 // Helper to convert data URL to File
@@ -252,18 +252,38 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       if (selectedStylingModel && currentProjectId) {
         setModelImageUrl(selectedStylingModel.url);
 
-        // Try to load existing styling history for this base model
-        const existingHistory = await loadStylingHistory(currentProjectId, selectedStylingModel.baseModelId);
+        // Load unified history (Create Model + Image Studio history merged)
+        const unifiedHistory = await loadUnifiedHistory(currentProjectId, selectedStylingModel.baseModelId);
 
-        if (existingHistory && existingHistory.length > 0) {
-          // Load existing history
-          setGeneratedModelHistory(existingHistory);
-          // Set current to the last item in history
-          const lastItem = existingHistory[existingHistory.length - 1];
-          setCurrentHistoryItemId(lastItem.id);
-          setGenerationSettings(lastItem.settings);
+        if (unifiedHistory && unifiedHistory.length > 0) {
+          // Load the unified history
+          setGeneratedModelHistory(unifiedHistory);
+
+          // Try to find the specific revision selected in Create Model
+          const selectedItem = unifiedHistory.find(item => item.id === selectedStylingModel.historyItemId);
+          if (selectedItem) {
+            // Use the selected revision
+            setCurrentHistoryItemId(selectedItem.id);
+            setGenerationSettings(selectedItem.settings);
+          } else {
+            // Fallback: Find the last try-on item, or the last item overall
+            const lastTryonItem = [...unifiedHistory]
+              .reverse()
+              .find(item => item.type === 'try-on' || item.type === 'try-on-revision');
+
+            if (lastTryonItem) {
+              setCurrentHistoryItemId(lastTryonItem.id);
+              setGenerationSettings(lastTryonItem.settings);
+            } else {
+              // No try-on history yet, use the last item (likely a model-generation or model-revision)
+              const lastItem = unifiedHistory[unifiedHistory.length - 1];
+              setCurrentHistoryItemId(lastItem.id);
+              setGenerationSettings(lastItem.settings);
+            }
+          }
         } else {
-          // Create new root history item for this model
+          // No history exists yet - Create new root history item for this model
+          // This happens when first entering Image Studio from a newly created model
           const baseLayer: OutfitLayer = { id: 'base-model', garment: null, isVisible: true };
           const rootHistoryItem: HistoryItem = {
             id: `hist-${Date.now()}`,
@@ -298,15 +318,15 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     initializeImageStudio();
   }, [selectedStylingModel, currentProjectId]);
 
-  // --- Auto-save styling history ---
+  // --- Auto-save unified history ---
   useEffect(() => {
     const autoSave = async () => {
       if (
         selectedStylingModel &&
         currentProjectId &&
-        generatedModelHistory.length > 0 &&
-        generatedModelHistory[0]?.type === 'try-on' // Only save if this is styling history
+        generatedModelHistory.length > 0
       ) {
+        // Save unified history (will be split into Create Model and Image Studio history by dbService)
         await saveStylingHistory(currentProjectId, selectedStylingModel.baseModelId, generatedModelHistory);
         onSaveStylingHistory(selectedStylingModel.baseModelId, generatedModelHistory);
       }
@@ -493,6 +513,8 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             settings: deepCopy(generationSettings),
             modelName: "gemini-2.5-flash-image",
             isStarred: false,
+            type: 'try-on',
+            baseModelId: selectedStylingModel!.baseModelId,
         };
 
         setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
@@ -817,6 +839,8 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
               settings: deepCopy(generationSettings),
               modelName: "gemini-2.5-flash-image",
               isStarred: false,
+              type: 'try-on-revision',
+              baseModelId: selectedStylingModel!.baseModelId,
           };
 
           setGeneratedModelHistory(prev => [...prev, newHistoryItem]);

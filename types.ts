@@ -311,7 +311,7 @@ export interface GenerationSettings {
   panelToggles: PanelToggles;
 }
 
-export type HistoryItemType = 'model-generation' | 'model-revision' | 'try-on';
+export type HistoryItemType = 'model-generation' | 'model-revision' | 'try-on' | 'try-on-revision';
 
 export interface HistoryItem {
   id: string;
@@ -322,8 +322,8 @@ export interface HistoryItem {
   modelName: string;
   name?: string; // User-defined name
   isStarred: boolean;
-  type?: HistoryItemType; // Type of history item
-  baseModelId?: string; // For try-ons: references the root model from Create Model
+  type: HistoryItemType; // Type of history item: model-generation, model-revision, try-on, try-on-revision
+  baseModelId: string; // References the root base model (consistent across Create Model and Image Studio)
 }
 
 export interface GarmentAnalysis {
