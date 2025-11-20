@@ -165,6 +165,13 @@ export const saveStylingHistory = async (
         // Split unified history back into separate storage locations
         // Create Model history: model-generation, model-revision
         // Image Studio history: try-on, try-on-revision
+
+        // DEBUG: Log items without type field
+        const itemsWithoutType = history.filter((item: any) => !item.type);
+        if (itemsWithoutType.length > 0) {
+            console.warn('[saveStylingHistory] WARNING: Found items without type field:', itemsWithoutType.map(h => ({ id: h.id, parentId: h.parentId })));
+        }
+
         const createModelHistory = history.filter((item: any) =>
             item.type === 'model-generation' || item.type === 'model-revision'
         );
@@ -319,6 +326,7 @@ export const deleteStylingHistory = async (
  * Migration: Add type field to existing history items
  * Base models (parentId === null) get type 'model-generation'
  * All other models get type 'model-revision'
+ * Try-on items get type 'try-on' or 'try-on-revision'
  */
 export const migrateHistoryItemTypes = async (): Promise<void> => {
     if (!db) await initDB();
@@ -329,10 +337,10 @@ export const migrateHistoryItemTypes = async (): Promise<void> => {
 
         for (const project of projects) {
             const state = await loadProjectState(project.id);
+            let needsUpdate = false;
 
+            // Migrate generatedModelHistory (Create Model items)
             if (state?.generatedModelHistory && Array.isArray(state.generatedModelHistory)) {
-                let needsUpdate = false;
-
                 // Update history items that don't have a type field
                 state.generatedModelHistory = state.generatedModelHistory.map((item: any) => {
                     if (!item.type) {
@@ -348,11 +356,36 @@ export const migrateHistoryItemTypes = async (): Promise<void> => {
                     }
                     return item;
                 });
+            }
 
-                if (needsUpdate) {
-                    await saveProjectState(project.id, state);
-                    console.log(`Migrated ${totalMigrated} history item(s) in project ${project.id}`);
-                }
+            // Migrate stylingHistory (Image Studio try-on items)
+            if (state?.stylingHistory && typeof state.stylingHistory === 'object') {
+                // Loop through each baseModelId key
+                Object.keys(state.stylingHistory).forEach((baseModelId: string) => {
+                    const stylingItems = state.stylingHistory[baseModelId];
+
+                    if (Array.isArray(stylingItems)) {
+                        state.stylingHistory[baseModelId] = stylingItems.map((item: any) => {
+                            if (!item.type) {
+                                needsUpdate = true;
+                                totalMigrated++;
+
+                                // Try-on items with no parent are base try-ons
+                                // Try-on items with a parent are try-on revisions
+                                return {
+                                    ...item,
+                                    type: item.parentId === null ? 'try-on' : 'try-on-revision',
+                                };
+                            }
+                            return item;
+                        });
+                    }
+                });
+            }
+
+            if (needsUpdate) {
+                await saveProjectState(project.id, state);
+                console.log(`Migrated history items in project ${project.id}`);
             }
         }
 

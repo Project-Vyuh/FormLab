@@ -84,22 +84,28 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
     return descendants;
   }, []);
 
-  // Filter history to show only the lineage of the current model
+  // Filter history to show only items with the same baseModelId
   const lineageFilteredHistory = useMemo(() => {
     if (!currentHistoryItemId || history.length === 0) {
+      console.log('[VersionHistoryPanel] No currentHistoryItemId or empty history, showing all:', history.length);
       return history;
     }
 
-    // Find the root ancestor of the current item
-    const rootId = findRootAncestor(currentHistoryItemId, history);
-    if (!rootId) return history;
+    const currentItem = history.find(h => h.id === currentHistoryItemId);
+    if (!currentItem || !currentItem.baseModelId) {
+      console.log('[VersionHistoryPanel] Current item not found or no baseModelId, showing all:', history.length);
+      return history;
+    }
 
-    // Get all descendants of the root (including the root itself)
-    const lineageIds = getAllDescendants(rootId, history);
+    const filtered = history.filter(item => item.baseModelId === currentItem.baseModelId);
 
-    // Filter history to only include items in this lineage
-    return history.filter(item => lineageIds.has(item.id));
-  }, [history, currentHistoryItemId, findRootAncestor, getAllDescendants]);
+    console.log('[VersionHistoryPanel] Filtering by baseModelId:', currentItem.baseModelId);
+    console.log('[VersionHistoryPanel] Total history items:', history.length);
+    console.log('[VersionHistoryPanel] Filtered history items:', filtered.length);
+    console.log('[VersionHistoryPanel] Filtered items:', filtered.map(h => ({ id: h.id, type: h.type, baseModelId: h.baseModelId })));
+
+    return filtered;
+  }, [history, currentHistoryItemId]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

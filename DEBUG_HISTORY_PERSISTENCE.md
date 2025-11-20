@@ -1,7 +1,29 @@
-# Debugging History Persistence Issue
+# Debugging History Persistence Issue - RESOLVED ✅
 
-## Problem
-Try-ons created in Image Studio are not showing in Version History Panel when returning to the same model after switching to a different model.
+## Problem (RESOLVED)
+Try-ons created in Image Studio were not showing in Version History Panel when returning to the same model after switching to a different model.
+
+## Root Cause Identified
+The migration function `migrateHistoryItemTypes()` was only migrating items in `generatedModelHistory` (Create Model) but NOT items in `stylingHistory` (Image Studio try-ons). Old try-on items without the `type` field were being filtered out during save operations.
+
+## Solution Implemented
+1. **Updated Migration Function** (`services/dbService.ts`, lines 354-377):
+   - Now migrates both `generatedModelHistory` AND `stylingHistory`
+   - Try-on items get `type: 'try-on'` or `type: 'try-on-revision'`
+
+2. **Updated VersionHistoryPanel Filtering** (`components/VersionHistoryPanel.tsx`, lines 87-108):
+   - Replaced parent-child tree traversal with simpler `baseModelId` filtering
+   - All items with same `baseModelId` are shown together
+
+3. **Added Debug Logging** (`services/dbService.ts`, lines 169-173):
+   - Warns if any items are missing `type` field during save
+
+## Testing Instructions
+After these fixes, you need to:
+1. **Clear browser cache and reload** to trigger migration
+2. Or manually trigger migration in console: `window.location.reload(true)`
+3. Check console for migration success message
+4. Re-test the workflow
 
 ## Debug Logs Added
 

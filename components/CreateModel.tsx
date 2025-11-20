@@ -290,8 +290,24 @@ const CreateModel: React.FC<CreateModelProps> = ({
   // --- Session Persistence & Project Management ---
   useDebouncedEffect(() => {
     if (!isLoaded || !currentProjectId) return;
-    const projectState = { modelDescription, revisionPrompt, selectedModelName, generatedModelHistory, currentHistoryItemId, generationSettings, hasSavedInstance };
-    saveProjectState(currentProjectId, projectState).catch(e => console.error("Failed to save project state:", e));
+
+    const saveState = async () => {
+      // Load existing state first to preserve fields like stylingHistory
+      const existingState = await loadProjectState(currentProjectId) || {};
+      const projectState = {
+        ...existingState,  // Preserve existing fields (stylingHistory, wardrobe, etc.)
+        modelDescription,
+        revisionPrompt,
+        selectedModelName,
+        generatedModelHistory,
+        currentHistoryItemId,
+        generationSettings,
+        hasSavedInstance
+      };
+      await saveProjectState(currentProjectId, projectState);
+    };
+
+    saveState().catch(e => console.error("Failed to save project state:", e));
   }, [currentProjectId, modelDescription, revisionPrompt, selectedModelName, generatedModelHistory, currentHistoryItemId, generationSettings, hasSavedInstance], 500);
   
   useEffect(() => {
