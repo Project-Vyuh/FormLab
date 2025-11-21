@@ -18,13 +18,15 @@ import {
     saveProjectState,
     loadProjectState
 } from '../services/dbService';
-import { uploadBase64Image, isBase64Url } from '../services/storageService';
+import { uploadBase64Image, isBase64Url, deleteFile } from '../services/storageService';
+import { deleteStylingHistory } from '../services/dbService';
 import GlobalControls from './GlobalControls';
 import CollapsibleSection from './shared/CollapsibleSection';
 import OptionButton from './shared/OptionButton';
 import VersionHistoryPanel from './VersionHistoryPanel';
 import ProjectSelectorPanel from './ProjectSelectorPanel';
 import PromptPanel from './PromptPanel';
+import ContextMenu from './ContextMenu';
 import { loadPredefinedModels } from '../services/firestoreService';
 
 
@@ -39,6 +41,7 @@ interface CreateModelProps {
   modelGallery: Model[];
   onSelectModel: (model: Model) => void;
   onModelAdded?: (model: Model) => void; // Callback when a new base model is created
+  onModelDeleted?: (model: Model) => void; // Callback when a model is deleted
   selectedHistoryItemId?: string | null; // History item to load from gallery selection
   onHistoryItemLoaded?: () => void; // Callback when history item has been loaded
 }
@@ -186,6 +189,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
     modelGallery,
     onSelectModel,
     onModelAdded,
+    onModelDeleted,
     selectedHistoryItemId,
     onHistoryItemLoaded
 }) => {
@@ -245,6 +249,15 @@ const CreateModel: React.FC<CreateModelProps> = ({
   const [isTemplatesSectionOpen, setIsTemplatesSectionOpen] = useState(false);
   const [selectedTemplateForPreview, setSelectedTemplateForPreview] = useState<Model | null>(null);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+
+  // Context Menu & Delete State
+  const [contextMenuModel, setContextMenuModel] = useState<Model | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ isOpen: boolean; model: Model | null }>({
+    isOpen: false,
+    model: null,
+  });
+
   const [brushSize, setBrushSize] = useState(40);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingMask = useRef(false);
@@ -710,6 +723,30 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
     setIsSavingTemplate(true);
 
+    // Check if this template is already saved in the current project
+    const existingTemplate = generatedModelHistory.find(
+      item => item.imageUrl === template.url &&
+              item.parentId === null &&
+              item.prompt?.includes('Saved from template')
+    );
+
+    if (existingTemplate) {
+      // Template already saved, just load it instead of creating duplicate
+      setCurrentHistoryItemId(existingTemplate.id);
+      setGenerationSettings(existingTemplate.settings);
+      setSelectedModelName(existingTemplate.modelName);
+      setModelDescription(existingTemplate.prompt || '');
+      setRevisionPrompt('');
+      setRedoStack([]);
+      setIsMaskingMode(false);
+      setMaskDataUrl(null);
+      setIsCompareMode(false);
+      setSelectedTemplateForPreview(null);
+      setIsSavingTemplate(false);
+      setToastMessage('Template already in Your Models!');
+      return;
+    }
+
     try {
       // Upload image to Firebase Storage if it's a base64 URL
       let finalImageUrl = template.url;
@@ -778,7 +815,110 @@ const CreateModel: React.FC<CreateModelProps> = ({
     } finally {
       setIsSavingTemplate(false);
     }
-  }, [currentProjectId, currentUser, onModelAdded]);
+  }, [currentProjectId, currentUser, onModelAdded, generatedModelHistory]);
+
+  // Context menu handlers
+  const handleContextMenu = useCallback((e: React.MouseEvent, model: Model) => {
+    e.preventDefault();
+    setContextMenuModel(model);
+    setContextMenuPosition({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const handleCloseContextMenu = useCallback(() => {
+    setContextMenuModel(null);
+    setContextMenuPosition(null);
+  }, []);
+
+  const handleDeleteModelClick = useCallback(() => {
+    if (contextMenuModel) {
+      setDeleteConfirmModal({ isOpen: true, model: contextMenuModel });
+    }
+  }, [contextMenuModel]);
+
+  const handleDeleteModel = useCallback(async () => {
+    if (!deleteConfirmModal.model || !currentProjectId) return;
+
+    const modelToDelete = deleteConfirmModal.model;
+
+    try {
+      console.log('[CreateModel] Deleting model:', modelToDelete.id);
+
+      // 1. Delete image from Firebase Storage (only for user-uploaded models)
+      if (modelToDelete.url && modelToDelete.url.includes('firebasestorage.googleapis.com')) {
+        // Check if it's a user-uploaded file (not a predefined model)
+        // Handle both URL-encoded and decoded paths
+        const isPredefinedModel = modelToDelete.url.includes('/predefined/') ||
+                                  modelToDelete.url.includes('predefined%2F');
+
+        if (!isPredefinedModel) {
+          try {
+            await deleteFile(modelToDelete.url);
+            console.log('[CreateModel] Image deleted from storage');
+          } catch (error) {
+            console.error('[CreateModel] Failed to delete image from storage:', error);
+            // Continue with deletion even if storage deletion fails
+          }
+        } else {
+          console.log('[CreateModel] Skipping storage deletion for predefined model reference');
+        }
+      }
+
+      // 2. Remove from history if this model has a history item
+      if (modelToDelete.historyItemId) {
+        const historyItemToDelete = generatedModelHistory.find(h => h.id === modelToDelete.historyItemId);
+
+        // Remove the history item
+        const updatedHistory = generatedModelHistory.filter(h => h.id !== modelToDelete.historyItemId);
+        setGeneratedModelHistory(updatedHistory);
+
+        // 3. Delete styling history if it's a base model
+        if (historyItemToDelete?.type === 'model-generation' && historyItemToDelete.baseModelId === historyItemToDelete.id) {
+          try {
+            await deleteStylingHistory(currentProjectId, historyItemToDelete.baseModelId);
+            console.log('[CreateModel] Styling history deleted');
+          } catch (error) {
+            console.error('[CreateModel] Failed to delete styling history:', error);
+          }
+        }
+
+        // 4. If this was the currently loaded model, clear workspace
+        if (currentHistoryItemId === modelToDelete.historyItemId) {
+          setCurrentHistoryItemId(null);
+          setGenerationSettings(initialGenerationSettings);
+          setModelDescription('');
+          setRevisionPrompt('');
+          setRedoStack([]);
+          console.log('[CreateModel] Cleared workspace (deleted model was loaded)');
+        }
+
+        // 5. Save updated state to IndexedDB (will auto-sync to Firestore)
+        const currentState = await loadProjectState(currentProjectId);
+        if (currentState) {
+          const updatedState = {
+            ...currentState,
+            generatedModelHistory: updatedHistory,
+            currentHistoryItemId: currentHistoryItemId === modelToDelete.historyItemId ? null : currentHistoryItemId,
+            updatedAt: Date.now(),
+          };
+          await saveProjectState(currentProjectId, updatedState);
+          console.log('[CreateModel] Project state updated');
+        }
+      }
+
+      // 6. Notify parent component to update modelGallery
+      if (onModelDeleted) {
+        onModelDeleted(modelToDelete);
+      }
+
+      // Close modal and show success
+      setDeleteConfirmModal({ isOpen: false, model: null });
+      setToastMessage('Model deleted successfully');
+
+    } catch (error) {
+      console.error('[CreateModel] Failed to delete model:', error);
+      setToastMessage('Failed to delete model');
+    }
+  }, [deleteConfirmModal.model, currentProjectId, generatedModelHistory, currentHistoryItemId, onModelDeleted]);
 
   const handleDownload = (format: 'png' | 'jpeg' | 'webp') => {
     if (!generatedModelUrl) return;
@@ -1078,6 +1218,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 <div key={model.id}>
                   <button
                     onClick={() => onSelectModel(model)}
+                    onContextMenu={(e) => handleContextMenu(e, model)}
                     disabled={isGenerating || isSelected}
                     className={`w-full aspect-square rounded-lg overflow-hidden border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 group disabled:cursor-not-allowed ${
                       isSelected
@@ -1499,6 +1640,24 @@ const CreateModel: React.FC<CreateModelProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Context Menu */}
+      <ContextMenu
+        isOpen={contextMenuModel !== null}
+        position={contextMenuPosition}
+        onClose={handleCloseContextMenu}
+        onDelete={handleDeleteModelClick}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteConfirmModal.isOpen}
+        onClose={() => setDeleteConfirmModal({ isOpen: false, model: null })}
+        onConfirm={handleDeleteModel}
+        title="Delete Model?"
+        message="Do you want to permanently delete this model? This action cannot be undone."
+        confirmText="Delete Model"
+      />
     </div>
   );
 };

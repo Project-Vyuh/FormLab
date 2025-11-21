@@ -26,6 +26,17 @@ import { SyncProvider } from './contexts/SyncContext';
 
 export type View = 'createModel' | 'imageStudio' | 'videoCreator' | 'templates' | 'projects';
 
+// Helper function to deduplicate models by ID
+const deduplicateModels = (models: Model[]): Model[] => {
+  const modelMap = new Map<string, Model>();
+  models.forEach(model => {
+    if (!modelMap.has(model.id)) {
+      modelMap.set(model.id, model);
+    }
+  });
+  return Array.from(modelMap.values());
+};
+
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<View>('createModel');
 
@@ -250,16 +261,16 @@ const App: React.FC = () => {
             const predefinedModels = await loadPredefinedModels();
             console.log(`Loaded ${predefinedModels.length} pre-defined models`);
 
-            // Combine user models with pre-defined models
-            const allModels = [
+            // Combine user models with pre-defined models and deduplicate
+            const allModels = deduplicateModels([
               ...galleryModels.reverse(), // User models first, newest first
               ...predefinedModels, // Then pre-defined models
-            ];
+            ]);
             setModelGallery(allModels);
           } catch (error) {
             console.error('Failed to load pre-defined models:', error);
-            // Fallback to just user models
-            setModelGallery(galleryModels.reverse());
+            // Fallback to just user models with deduplication
+            setModelGallery(deduplicateModels(galleryModels.reverse()));
           }
 
           setActiveView('createModel');
@@ -340,13 +351,21 @@ const App: React.FC = () => {
   }, []);
 
   const handleDeleteModel = useCallback(async (modelToDelete: Model) => {
-    // This logic is now mostly deprecated.
-    console.log("Legacy delete model called:", modelToDelete);
+    // Remove the model from the gallery
+    setModelGallery(prevGallery => prevGallery.filter(m => m.id !== modelToDelete.id));
+    console.log('[App] Model deleted from gallery:', modelToDelete.id);
   }, []);
 
   const handleModelAdded = useCallback((model: Model) => {
-    // Add the new model to the gallery immediately
-    setModelGallery(prevGallery => [model, ...prevGallery]);
+    // Add the new model to the gallery immediately, checking for duplicates
+    setModelGallery(prevGallery => {
+      const exists = prevGallery.some(m => m.id === model.id);
+      if (exists) {
+        console.log('[App] Model already in gallery, skipping duplicate:', model.id);
+        return prevGallery;
+      }
+      return [model, ...prevGallery];
+    });
   }, []);
 
   const handleSelectModelFromGallery = useCallback((model: Model) => {
@@ -528,6 +547,7 @@ const App: React.FC = () => {
             modelGallery={currentProjectModels}
             onSelectModel={handleSelectModelFromGallery}
             onModelAdded={handleModelAdded}
+            onModelDeleted={handleDeleteModel}
             selectedHistoryItemId={selectedHistoryItemId}
             onHistoryItemLoaded={handleHistoryItemLoaded}
           />

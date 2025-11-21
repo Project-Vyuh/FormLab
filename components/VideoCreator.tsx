@@ -54,8 +54,19 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
   useEffect(() => {
     // Check for API key when component mounts
     const checkApiKey = async () => {
-      const hasKey = await window.aistudio.hasSelectedApiKey();
-      setIsApiKeySelected(hasKey);
+      // Check if aistudio API is available
+      if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+        try {
+          const hasKey = await window.aistudio.hasSelectedApiKey();
+          setIsApiKeySelected(hasKey);
+        } catch (error) {
+          console.warn('[VideoCreator] Failed to check API key:', error);
+          setIsApiKeySelected(false);
+        }
+      } else {
+        console.warn('[VideoCreator] AI Studio bridge not available');
+        setIsApiKeySelected(false);
+      }
     };
     checkApiKey();
   }, []);

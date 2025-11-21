@@ -343,6 +343,21 @@ export const syncHistoryItems = async (
         const batch = writeBatch(db);
         const collectionRef = collection(db, 'projects', projectId, collectionPath);
 
+        // STEP 1: Load all existing documents from Firestore
+        const existingDocs = await getDocs(collectionRef);
+        const currentIds = new Set(historyItems.map(item => item.id));
+
+        // STEP 2: Delete documents that exist in Firestore but not in local state
+        let deletedCount = 0;
+        existingDocs.docs.forEach((docSnapshot) => {
+            if (!currentIds.has(docSnapshot.id)) {
+                console.log(`[firestoreSync] Deleting orphaned document: ${docSnapshot.id} from ${collectionPath}`);
+                batch.delete(docSnapshot.ref);
+                deletedCount++;
+            }
+        });
+
+        // STEP 3: Add/update current items
         historyItems.forEach((item) => {
             const itemRef = doc(collectionRef, item.id);
             // Sanitize item to convert undefined to null (Firestore requirement)
@@ -354,7 +369,7 @@ export const syncHistoryItems = async (
         });
 
         await batch.commit();
-        console.log(`[firestoreSync] Synced ${historyItems.length} history items to ${collectionPath}`);
+        console.log(`[firestoreSync] Synced ${historyItems.length} history items to ${collectionPath}${deletedCount > 0 ? `, deleted ${deletedCount} orphaned items` : ''}`);
     } catch (error) {
         console.error('[firestoreSync] Error syncing history items:', error);
         throw error;

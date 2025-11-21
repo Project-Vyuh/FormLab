@@ -24,10 +24,14 @@ service firebase.storage {
       // Allow users to read their own files
       allow read: if isOwner(userId);
 
-      // Allow users to write to specific categories with validation
-      allow write: if isOwner(userId) &&
+      // Allow users to create/update files with validation
+      allow create, update: if isOwner(userId) &&
         isValidSize() &&
         isValidImageOrVideo() &&
+        category in ['models', 'wardrobe', 'tryons', 'videos', 'products'];
+
+      // Allow users to delete their own files (no validation needed for deletion)
+      allow delete: if isOwner(userId) &&
         category in ['models', 'wardrobe', 'tryons', 'videos', 'products'];
     }
 
