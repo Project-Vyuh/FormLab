@@ -17,7 +17,7 @@ import ProjectModal from './components/ProjectModal';
 import ConflictResolutionModal from './components/ConflictResolutionModal';
 import ProjectSyncListener from './components/ProjectSyncListener';
 import { Model, Project, Notification, User, SelectedStylingModel } from './types';
-import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes, migrateIndexedDBToFirestore, setCurrentUserId } from './services/dbService';
+import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes, migrateBase64ImagesToStorage, migrateIndexedDBToFirestore, setCurrentUserId } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
 import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
 import { loadPredefinedModels } from './services/firestoreService';
@@ -154,28 +154,47 @@ const App: React.FC = () => {
     const runFirestoreMigration = async () => {
       if (!currentUser) return;
 
-      // Check if migration has already been run for this user
-      const migrationKey = `formlab-firestore-migration-${currentUser.uid}`;
-      const hasRun = localStorage.getItem(migrationKey);
+      // Check if migrations have already been run for this user
+      const base64MigrationKey = `formlab-base64-migration-${currentUser.uid}`;
+      const firestoreMigrationKey = `formlab-firestore-migration-${currentUser.uid}`;
 
-      if (hasRun) {
-        console.log('[App] Firestore migration already completed for this user');
-        return;
-      }
+      const hasRunBase64Migration = localStorage.getItem(base64MigrationKey);
+      const hasRunFirestoreMigration = localStorage.getItem(firestoreMigrationKey);
 
       try {
-        console.log('[App] Running one-time Firestore migration...');
-        const result = await migrateIndexedDBToFirestore();
-        console.log('[App] Migration result:', result);
+        // Step 1: Migrate base64 images to Firebase Storage (run first)
+        if (!hasRunBase64Migration) {
+          console.log('[App] Running one-time base64 image migration...');
+          const base64Result = await migrateBase64ImagesToStorage();
+          console.log('[App] Base64 migration result:', base64Result);
 
-        // Mark migration as complete
-        localStorage.setItem(migrationKey, 'completed');
+          // Mark base64 migration as complete
+          localStorage.setItem(base64MigrationKey, 'completed');
 
-        if (result.migrated > 0) {
-          console.log(`[App] Successfully migrated ${result.migrated} projects to Firestore`);
+          if (base64Result.uploaded > 0) {
+            console.log(`[App] Successfully uploaded ${base64Result.uploaded} base64 images to Storage`);
+          }
+        } else {
+          console.log('[App] Base64 migration already completed for this user');
+        }
+
+        // Step 2: Migrate IndexedDB to Firestore (run after base64 migration)
+        if (!hasRunFirestoreMigration) {
+          console.log('[App] Running one-time Firestore migration...');
+          const firestoreResult = await migrateIndexedDBToFirestore();
+          console.log('[App] Firestore migration result:', firestoreResult);
+
+          // Mark Firestore migration as complete
+          localStorage.setItem(firestoreMigrationKey, 'completed');
+
+          if (firestoreResult.migrated > 0) {
+            console.log(`[App] Successfully migrated ${firestoreResult.migrated} projects to Firestore`);
+          }
+        } else {
+          console.log('[App] Firestore migration already completed for this user');
         }
       } catch (error) {
-        console.error('[App] Firestore migration failed:', error);
+        console.error('[App] Migration failed:', error);
         // Don't mark as complete so it can be retried
       }
     };

@@ -830,11 +830,29 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       setError(null);
       try {
           const result = await reviseGeneratedImage(displayImageUrl, revisionPrompt, generationSettings);
-          
+
+          // Upload to Firebase Storage if user is logged in and result is base64
+          let finalImageUrl = result;
+          if (currentUser && isBase64Url(result)) {
+              try {
+                  finalImageUrl = await uploadBase64Image(
+                      result,
+                      currentUser.uid,
+                      'tryons',
+                      `revision_${Date.now()}.jpg`,
+                      currentProjectId || undefined
+                  );
+                  console.log('Revision image uploaded to Firebase Storage:', finalImageUrl);
+              } catch (error) {
+                  console.error('Failed to upload revision to Firebase Storage, using base64:', error);
+                  // Fallback to base64 if upload fails
+              }
+          }
+
           const newHistoryItem: HistoryItem = {
               id: `hist-${Date.now()}`,
               parentId: currentHistoryItemId,
-              imageUrl: result,
+              imageUrl: finalImageUrl,
               prompt: revisionPrompt,
               settings: deepCopy(generationSettings),
               modelName: "gemini-2.5-flash-image",

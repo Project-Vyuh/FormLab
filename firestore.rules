@@ -1,7 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
+    // ========================================
+    // Helper Functions
+    // ========================================
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -18,7 +20,9 @@ service cloud.firestore {
       );
     }
 
-    // Projects - Top level collection with userId index
+    // ========================================
+    // Projects - Top Level Collection
+    // ========================================
     match /projects/{projectId} {
       allow read: if isAuthenticated() && (
         resource.data.userId == request.auth.uid ||
@@ -35,35 +39,77 @@ service cloud.firestore {
 
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
 
-      // Models subcollection - Unified history for both Create Model and Image Studio
+      // Generated Model History - Direct collection for Create Model workflow
+      match /generatedModelHistory/{historyId} {
+        allow read, write: if isAuthenticated() &&
+          isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
+
+        // Validate history item structure (createdAt optional as it can be serverTimestamp)
+        allow create: if request.resource.data.keys().hasAll(['type', 'imageUrl']) &&
+          request.resource.data.type in ['model-generation', 'model-revision'] &&
+          isValidImageUrl(request.resource.data.imageUrl);
+      }
+
+      // Styling History - Per-baseModel collections for Image Studio workflow
+      // This allows dynamic collection names based on baseModelId (e.g., /projects/{projectId}/rev-123/{historyId})
+      match /{baseModelId}/{historyId} {
+        allow read, write: if isAuthenticated() &&
+          isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
+
+        // Validate try-on history item structure (createdAt optional)
+        allow create: if request.resource.data.keys().hasAll(['type', 'imageUrl']) &&
+          request.resource.data.type in ['try-on', 'try-on-revision'] &&
+          isValidImageUrl(request.resource.data.imageUrl);
+      }
+
+      // Models Subcollection - Unified history for Create Model and Image Studio (legacy/alternative structure)
       match /models/{baseModelId} {
         allow read, write: if isAuthenticated() &&
           isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
 
-        // History subcollection - Contains all history: model-generation, model-revision, try-on, try-on-revision
+        // History Subcollection - model-generation, model-revision, try-on, try-on-revision
         match /history/{historyId} {
           allow read, write: if isAuthenticated() &&
             isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
 
-          // Validate history item structure
-          allow create: if request.resource.data.keys().hasAll(['type', 'imageUrl', 'createdAt']) &&
+          // Validate history item structure (createdAt optional as it can be serverTimestamp)
+          allow create: if request.resource.data.keys().hasAll(['type', 'imageUrl']) &&
             request.resource.data.type in ['model-generation', 'model-revision', 'try-on', 'try-on-revision'] &&
             isValidImageUrl(request.resource.data.imageUrl);
         }
       }
 
-      // Wardrobe subcollection
+      // Wardrobe Subcollection
       match /wardrobe/{itemId} {
         allow read, write: if isAuthenticated() &&
           isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
 
-        // Validate wardrobe item
-        allow create: if request.resource.data.keys().hasAll(['name', 'category', 'url', 'createdAt']) &&
-          isValidImageUrl(request.resource.data.url);
+        // Validate wardrobe item (relaxed for merge operations)
+        allow create, update: if request.resource.data.url == null || isValidImageUrl(request.resource.data.url);
       }
     }
 
-    // Pre-defined content - Read-only for authenticated users, write via Admin SDK only
+    // ========================================
+    // User Profile Management
+    // ========================================
+    match /users/{userId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ========================================
+    // User-Owned Content/Media Metadata
+    // ========================================
+    match /media/{mediaId} {
+      // Allow creating new media metadata if authenticated and ownerId matches
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.ownerId;
+
+      // Allow reading, updating, or deleting if authenticated and ownerId matches
+      allow read, update, delete: if isAuthenticated() && request.auth.uid == resource.data.ownerId;
+    }
+
+    // ========================================
+    // Pre-defined Content (Read-only)
+    // ========================================
     match /predefined_models/{modelId} {
       allow read: if isAuthenticated();
       allow write: if false; // Admin Console or Admin SDK only
@@ -79,32 +125,39 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // User templates - User-created styling templates
+    // ========================================
+    // User Templates
+    // ========================================
     match /user_templates/{templateId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
-    // User profiles
-    match /users/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() && request.auth.uid == userId;
-    }
-
-    // Usage tracking - Cloud Functions write-only, user read-only
+    // ========================================
+    // Usage Tracking
+    // ========================================
     match /usage/{userId} {
       allow read: if isAuthenticated() && request.auth.uid == userId;
       allow write: if false; // Only Cloud Functions can write via Admin SDK
     }
 
-    // Sync metadata - Track last sync timestamps per device
+    // ========================================
+    // Sync Metadata
+    // ========================================
     match /sync/{userId} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
 
       match /devices/{deviceId} {
         allow read, write: if isAuthenticated() && request.auth.uid == userId;
       }
+    }
+
+    // ========================================
+    // Secure Default - Deny All
+    // ========================================
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

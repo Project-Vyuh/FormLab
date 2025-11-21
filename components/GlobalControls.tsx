@@ -236,7 +236,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                     <div>
                         <label className="text-xs font-medium text-gray-400">Lens Profile</label>
                         <div className="grid grid-cols-5 gap-2 mt-1">
-                            {lensProfileOptions.map(option => <OptionButton key={option.id} onClick={() => onSettingsChange(gs => ({ ...gs, lensProfile: gs.lensProfile === option.id ? undefined : option.id }))} isActive={generationSettings.lensProfile === option.id} disabled={isGenerating}>{option.label}</OptionButton>)}
+                            {lensProfileOptions.map(option => <OptionButton key={option.id} onClick={() => onSettingsChange(gs => ({ ...gs, lensProfile: gs.lensProfile === option.id ? '50mm' : option.id }))} isActive={generationSettings.lensProfile === option.id} disabled={isGenerating}>{option.label}</OptionButton>)}
                         </div>
                     </div>
                     <div>

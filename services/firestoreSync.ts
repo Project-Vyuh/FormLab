@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { HistoryItem, Project } from '../types';
+import { isBase64Url } from './storageService';
 
 // ========================
 // TYPES & INTERFACES
@@ -44,6 +45,33 @@ export interface SyncQueueItem {
     retryCount: number;
     maxRetries: number;
 }
+
+/**
+ * Sanitize object for Firestore by converting undefined to null
+ * Firestore doesn't support undefined values, only null
+ */
+const sanitizeForFirestore = (obj: any): any => {
+    if (obj === null || obj === undefined) {
+        return null;
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(sanitizeForFirestore);
+    }
+    if (typeof obj === 'object') {
+        const sanitized: any = {};
+        for (const [key, value] of Object.entries(obj)) {
+            if (value === undefined) {
+                sanitized[key] = null; // Convert undefined to null
+            } else if (typeof value === 'object' && value !== null) {
+                sanitized[key] = sanitizeForFirestore(value);
+            } else {
+                sanitized[key] = value;
+            }
+        }
+        return sanitized;
+    }
+    return obj;
+};
 
 export interface ProjectState {
     id: string;
@@ -139,6 +167,50 @@ export const syncProjectToFirestore = async (
     try {
         console.log('[firestoreSync] Syncing project to Firestore:', projectId);
 
+        // ===== VALIDATION: Prevent base64 images from reaching Firestore =====
+        // Check generatedModelHistory for base64 images
+        if (projectState.generatedModelHistory) {
+            for (const item of projectState.generatedModelHistory) {
+                if (item.imageUrl && isBase64Url(item.imageUrl)) {
+                    const error = `[firestoreSync] BLOCKED: Project ${projectId} contains base64 images in generatedModelHistory. ` +
+                                  `Item ${item.id} has base64 imageUrl. Migration to Firebase Storage required before Firestore sync.`;
+                    console.error(error);
+                    throw new Error('Cannot sync project with base64 images - migration needed');
+                }
+            }
+        }
+
+        // Check stylingHistory for base64 images
+        if (projectState.stylingHistory) {
+            for (const [baseModelId, historyItems] of Object.entries(projectState.stylingHistory)) {
+                if (historyItems && Array.isArray(historyItems)) {
+                    for (const item of historyItems) {
+                        if (item.imageUrl && isBase64Url(item.imageUrl)) {
+                            const error = `[firestoreSync] BLOCKED: Project ${projectId} contains base64 images in stylingHistory[${baseModelId}]. ` +
+                                          `Item ${item.id} has base64 imageUrl. Migration to Firebase Storage required before Firestore sync.`;
+                            console.error(error);
+                            throw new Error('Cannot sync project with base64 images - migration needed');
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check wardrobe for base64 images
+        if (projectState.wardrobe) {
+            for (const item of projectState.wardrobe) {
+                if (item.url && isBase64Url(item.url)) {
+                    const error = `[firestoreSync] BLOCKED: Project ${projectId} contains base64 images in wardrobe. ` +
+                                  `Item ${item.id} has base64 url. Migration to Firebase Storage required before Firestore sync.`;
+                    console.error(error);
+                    throw new Error('Cannot sync project with base64 images - migration needed');
+                }
+            }
+        }
+
+        console.log('[firestoreSync] Validation passed: No base64 images detected');
+        // ===== END VALIDATION =====
+
         const projectRef = doc(db, 'projects', projectId);
 
         // Prepare project metadata
@@ -151,12 +223,16 @@ export const syncProjectToFirestore = async (
             currentHistoryItemId: projectState.currentHistoryItemId || null,
             hasSavedInstance: projectState.hasSavedInstance || false,
             generationSettings: projectState.generationSettings || {},
+            createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
             syncVersion: (projectState.syncVersion || 0) + 1,
         };
 
+        // Sanitize metadata to convert undefined to null (Firestore requirement)
+        const sanitizedMetadata = sanitizeForFirestore(projectMetadata);
+
         // Save project metadata
-        await setDoc(projectRef, projectMetadata, { merge: true });
+        await setDoc(projectRef, sanitizedMetadata, { merge: true });
 
         // Sync history items in batches
         if (projectState.generatedModelHistory && projectState.generatedModelHistory.length > 0) {
@@ -244,7 +320,12 @@ export const loadProjectFromFirestore = async (
 
         console.log('[firestoreSync] Project loaded successfully');
         return projectState;
-    } catch (error) {
+    } catch (error: any) {
+        // Handle permission errors gracefully (document might not exist yet in Firestore)
+        if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+            console.log('[firestoreSync] Project not yet synced to Firestore (using local data)');
+            return null;
+        }
         console.error('[firestoreSync] Error loading project:', error);
         return null;
     }
@@ -264,10 +345,12 @@ export const syncHistoryItems = async (
 
         historyItems.forEach((item) => {
             const itemRef = doc(collectionRef, item.id);
-            batch.set(itemRef, {
+            // Sanitize item to convert undefined to null (Firestore requirement)
+            const sanitizedItem = sanitizeForFirestore({
                 ...item,
                 updatedAt: serverTimestamp(),
-            }, { merge: true });
+            });
+            batch.set(itemRef, sanitizedItem, { merge: true });
         });
 
         await batch.commit();
@@ -332,10 +415,12 @@ export const syncWardrobeItems = async (
 
         wardrobeItems.forEach((item) => {
             const itemRef = doc(collectionRef, item.id || `item-${Date.now()}-${Math.random()}`);
-            batch.set(itemRef, {
+            // Sanitize item to convert undefined to null (Firestore requirement)
+            const sanitizedItem = sanitizeForFirestore({
                 ...item,
                 updatedAt: serverTimestamp(),
-            }, { merge: true });
+            });
+            batch.set(itemRef, sanitizedItem, { merge: true });
         });
 
         await batch.commit();
@@ -531,7 +616,12 @@ export const subscribeToProject = (
         // Load full project state
         const remoteState = await loadProjectFromFirestore(projectId, userId);
         onUpdate(remoteState);
-    }, (error) => {
+    }, (error: any) => {
+        // Handle permission errors gracefully (document might not exist yet in Firestore)
+        if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+            console.log('[firestoreSync] Project not yet synced to Firestore, skipping real-time updates');
+            return;
+        }
         console.error('[firestoreSync] Error in project subscription:', error);
     });
 };

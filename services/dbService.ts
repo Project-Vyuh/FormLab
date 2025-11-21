@@ -5,6 +5,7 @@
 
 import { Project, ProjectState } from '../types';
 import { syncProjectToFirestore, loadProjectFromFirestore, mergeProjectStates } from './firestoreSync';
+import { uploadBase64Image, isBase64Url } from './storageService';
 
 // --- IndexedDB Service for Project Persistence ---
 const DB_NAME = 'FormLabProjectsDB';
@@ -25,7 +26,18 @@ export const setCurrentUserId = (userId: string | null) => {
 };
 
 /**
+ * Clear all pending Firestore sync operations
+ * Useful during migrations to prevent stale data from being synced
+ */
+export const clearSyncQueue = () => {
+  console.log('[dbService] Clearing sync queue, canceling', syncQueue.size, 'pending syncs');
+  syncQueue.forEach((timer) => clearTimeout(timer));
+  syncQueue.clear();
+};
+
+/**
  * Queue Firestore sync (debounced 2 seconds)
+ * Always reloads fresh state from IndexedDB before syncing to ensure migrated data is used
  */
 const queueFirestoreSync = (projectId: string, state: any) => {
   // Skip if no user logged in
@@ -40,11 +52,26 @@ const queueFirestoreSync = (projectId: string, state: any) => {
   const timer = setTimeout(async () => {
     try {
       console.log('[dbService] Starting background Firestore sync for project:', projectId);
+
+      // CRITICAL: Reload fresh state from IndexedDB to ensure we sync migrated data
+      // This prevents race conditions where in-memory state is stale (e.g., contains base64 before migration)
+      const freshState = await new Promise<any>((resolve, reject) => {
+        const transaction = db.transaction([STATE_STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STATE_STORE_NAME);
+        const request = store.get(projectId);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+      });
+
+      // Use fresh state if available, otherwise fall back to the state passed in
+      const stateToSync = freshState || state;
+
       const projectState: ProjectState = {
         id: projectId,
-        ...state,
+        ...stateToSync,
         updatedAt: Date.now(),
       };
+
       await syncProjectToFirestore(projectId, currentUserId!, projectState);
       syncQueue.delete(projectId);
       console.log('[dbService] Firestore sync completed successfully');
@@ -555,5 +582,153 @@ export const migrateHistoryItemTypes = async (): Promise<void> => {
         console.log(`History item type migration completed. Total items migrated: ${totalMigrated}`);
     } catch (error) {
         console.error('Error during history item type migration:', error);
+    }
+};
+
+/**
+ * Migration: Upload existing base64 images to Firebase Storage
+ * This converts base64 data URLs to Storage URLs before Firestore sync
+ * Required because Firestore has a 1MB document size limit
+ */
+export const migrateBase64ImagesToStorage = async (): Promise<{
+    total: number;
+    uploaded: number;
+    skipped: number;
+    errors: number;
+}> => {
+    if (!db) await initDB();
+
+    const result = {
+        total: 0,
+        uploaded: 0,
+        skipped: 0,
+        errors: 0,
+    };
+
+    // Skip if no user logged in
+    if (!currentUserId) {
+        console.log('[migrateBase64ImagesToStorage] No user logged in, skipping migration');
+        return result;
+    }
+
+    try {
+        console.log('[migrateBase64ImagesToStorage] Starting base64 image migration...');
+
+        // Clear any pending Firestore syncs to prevent stale data from being synced
+        clearSyncQueue();
+
+        // Get all project metadata
+        const projects = await getAllProjectMetadata();
+
+        for (const project of projects) {
+            try {
+                console.log(`[migrateBase64ImagesToStorage] Processing project: ${project.id}`);
+
+                // Load project state from IndexedDB
+                const state = await loadProjectState(project.id);
+                if (!state) {
+                    console.warn(`[migrateBase64ImagesToStorage] No state found for project ${project.id}`);
+                    continue;
+                }
+
+                let stateChanged = false;
+
+                // Process generatedModelHistory (Create Model history)
+                if (state.generatedModelHistory && Array.isArray(state.generatedModelHistory)) {
+                    for (let i = 0; i < state.generatedModelHistory.length; i++) {
+                        const item = state.generatedModelHistory[i];
+                        result.total++;
+
+                        if (item.imageUrl && isBase64Url(item.imageUrl)) {
+                            try {
+                                console.log(`[migrateBase64ImagesToStorage] Uploading base64 image for history item ${item.id}`);
+
+                                const storageUrl = await uploadBase64Image(
+                                    item.imageUrl,
+                                    currentUserId,
+                                    'tryons',
+                                    `history_${item.id}_${Date.now()}.jpg`,
+                                    project.id
+                                );
+
+                                // Update the imageUrl in the state
+                                state.generatedModelHistory[i].imageUrl = storageUrl;
+                                stateChanged = true;
+                                result.uploaded++;
+
+                                console.log(`[migrateBase64ImagesToStorage] Successfully uploaded: ${item.id}`);
+                            } catch (error) {
+                                console.error(`[migrateBase64ImagesToStorage] Failed to upload image for ${item.id}:`, error);
+                                result.errors++;
+                            }
+                        } else {
+                            result.skipped++;
+                        }
+                    }
+                }
+
+                // Process stylingHistory (Image Studio try-on history)
+                if (state.stylingHistory && typeof state.stylingHistory === 'object') {
+                    for (const baseModelId of Object.keys(state.stylingHistory)) {
+                        const stylingItems = state.stylingHistory[baseModelId];
+
+                        if (Array.isArray(stylingItems)) {
+                            for (let i = 0; i < stylingItems.length; i++) {
+                                const item = stylingItems[i];
+                                result.total++;
+
+                                if (item.imageUrl && isBase64Url(item.imageUrl)) {
+                                    try {
+                                        console.log(`[migrateBase64ImagesToStorage] Uploading base64 image for styling item ${item.id}`);
+
+                                        const storageUrl = await uploadBase64Image(
+                                            item.imageUrl,
+                                            currentUserId,
+                                            'tryons',
+                                            `styling_${item.id}_${Date.now()}.jpg`,
+                                            project.id
+                                        );
+
+                                        // Update the imageUrl in the state
+                                        state.stylingHistory[baseModelId][i].imageUrl = storageUrl;
+                                        stateChanged = true;
+                                        result.uploaded++;
+
+                                        console.log(`[migrateBase64ImagesToStorage] Successfully uploaded: ${item.id}`);
+                                    } catch (error) {
+                                        console.error(`[migrateBase64ImagesToStorage] Failed to upload image for ${item.id}:`, error);
+                                        result.errors++;
+                                    }
+                                } else {
+                                    result.skipped++;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Save updated state back to IndexedDB if any changes were made
+                if (stateChanged) {
+                    // Save without triggering Firestore sync (use direct IndexedDB write)
+                    await new Promise<void>((resolve, reject) => {
+                        const transaction = db.transaction([STATE_STORE_NAME], 'readwrite');
+                        const store = transaction.objectStore(STATE_STORE_NAME);
+                        const request = store.put({ id: project.id, ...state });
+                        request.onsuccess = () => resolve();
+                        request.onerror = () => reject(request.error);
+                    });
+
+                    console.log(`[migrateBase64ImagesToStorage] Updated project ${project.id} with Storage URLs`);
+                }
+            } catch (error) {
+                console.error(`[migrateBase64ImagesToStorage] Error processing project ${project.id}:`, error);
+            }
+        }
+
+        console.log('[migrateBase64ImagesToStorage] Migration complete:', result);
+        return result;
+    } catch (error) {
+        console.error('[migrateBase64ImagesToStorage] Migration failed:', error);
+        throw error;
     }
 };
