@@ -405,3 +405,40 @@ export interface User {
   displayName: string | null;
   photoURL: string | null;
 }
+
+// --- Firestore Sync ---
+export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error' | 'conflict';
+
+export type MergeStrategy = 'prefer-local' | 'prefer-remote' | 'smart';
+
+export interface Conflict {
+  field: string;
+  local: any;
+  remote: any;
+  timestamp: number;
+}
+
+export interface SyncQueueItem {
+  id: string;
+  projectId: string;
+  operation: 'save' | 'delete' | 'update';
+  data: any;
+  timestamp: number;
+  retryCount: number;
+  maxRetries: number;
+}
+
+export interface ProjectState {
+  id: string;
+  modelDescription?: string;
+  revisionPrompt?: string;
+  selectedModelName?: string;
+  generatedModelHistory?: HistoryItem[];
+  currentHistoryItemId?: string | null;
+  generationSettings?: GenerationSettings;
+  hasSavedInstance?: boolean;
+  stylingHistory?: { [baseModelId: string]: HistoryItem[] };
+  wardrobe?: WardrobeItem[];
+  updatedAt?: number;
+  syncVersion?: number;
+}

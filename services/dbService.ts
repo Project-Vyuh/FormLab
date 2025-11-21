@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import { Project } from '../types';
+import { Project, ProjectState } from '../types';
+import { syncProjectToFirestore, loadProjectFromFirestore, mergeProjectStates } from './firestoreSync';
 
 // --- IndexedDB Service for Project Persistence ---
 const DB_NAME = 'FormLabProjectsDB';
@@ -11,6 +12,51 @@ const DB_VERSION = 1;
 const STATE_STORE_NAME = 'modelProjects';
 const METADATA_STORE_NAME = 'projectMetadata';
 let db: IDBDatabase;
+
+// --- Firestore Sync Queue ---
+const syncQueue = new Map<string, NodeJS.Timeout>();
+let currentUserId: string | null = null;
+
+/**
+ * Set current user ID for Firestore sync
+ */
+export const setCurrentUserId = (userId: string | null) => {
+  currentUserId = userId;
+};
+
+/**
+ * Queue Firestore sync (debounced 2 seconds)
+ */
+const queueFirestoreSync = (projectId: string, state: any) => {
+  // Skip if no user logged in
+  if (!currentUserId) return;
+
+  // Clear existing timer for this project
+  if (syncQueue.has(projectId)) {
+    clearTimeout(syncQueue.get(projectId)!);
+  }
+
+  // Queue new sync (debounced 2 seconds)
+  const timer = setTimeout(async () => {
+    try {
+      console.log('[dbService] Starting background Firestore sync for project:', projectId);
+      const projectState: ProjectState = {
+        id: projectId,
+        ...state,
+        updatedAt: Date.now(),
+      };
+      await syncProjectToFirestore(projectId, currentUserId!, projectState);
+      syncQueue.delete(projectId);
+      console.log('[dbService] Firestore sync completed successfully');
+    } catch (error) {
+      console.error('[dbService] Firestore sync failed:', error);
+      // Keep in IndexedDB, will retry next time
+      syncQueue.delete(projectId);
+    }
+  }, 2000);
+
+  syncQueue.set(projectId, timer);
+};
 
 export const initDB = (): Promise<boolean> => {
   return new Promise((resolve, reject) => {
@@ -33,13 +79,18 @@ export const initDB = (): Promise<boolean> => {
 export const saveProjectState = async (id: string, state: object) => {
   if (!id.trim()) return;
   if (!db) await initDB();
-  return new Promise<void>((resolve, reject) => {
+
+  // Save to IndexedDB (instant, no network latency)
+  await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction([STATE_STORE_NAME], 'readwrite');
     const store = transaction.objectStore(STATE_STORE_NAME);
     const request = store.put({ id, ...state });
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
+
+  // Queue Firestore sync (background, debounced 2 seconds)
+  queueFirestoreSync(id, state);
 };
 
 export const saveProjectMetadata = async (project: Project) => {
@@ -56,13 +107,46 @@ export const saveProjectMetadata = async (project: Project) => {
 
 export const loadProjectState = async (id: string): Promise<any | null> => {
   if (!db) await initDB();
-  return new Promise((resolve, reject) => {
+
+  // Load from IndexedDB first (instant)
+  const localState = await new Promise<any>((resolve, reject) => {
     const transaction = db.transaction([STATE_STORE_NAME], 'readonly');
     const store = transaction.objectStore(STATE_STORE_NAME);
     const request = store.get(id);
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
   });
+
+  // Skip Firestore check if no user logged in
+  if (!currentUserId) {
+    return localState;
+  }
+
+  // Check Firestore for newer version (background, don't block UI)
+  try {
+    const remoteState = await loadProjectFromFirestore(id, currentUserId);
+
+    if (remoteState && (!localState || (remoteState.updatedAt || 0) > (localState.updatedAt || 0))) {
+      console.log('[dbService] Remote version is newer, merging with local');
+      // Remote is newer, merge and save locally
+      const merged = mergeProjectStates(localState || { id }, remoteState, 'prefer-remote');
+
+      // Save merged state to IndexedDB (don't trigger another Firestore sync)
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction([STATE_STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STATE_STORE_NAME);
+        const request = store.put(merged);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+
+      return merged;
+    }
+  } catch (error) {
+    console.warn('[dbService] Failed to check Firestore, using local state:', error);
+  }
+
+  return localState;
 };
 
 export const getAllProjectMetadata = async (): Promise<Project[]> => {
@@ -319,6 +403,85 @@ export const deleteStylingHistory = async (
         await saveProjectState(projectId, state);
     } catch (error) {
         console.error('Error deleting styling history:', error);
+    }
+};
+
+/**
+ * Migration: Migrate all existing IndexedDB projects to Firestore
+ * This should be run once when user logs in for the first time
+ * Only syncs projects that don't already exist in Firestore
+ */
+export const migrateIndexedDBToFirestore = async (): Promise<{
+    total: number;
+    migrated: number;
+    skipped: number;
+    errors: number;
+}> => {
+    if (!db) await initDB();
+
+    const result = {
+        total: 0,
+        migrated: 0,
+        skipped: 0,
+        errors: 0,
+    };
+
+    // Skip if no user logged in
+    if (!currentUserId) {
+        console.log('[migrateIndexedDBToFirestore] No user logged in, skipping migration');
+        return result;
+    }
+
+    try {
+        console.log('[migrateIndexedDBToFirestore] Starting migration to Firestore...');
+
+        // Get all project metadata
+        const projects = await getAllProjectMetadata();
+        result.total = projects.length;
+
+        for (const project of projects) {
+            try {
+                console.log(`[migrateIndexedDBToFirestore] Migrating project: ${project.id}`);
+
+                // Load project state from IndexedDB
+                const state = await loadProjectState(project.id);
+                if (!state) {
+                    console.warn(`[migrateIndexedDBToFirestore] No state found for project ${project.id}`);
+                    result.skipped++;
+                    continue;
+                }
+
+                // Check if project already exists in Firestore
+                const remoteState = await loadProjectFromFirestore(project.id, currentUserId);
+                if (remoteState) {
+                    console.log(`[migrateIndexedDBToFirestore] Project ${project.id} already exists in Firestore, skipping`);
+                    result.skipped++;
+                    continue;
+                }
+
+                // Prepare project state for Firestore
+                const projectState: ProjectState = {
+                    id: project.id,
+                    ...state,
+                    updatedAt: Date.now(),
+                };
+
+                // Sync to Firestore
+                await syncProjectToFirestore(project.id, currentUserId, projectState);
+
+                console.log(`[migrateIndexedDBToFirestore] Successfully migrated project ${project.id}`);
+                result.migrated++;
+            } catch (error) {
+                console.error(`[migrateIndexedDBToFirestore] Error migrating project ${project.id}:`, error);
+                result.errors++;
+            }
+        }
+
+        console.log('[migrateIndexedDBToFirestore] Migration complete:', result);
+        return result;
+    } catch (error) {
+        console.error('[migrateIndexedDBToFirestore] Migration failed:', error);
+        throw error;
     }
 };
 

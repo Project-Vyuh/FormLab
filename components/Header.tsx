@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { View } from '../App';
 import { Notification, User } from '../types';
 import NotificationDropdown from './NotificationDropdown';
+import SyncStatusIndicator from './SyncStatusIndicator';
 import { ChevronDownIcon, UserIcon } from './icons';
 
 interface HeaderProps {
@@ -123,6 +124,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, onNavigate, notifications, 
                     Templates
                 </button>
                 <NotificationDropdown notifications={notifications} />
+                <SyncStatusIndicator />
                 <div className="w-px h-6 bg-gray-700 mx-2"></div>
                 <UserMenu user={currentUser} onLogout={onLogout} onNavigateToProjects={() => onNavigate('projects')} />
             </nav>

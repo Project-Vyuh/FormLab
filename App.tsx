@@ -14,11 +14,14 @@ import Auth from './components/Auth';
 import EmailVerification from './components/EmailVerification';
 import ProjectOnboarding from './components/ProjectOnboarding';
 import ProjectModal from './components/ProjectModal';
+import ConflictResolutionModal from './components/ConflictResolutionModal';
+import ProjectSyncListener from './components/ProjectSyncListener';
 import { Model, Project, Notification, User, SelectedStylingModel } from './types';
-import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes } from './services/dbService';
+import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes, migrateIndexedDBToFirestore, setCurrentUserId } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
 import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
 import { loadPredefinedModels } from './services/firestoreService';
+import { SyncProvider } from './contexts/SyncContext';
 
 
 export type View = 'createModel' | 'imageStudio' | 'videoCreator' | 'templates' | 'projects';
@@ -105,6 +108,9 @@ const App: React.FC = () => {
           setCurrentUser(user);
           setUnverifiedEmail(null);
           setAuthLoading(false);
+
+          // Set user ID for Firestore sync
+          setCurrentUserId(user.uid);
         } catch (error) {
           console.error('Error fetching user data from Firestore:', error);
           // Fallback to Firebase Auth data if Firestore fetch fails
@@ -117,11 +123,17 @@ const App: React.FC = () => {
           setCurrentUser(user);
           setUnverifiedEmail(null);
           setAuthLoading(false);
+
+          // Set user ID for Firestore sync
+          setCurrentUserId(user.uid);
         }
       } else {
         // User is signed out
         setCurrentUser(null);
         setAuthLoading(false);
+
+        // Clear user ID for Firestore sync
+        setCurrentUserId(null);
       }
     });
 
@@ -136,6 +148,40 @@ const App: React.FC = () => {
     };
     runMigrations();
   }, []);
+
+  // Migrate IndexedDB to Firestore when user logs in
+  useEffect(() => {
+    const runFirestoreMigration = async () => {
+      if (!currentUser) return;
+
+      // Check if migration has already been run for this user
+      const migrationKey = `formlab-firestore-migration-${currentUser.uid}`;
+      const hasRun = localStorage.getItem(migrationKey);
+
+      if (hasRun) {
+        console.log('[App] Firestore migration already completed for this user');
+        return;
+      }
+
+      try {
+        console.log('[App] Running one-time Firestore migration...');
+        const result = await migrateIndexedDBToFirestore();
+        console.log('[App] Migration result:', result);
+
+        // Mark migration as complete
+        localStorage.setItem(migrationKey, 'completed');
+
+        if (result.migrated > 0) {
+          console.log(`[App] Successfully migrated ${result.migrated} projects to Firestore`);
+        }
+      } catch (error) {
+        console.error('[App] Firestore migration failed:', error);
+        // Don't mark as complete so it can be retried
+      }
+    };
+
+    runFirestoreMigration();
+  }, [currentUser]);
 
   // Check for persisted user session on initial load
   useEffect(() => {
@@ -441,14 +487,15 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="font-sans flex flex-col h-screen bg-[#1a1a1a]">
-      <Header
-        activeView={activeView}
-        onNavigate={handleNavigate}
-        notifications={notifications}
-        currentUser={currentUser}
-        onLogout={handleLogout}
-      />
+    <SyncProvider>
+      <div className="font-sans flex flex-col h-screen bg-[#1a1a1a]">
+        <Header
+          activeView={activeView}
+          onNavigate={handleNavigate}
+          notifications={notifications}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+        />
       <div className="flex-grow min-h-0 relative">
         <div className={`${activeView === 'createModel' ? 'block' : 'hidden'} absolute inset-0 bg-[#1a1a1a]`}>
           <CreateModel
@@ -505,7 +552,14 @@ const App: React.FC = () => {
         mode={projectModalMode}
         projectData={projectModalMode === 'edit' ? currentProject : null}
       />
+
+      {/* Real-time Sync Listener (invisible component) */}
+      <ProjectSyncListener projectId={currentProjectId} currentUser={currentUser} />
+
+      {/* Sync Conflict Resolution Modal */}
+      <ConflictResolutionModal />
     </div>
+    </SyncProvider>
   );
 };
 
