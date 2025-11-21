@@ -121,7 +121,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, onNavigate, notifications, 
                     onClick={() => onNavigate('templates')}
                     className={getButtonClasses('templates')}
                 >
-                    Templates
+                    Collections
                 </button>
                 <NotificationDropdown notifications={notifications} />
                 <SyncStatusIndicator />

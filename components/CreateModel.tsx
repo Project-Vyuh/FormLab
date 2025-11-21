@@ -447,7 +447,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
           setPredefinedModels(models);
         } catch (error) {
           console.error('Failed to load predefined models:', error);
-          setToastMessage('Failed to load model templates');
+          setToastMessage('Failed to load model collections');
         } finally {
           setIsLoadingTemplates(false);
         }
@@ -743,7 +743,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
       setIsCompareMode(false);
       setSelectedTemplateForPreview(null);
       setIsSavingTemplate(false);
-      setToastMessage('Template already in Your Models!');
+      setToastMessage('Collection already in Your Models!');
       return;
     }
 
@@ -1290,8 +1290,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
                     {predefinedModels.length > 9 && (
                       <button
                         onClick={() => {
-                          // Navigate to Templates screen - to be implemented
-                          setToastMessage('Navigation to Templates screen - coming soon!');
+                          // Navigate to Collections screen - to be implemented
+                          setToastMessage('Navigation to Collections screen - coming soon!');
                         }}
                         className="w-full mt-3 py-2 text-sm text-blue-400 hover:text-blue-300 transition-colors flex items-center justify-center gap-1"
                       >

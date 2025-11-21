@@ -223,7 +223,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
     <div className="w-full h-full flex flex-col relative bg-[#111111]">
       {/* Header */}
       <div className="h-16 border-b border-gray-800 bg-[#1a1a1a] flex items-center justify-between px-6 flex-shrink-0 z-20">
-        <h1 className="text-lg font-sans font-semibold text-gray-200">Templates</h1>
+        <h1 className="text-lg font-sans font-semibold text-gray-200">Collections</h1>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
@@ -234,7 +234,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
           </button>
           <button
             className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-            title="Filter templates"
+            title="Filter collections"
           >
             <FilterIcon className="w-5 h-5" />
           </button>
@@ -246,13 +246,13 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
         {/* Sidebar */}
         <div className="w-64 bg-[#1a1a1a] border-r border-gray-800 flex flex-col flex-shrink-0 h-full overflow-y-auto">
           <div className="p-4 space-y-3">
-            {/* Create Template Button */}
+            {/* Create Collection Button */}
             <button
               onClick={handleCreateTemplate}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-colors shadow-sm"
             >
               <PlusIcon className="w-4 h-4" />
-              Create Template
+              Create Collection
             </button>
 
             {/* Divider */}
@@ -386,7 +386,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                 <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
                   type="text"
-                  placeholder="Search templates..."
+                  placeholder="Search collections..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 bg-black/30 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-200 focus:border-transparent"
@@ -422,7 +422,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                         ? 'bg-blue-500 text-white'
                         : 'text-gray-400 hover:text-white hover:bg-gray-800'
                     }`}
-                    title="Filter templates"
+                    title="Filter collections"
                   >
                     <FilterIcon className="w-5 h-5" />
                     {activeFilterCount > 0 && (
@@ -528,7 +528,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
               <span>
                 {selectedSection === 'predefined' && activeCategory === 'models'
                   ? `${filteredPredefinedModels.length} models`
-                  : `${templates.length} templates`}
+                  : `${templates.length} collections`}
               </span>
             </div>
           </div>
@@ -604,12 +604,12 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                       <LayoutIcon className="w-8 h-8 text-gray-600" />
                     </div>
                     <h3 className="text-lg font-semibold text-gray-300 mb-2">
-                      No {selectedSection === 'user' ? 'User-Defined' : 'Pre-Defined'} Templates Yet
+                      No {selectedSection === 'user' ? 'User-Defined' : 'Pre-Defined'} Collections Yet
                     </h3>
                     <p className="text-sm text-gray-500 max-w-sm mb-6">
                       {selectedSection === 'user'
-                        ? 'Create your first custom template to get started. Templates help you reuse models and wardrobes across projects.'
-                        : 'Pre-defined templates from the library will appear here.'}
+                        ? 'Create your first custom collection to get started. Collections help you reuse models and wardrobes across projects.'
+                        : 'Pre-defined collections from the library will appear here.'}
                     </p>
                     {selectedSection === 'user' && (
                       <button
@@ -617,7 +617,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                         className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-colors flex items-center gap-2"
                       >
                         <PlusIcon className="w-4 h-4" />
-                        Create Your First Template
+                        Create Your First Collection
                       </button>
                     )}
                   </div>

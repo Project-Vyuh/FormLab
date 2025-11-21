@@ -92,7 +92,7 @@ const CreateTemplateModal: React.FC<CreateTemplateModalProps> = ({
 
   const handleSubmit = () => {
     if (!name.trim() || !file) {
-      setError('Please provide a template name and thumbnail image.');
+      setError('Please provide a collection name and thumbnail image.');
       return;
     }
 
@@ -133,7 +133,7 @@ const CreateTemplateModal: React.FC<CreateTemplateModalProps> = ({
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
               <h2 className="text-xl font-sans font-semibold text-gray-200">
-                Create {templateType === 'models' ? 'Model' : 'Wardrobe'} Template
+                Create {templateType === 'models' ? 'Model' : 'Wardrobe'} Collection
               </h2>
               <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:bg-gray-700 transition-colors">
                 <XIcon className="w-5 h-5" />
@@ -144,7 +144,7 @@ const CreateTemplateModal: React.FC<CreateTemplateModalProps> = ({
             <div className="p-6 grid grid-cols-2 gap-6 overflow-y-auto flex-1">
               {/* Left column - Thumbnail */}
               <div className="col-span-1">
-                <p className="text-sm font-medium text-gray-300 mb-2 block">Template Thumbnail</p>
+                <p className="text-sm font-medium text-gray-300 mb-2 block">Collection Thumbnail</p>
                 <label
                   htmlFor="template-thumbnail-upload"
                   className="relative w-full aspect-square border-2 border-dashed border-gray-600 rounded-lg flex flex-col items-center justify-center text-gray-400 transition-colors hover:border-gray-500 hover:text-gray-300 cursor-pointer"
@@ -152,7 +152,7 @@ const CreateTemplateModal: React.FC<CreateTemplateModalProps> = ({
                   onDragOver={onDragOver}
                 >
                   {previewUrl ? (
-                    <img src={previewUrl} alt="Template preview" className="w-full h-full object-cover rounded-md" />
+                    <img src={previewUrl} alt="Collection preview" className="w-full h-full object-cover rounded-md" />
                   ) : (
                     <>
                       <UploadCloudIcon className="w-12 h-12 mb-3" />
@@ -177,7 +177,7 @@ const CreateTemplateModal: React.FC<CreateTemplateModalProps> = ({
                 {/* Template Name */}
                 <div>
                   <label htmlFor="template-name" className="text-sm font-medium text-gray-300 block mb-1">
-                    Template Name *
+                    Collection Name *
                   </label>
                   <input
                     type="text"
@@ -198,7 +198,7 @@ const CreateTemplateModal: React.FC<CreateTemplateModalProps> = ({
                     id="template-description"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Add details about this template..."
+                    placeholder="Add details about this collection..."
                     rows={3}
                     className="w-full p-2 bg-black/30 border border-gray-700 rounded-md text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent resize-none"
                   />
@@ -247,8 +247,8 @@ const CreateTemplateModal: React.FC<CreateTemplateModalProps> = ({
                 <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                   <p className="text-xs text-blue-300">
                     {templateType === 'models'
-                      ? 'Model templates help you quickly reuse favorite model configurations across projects.'
-                      : 'Wardrobe templates allow you to save complete outfit combinations for easy reuse.'}
+                      ? 'Model collections help you quickly reuse favorite model configurations across projects.'
+                      : 'Wardrobe collections allow you to save complete outfit combinations for easy reuse.'}
                   </p>
                 </div>
               </div>
@@ -274,7 +274,7 @@ const CreateTemplateModal: React.FC<CreateTemplateModalProps> = ({
                 className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!name.trim() || !file}
               >
-                Create Template
+                Create Collection
               </button>
             </div>
           </motion.div>
