@@ -5,12 +5,12 @@
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UploadCloudIcon, PenLineIcon, CubeIcon, UndoIcon, RedoIcon, BookmarkIcon, DownloadIcon, CameraIcon, ZapIcon, LayoutIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, LayersIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon, Share2Icon, UserIcon } from './icons';
+import { UploadCloudIcon, PenLineIcon, CubeIcon, UndoIcon, RedoIcon, BookmarkIcon, DownloadIcon, CameraIcon, ZapIcon, LayoutIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, LayersIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon, Share2Icon, UserIcon, SparklesIcon } from './icons';
 import { Compare } from './ui/compare';
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
 import Spinner from './Spinner';
 import { getFriendlyErrorMessage } from '../lib/utils';
-import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, BrandStyle, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem, HistoryItemType, User, SelectedStylingModel } from '../types';
+import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, BrandStyle, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem, HistoryItemType, User, SelectedStylingModel, Model } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 import ResizeHandle from './ResizeHandle';
 import { useDebouncedEffect } from '../hooks/useDebouncedEffect';
@@ -25,6 +25,7 @@ import OptionButton from './shared/OptionButton';
 import VersionHistoryPanel from './VersionHistoryPanel';
 import ProjectSelectorPanel from './ProjectSelectorPanel';
 import PromptPanel from './PromptPanel';
+import { loadPredefinedModels } from '../services/firestoreService';
 
 
 interface CreateModelProps {
@@ -237,6 +238,13 @@ const CreateModel: React.FC<CreateModelProps> = ({
   // Masking State
   const [isMaskingMode, setIsMaskingMode] = useState(false);
   const [maskDataUrl, setMaskDataUrl] = useState<string | null>(null);
+
+  // Model Templates State
+  const [predefinedModels, setPredefinedModels] = useState<Model[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [isTemplatesSectionOpen, setIsTemplatesSectionOpen] = useState(false);
+  const [selectedTemplateForPreview, setSelectedTemplateForPreview] = useState<Model | null>(null);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [brushSize, setBrushSize] = useState(40);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingMask = useRef(false);
@@ -415,7 +423,26 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
     loadProject();
   }, [currentProjectId, resetProjectState, isLoaded, pendingHistoryItemId]);
-  
+
+  // Load predefined models when templates section is opened
+  useEffect(() => {
+    const loadTemplates = async () => {
+      if (isTemplatesSectionOpen && predefinedModels.length === 0 && !isLoadingTemplates) {
+        setIsLoadingTemplates(true);
+        try {
+          const models = await loadPredefinedModels();
+          setPredefinedModels(models);
+        } catch (error) {
+          console.error('Failed to load predefined models:', error);
+          setToastMessage('Failed to load model templates');
+        } finally {
+          setIsLoadingTemplates(false);
+        }
+      }
+    };
+    loadTemplates();
+  }, [isTemplatesSectionOpen, predefinedModels.length, isLoadingTemplates]);
+
   const reset = useCallback(() => {
     resetProjectState();
     onOpenProjectModal('create');
@@ -676,6 +703,82 @@ const CreateModel: React.FC<CreateModelProps> = ({
       setHasSavedInstance(true);
     }
   };
+
+  // Handler: Save template from modal to user's models
+  const handleSaveTemplateFromModal = useCallback(async (template: Model) => {
+    if (!currentProjectId) return;
+
+    setIsSavingTemplate(true);
+
+    try {
+      // Upload image to Firebase Storage if it's a base64 URL
+      let finalImageUrl = template.url;
+      if (currentUser && isBase64Url(template.url)) {
+        try {
+          finalImageUrl = await uploadBase64Image(
+            template.url,
+            currentUser.uid,
+            'models',
+            `template_${Date.now()}.jpg`,
+            currentProjectId
+          );
+          console.log('[CreateModel] Uploaded template to Firebase Storage:', finalImageUrl);
+        } catch (error) {
+          console.error('[CreateModel] Failed to upload, using original URL:', error);
+        }
+      }
+
+      // Create new history item as base model
+      const newHistoryItemId = `rev-${Date.now()}`;
+      const newHistoryItem: HistoryItem = {
+        id: newHistoryItemId,
+        parentId: null, // New base model
+        imageUrl: finalImageUrl,
+        prompt: `Saved from template: ${template.name || template.id}`,
+        settings: initialGenerationSettings,
+        modelName: 'Nano Banana',
+        name: `${template.name || 'Template'} - Copy`,
+        isStarred: true, // Auto-star saved templates
+        type: 'model-generation',
+        baseModelId: newHistoryItemId, // Self-reference for base model
+      };
+
+      // Add to history
+      setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
+      setCurrentHistoryItemId(newHistoryItemId);
+
+      // Load into workspace
+      setGenerationSettings(initialGenerationSettings);
+      setModelDescription(`Saved from template: ${template.name || template.id}`);
+      setRevisionPrompt('');
+      setRedoStack([]);
+      setIsMaskingMode(false);
+      setMaskDataUrl(null);
+      setIsCompareMode(false);
+
+      // Add to model gallery
+      if (onModelAdded) {
+        const newModel: Model = {
+          id: `${currentProjectId}-${newHistoryItemId}`,
+          url: finalImageUrl,
+          source: 'user',
+          projectId: currentProjectId,
+          historyItemId: newHistoryItemId,
+        };
+        onModelAdded(newModel);
+      }
+
+      // Close modal and show success
+      setSelectedTemplateForPreview(null);
+      setToastMessage(`✓ Saved to Your Models!`);
+
+    } catch (error) {
+      console.error('[CreateModel] Failed to save template:', error);
+      setToastMessage('Failed to save model');
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  }, [currentProjectId, currentUser, onModelAdded]);
 
   const handleDownload = (format: 'png' | 'jpeg' | 'webp') => {
     if (!generatedModelUrl) return;
@@ -967,7 +1070,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
             </button>
 
             {/* Existing Models */}
-            {modelGallery.map(model => {
+            {modelGallery
+              .filter(model => model.source !== 'predefined')
+              .map(model => {
               const isSelected = model.url === generatedModelUrl;
               return (
                 <div key={model.id}>
@@ -992,6 +1097,71 @@ const CreateModel: React.FC<CreateModelProps> = ({
               Create a model through prompt or upload photo
             </div>
           )}
+        </div>
+
+        {/* Model Templates Section */}
+        <div className="flex-shrink-0 mt-4">
+          <button
+            onClick={() => setIsTemplatesSectionOpen(!isTemplatesSectionOpen)}
+            className="w-full flex items-center justify-between text-base font-sans font-semibold text-gray-200 mb-3 hover:text-white transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <SparklesIcon className="w-5 h-5 text-blue-400" />
+              Model Templates
+            </div>
+            <ChevronDownIcon className={`w-5 h-5 text-gray-400 transition-transform ${isTemplatesSectionOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          <AnimatePresence>
+            {isTemplatesSectionOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <p className="text-xs text-gray-400 mb-3">Pre-defined models to get started</p>
+
+                {isLoadingTemplates ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Spinner className="w-6 h-6" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-3">
+                      {predefinedModels.slice(0, 9).map(template => (
+                        <div key={template.id} className="relative">
+                          <button
+                            onClick={() => setSelectedTemplateForPreview(template)}
+                            disabled={isGenerating}
+                            className="w-full aspect-square rounded-lg overflow-hidden border-2 border-gray-700 hover:border-blue-500 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 group disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Preview template: ${template.name || template.id}`}
+                          >
+                            <img src={template.thumbnail || template.url} alt={template.name || 'Template'} className="w-full h-full object-cover" />
+                          </button>
+                          <div className="absolute top-1 right-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full shadow-lg">
+                            Template
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {predefinedModels.length > 9 && (
+                      <button
+                        onClick={() => {
+                          // Navigate to Templates screen - to be implemented
+                          setToastMessage('Navigation to Templates screen - coming soon!');
+                        }}
+                        className="w-full mt-3 py-2 text-sm text-blue-400 hover:text-blue-300 transition-colors flex items-center justify-center gap-1"
+                      >
+                        See all models <ChevronRightIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <CollapsibleSection title={isResultView ? "Revision" : "Prompt"} icon={<PenLineIcon className="w-4 h-4 text-gray-400" />} isOpen={openSections.prompt} onToggle={() => setOpenSections(p => ({ ...p, prompt: !p.prompt }))}>
@@ -1212,6 +1382,123 @@ const CreateModel: React.FC<CreateModelProps> = ({
         confirmText="Confirm Switch"
         confirmButtonClass="bg-gray-700 hover:bg-gray-600"
       />
+
+      {/* Template Preview Modal */}
+      <AnimatePresence>
+        {selectedTemplateForPreview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedTemplateForPreview(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#1a1a1a] rounded-xl border border-gray-700 max-w-6xl w-full max-h-[90vh] overflow-hidden flex"
+            >
+              {/* Main Image Area */}
+              <div className="flex-1 flex items-center justify-center bg-black p-8">
+                <img
+                  src={selectedTemplateForPreview.url}
+                  alt={selectedTemplateForPreview.name || 'Template'}
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
+
+              {/* Metadata Sidebar */}
+              <div className="w-80 bg-[#1a1a1a] border-l border-gray-700 flex flex-col">
+                {/* Header */}
+                <div className="p-6 border-b border-gray-700">
+                  <h2 className="text-xl font-semibold text-white mb-2">
+                    {selectedTemplateForPreview.name || 'Template Model'}
+                  </h2>
+                  {selectedTemplateForPreview.gender && (
+                    <span className="inline-block px-3 py-1 bg-gray-800 text-gray-300 text-sm rounded-full capitalize">
+                      {selectedTemplateForPreview.gender}
+                    </span>
+                  )}
+                </div>
+
+                {/* Metadata Content */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  {/* Model ID */}
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Model ID</h3>
+                    <p className="text-sm text-gray-300 font-mono break-all">{selectedTemplateForPreview.id}</p>
+                  </div>
+
+                  {/* Gender */}
+                  {selectedTemplateForPreview.gender && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Gender</h3>
+                      <p className="text-sm text-gray-300 capitalize">{selectedTemplateForPreview.gender}</p>
+                    </div>
+                  )}
+
+                  {/* Tags */}
+                  {selectedTemplateForPreview.tags && selectedTemplateForPreview.tags.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Tags</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedTemplateForPreview.tags.map((tag, idx) => (
+                          <span
+                            key={idx}
+                            className="px-3 py-1 bg-gray-800 text-gray-300 text-sm rounded-full"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Image URL */}
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Image URL</h3>
+                    <p className="text-xs text-gray-500 font-mono break-all">{selectedTemplateForPreview.url}</p>
+                  </div>
+
+                  {/* Thumbnail URL (if different) */}
+                  {selectedTemplateForPreview.thumbnail && selectedTemplateForPreview.thumbnail !== selectedTemplateForPreview.url && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Thumbnail URL</h3>
+                      <p className="text-xs text-gray-500 font-mono break-all">{selectedTemplateForPreview.thumbnail}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="p-6 border-t border-gray-700 space-y-3">
+                  <button
+                    onClick={() => handleSaveTemplateFromModal(selectedTemplateForPreview)}
+                    disabled={isSavingTemplate || !currentProjectId}
+                    className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSavingTemplate ? (
+                      <>
+                        <Spinner className="w-4 h-4" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save to Your Models'
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setSelectedTemplateForPreview(null)}
+                    className="w-full py-3 px-4 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg font-medium transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

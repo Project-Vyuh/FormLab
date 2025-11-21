@@ -50,14 +50,27 @@ const ProjectSyncListener: React.FC<ProjectSyncListenerProps> = ({ projectId, cu
           if (conflicts.length > 0) {
             console.log('[ProjectSyncListener] Conflicts detected:', conflicts);
 
-            // Show conflict resolution modal
-            setConflictData({
-              projectId,
-              local: localState,
-              remote: remoteState,
-              conflicts,
-            });
-            setSyncStatus('conflict');
+            // Check if auto-merge is enabled (default: true for better UX)
+            const autoMergeEnabled = localStorage.getItem('formlab-auto-smart-merge') !== 'false';
+
+            if (autoMergeEnabled) {
+              // Auto-resolve with smart merge strategy
+              console.log('[ProjectSyncListener] Auto-merging conflicts with smart strategy');
+              const merged = mergeProjectStates(localState, remoteState, 'smart');
+              await saveProjectState(projectId, merged);
+              setSyncStatus('synced');
+              setLastSyncTime(Date.now());
+              console.log('[ProjectSyncListener] Auto-merge completed successfully');
+            } else {
+              // Show conflict resolution modal (for users who prefer manual control)
+              setConflictData({
+                projectId,
+                local: localState,
+                remote: remoteState,
+                conflicts,
+              });
+              setSyncStatus('conflict');
+            }
           } else {
             // No conflicts, check if remote is newer
             const remoteNewer = (remoteState.updatedAt || 0) > (localState.updatedAt || 0);
