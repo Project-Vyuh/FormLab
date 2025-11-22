@@ -33,9 +33,17 @@ service cloud.firestore {
         request.resource.data.userId == request.auth.uid &&
         request.resource.data.keys().hasAll(['userId', 'createdAt', 'updatedAt']);
 
-      allow update: if isAuthenticated() &&
-        resource.data.userId == request.auth.uid &&
-        request.resource.data.userId == resource.data.userId; // Prevent userId change
+      allow update: if isAuthenticated() && (
+        // Normal update: existing userId matches authenticated user
+        (resource.data.userId == request.auth.uid &&
+         request.resource.data.userId == resource.data.userId) ||
+        // Migration case 1: document exists but has no userId field
+        (!resource.data.keys().hasAny(['userId']) &&
+         request.resource.data.userId == request.auth.uid) ||
+        // Migration case 2: document exists but userId is null
+        (resource.data.userId == null &&
+         request.resource.data.userId == request.auth.uid)
+      );
 
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
 

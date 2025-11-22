@@ -211,28 +211,107 @@ export const syncProjectToFirestore = async (
         console.log('[firestoreSync] Validation passed: No base64 images detected');
         // ===== END VALIDATION =====
 
+        // Validate userId matches authenticated user
+        if (!userId || typeof userId !== 'string') {
+            throw new Error('[firestoreSync] Invalid userId provided. Cannot sync to Firestore.');
+        }
+
+        // CRITICAL: Verify authenticated user matches the userId we're syncing
+        // This must match or Firestore rules will reject the write
+        const { auth } = await import('./firebase');
+        const currentUser = auth.currentUser;
+
+        if (!currentUser) {
+            throw new Error('[firestoreSync] No authenticated user found. Cannot sync to Firestore.');
+        }
+
+        if (currentUser.uid !== userId) {
+            console.error('[firestoreSync] UserId mismatch!', {
+                authenticatedUid: currentUser.uid,
+                providedUserId: userId,
+                message: 'The userId being synced does not match the authenticated user'
+            });
+            throw new Error(`[firestoreSync] UserId mismatch: auth.uid=${currentUser.uid} but syncing userId=${userId}`);
+        }
+
+        console.log('[firestoreSync] Authentication verified - user matches:', currentUser.uid);
+
         const projectRef = doc(db, 'projects', projectId);
 
-        // Prepare project metadata
+        // Prepare project metadata with all required fields
         const projectMetadata = {
             id: projectId,
-            userId: userId,
+            userId: userId, // Required by Firestore rules
             modelDescription: projectState.modelDescription || '',
             revisionPrompt: projectState.revisionPrompt || '',
             selectedModelName: projectState.selectedModelName || '',
             currentHistoryItemId: projectState.currentHistoryItemId || null,
             hasSavedInstance: projectState.hasSavedInstance || false,
             generationSettings: projectState.generationSettings || {},
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            createdAt: serverTimestamp(), // Required by Firestore rules
+            updatedAt: serverTimestamp(), // Required by Firestore rules
             syncVersion: (projectState.syncVersion || 0) + 1,
         };
 
         // Sanitize metadata to convert undefined to null (Firestore requirement)
         const sanitizedMetadata = sanitizeForFirestore(projectMetadata);
 
-        // Save project metadata
-        await setDoc(projectRef, sanitizedMetadata, { merge: true });
+        // Validate all required fields are present before write
+        if (!sanitizedMetadata.userId || !sanitizedMetadata.createdAt || !sanitizedMetadata.updatedAt) {
+            console.error('[firestoreSync] Missing required fields:', {
+                hasUserId: !!sanitizedMetadata.userId,
+                hasCreatedAt: !!sanitizedMetadata.createdAt,
+                hasUpdatedAt: !!sanitizedMetadata.updatedAt
+            });
+            throw new Error('[firestoreSync] Missing required fields (userId, createdAt, or updatedAt)');
+        }
+
+        console.log('[firestoreSync] Syncing project metadata for userId:', userId);
+
+        // Check if document exists to determine create vs update operation
+        // This is critical because Firestore rules differ for create vs update
+        let existingDoc;
+        let canReadExistingDoc = false;
+
+        try {
+            existingDoc = await getDoc(projectRef);
+            canReadExistingDoc = true;
+        } catch (error: any) {
+            // If we can't read the document (permission-denied), it might exist but with wrong userId
+            // OR it might not exist at all. Either way, we should try CREATE operation.
+            if (error?.code === 'permission-denied') {
+                console.warn('[firestoreSync] Cannot read existing document (permission-denied). Will attempt CREATE operation.');
+                canReadExistingDoc = false;
+            } else {
+                // Some other error - rethrow it
+                throw error;
+            }
+        }
+
+        if (!canReadExistingDoc || !existingDoc?.exists()) {
+            // Document doesn't exist OR we can't read it
+            // Use merge: true to handle migration case where document exists but we can't read it
+            console.log('[firestoreSync] Creating/updating project document (cannot verify existence due to permissions)');
+            console.log('[firestoreSync] Document data keys:', Object.keys(sanitizedMetadata));
+            console.log('[firestoreSync] Document data (sanitized):', {
+                hasUserId: 'userId' in sanitizedMetadata,
+                hasCreatedAt: 'createdAt' in sanitizedMetadata,
+                hasUpdatedAt: 'updatedAt' in sanitizedMetadata,
+                userIdValue: sanitizedMetadata.userId,
+                createdAtValue: sanitizedMetadata.createdAt,
+                updatedAtValue: sanitizedMetadata.updatedAt,
+                createdAtType: typeof sanitizedMetadata.createdAt,
+                updatedAtType: typeof sanitizedMetadata.updatedAt
+            });
+            // Use merge: true to trigger UPDATE rule which now allows migration
+            await setDoc(projectRef, sanitizedMetadata, { merge: true });
+        } else {
+            // Document exists and we can read it - use UPDATE operation (triggers update rules)
+            // Remove createdAt from update to preserve original creation timestamp
+            console.log('[firestoreSync] Updating existing project document');
+            const { createdAt, ...updateData } = sanitizedMetadata;
+            await setDoc(projectRef, updateData, { merge: true });
+        }
 
         // Sync history items in batches
         if (projectState.generatedModelHistory && projectState.generatedModelHistory.length > 0) {
@@ -254,8 +333,19 @@ export const syncProjectToFirestore = async (
         }
 
         console.log('[firestoreSync] Project synced successfully');
-    } catch (error) {
-        console.error('[firestoreSync] Error syncing project:', error);
+    } catch (error: any) {
+        // Enhanced error logging with specific details
+        if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+            console.error('[firestoreSync] Permission Error Details:', {
+                error: error.message,
+                code: error.code,
+                projectId: projectId,
+                userId: userId,
+                hint: 'Check: 1) User is authenticated, 2) userId matches auth.uid, 3) All required fields present'
+            });
+        } else {
+            console.error('[firestoreSync] Error syncing project:', error);
+        }
         throw error;
     }
 };
@@ -357,8 +447,35 @@ export const syncHistoryItems = async (
             }
         });
 
-        // STEP 3: Add/update current items
+        // STEP 3: Add/update current items with validation
+        let skippedCount = 0;
         historyItems.forEach((item) => {
+            // Validate required fields per Firestore rules
+            if (!item.type || !item.imageUrl) {
+                console.warn(`[firestoreSync] Skipping history item ${item.id} - missing required fields (type: ${!!item.type}, imageUrl: ${!!item.imageUrl})`);
+                skippedCount++;
+                return;
+            }
+
+            // Validate type is one of allowed values
+            const allowedTypes = ['model-generation', 'model-revision', 'try-on', 'try-on-revision'];
+            if (!allowedTypes.includes(item.type)) {
+                console.warn(`[firestoreSync] Skipping history item ${item.id} - invalid type: ${item.type}`);
+                skippedCount++;
+                return;
+            }
+
+            // Validate imageUrl format (must be Firebase Storage or data:image URL)
+            const isValidUrl = item.imageUrl.startsWith('https://firebasestorage.googleapis.com/') ||
+                              item.imageUrl.startsWith('https://storage.googleapis.com/') ||
+                              item.imageUrl.startsWith('data:image/');
+
+            if (!isValidUrl) {
+                console.warn(`[firestoreSync] Skipping history item ${item.id} - invalid imageUrl format (must be Firebase Storage or data:image URL)`);
+                skippedCount++;
+                return;
+            }
+
             const itemRef = doc(collectionRef, item.id);
             // Sanitize item to convert undefined to null (Firestore requirement)
             const sanitizedItem = sanitizeForFirestore({
@@ -369,8 +486,11 @@ export const syncHistoryItems = async (
         });
 
         await batch.commit();
-        console.log(`[firestoreSync] Synced ${historyItems.length} history items to ${collectionPath}${deletedCount > 0 ? `, deleted ${deletedCount} orphaned items` : ''}`);
-    } catch (error) {
+        console.log(`[firestoreSync] Synced ${historyItems.length - skippedCount} history items to ${collectionPath}${skippedCount > 0 ? ` (skipped ${skippedCount} invalid items)` : ''}${deletedCount > 0 ? `, deleted ${deletedCount} orphaned items` : ''}`);
+    } catch (error: any) {
+        if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+            console.error('[firestoreSync] Permission error syncing history items. Check that all items have valid type and imageUrl fields.');
+        }
         console.error('[firestoreSync] Error syncing history items:', error);
         throw error;
     }

@@ -617,7 +617,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                     </div>
 
                     <div className="pt-2 border-t border-gray-800 space-y-3">
-                        <h4 className="text-sm font-semibold text-gray-300">Atmosphere & Effects</h4>
+                        <h4 className="text-xs font-semibold text-gray-300">Atmosphere & Effects</h4>
                         <div>
                             <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Background Exposure</label><span className="text-[11px] font-mono text-gray-300">{generationSettings.sceneAtmosphere.backgroundExposure.toFixed(2)}</span></div>
                             <input type="range" min="-1" max="1" step="0.05" value={generationSettings.sceneAtmosphere.backgroundExposure} onChange={e => onSettingsChange(gs => ({...gs, sceneAtmosphere: {...gs.sceneAtmosphere, backgroundExposure: +e.target.value}}))} className="w-full" disabled={isGenerating}/>
@@ -647,7 +647,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                     </div>
                     
                     <div className="pt-2 border-t border-gray-800 space-y-3">
-                        <h4 className="text-sm font-semibold text-gray-300">Noise & Grain</h4>
+                        <h4 className="text-xs font-semibold text-gray-300">Noise & Grain</h4>
                         <div>
                             <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Grain Amount</label><span className="text-[11px] font-mono text-gray-300">{generationSettings.noiseAndGrain.amount.toFixed(2)}</span></div>
                             <input type="range" min="0" max="1" step="0.05" value={generationSettings.noiseAndGrain.amount} onChange={e => onSettingsChange(gs => ({...gs, noiseAndGrain: {...gs.noiseAndGrain, amount: +e.target.value}}))} className="w-full" disabled={isGenerating}/>
@@ -665,7 +665,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                     </div>
 
                     <div className="pt-2 border-t border-gray-800 space-y-3">
-                        <h4 className="text-sm font-semibold text-gray-300">Ambient Bounce</h4>
+                        <h4 className="text-xs font-semibold text-gray-300">Ambient Bounce</h4>
                         <div className="flex items-center gap-3">
                             <input type="color" value={generationSettings.ambientBounce.color} onChange={e => onSettingsChange(gs => ({...gs, ambientBounce: {...gs.ambientBounce, color: e.target.value}}))} className="w-8 h-8 p-0 border-none rounded-md cursor-pointer" disabled={isGenerating} />
                             <div className="flex-grow">
@@ -678,7 +678,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                         </div>
                     </div>
                      <div className="pt-2 border-t border-gray-800 space-y-3">
-                        <h4 className="text-sm font-semibold text-gray-300">Ambient Occlusion</h4>
+                        <h4 className="text-xs font-semibold text-gray-300">Ambient Occlusion</h4>
                         <div>
                             <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Intensity</label><span className="text-[11px] font-mono text-gray-300">{generationSettings.ambientOcclusion.intensity.toFixed(2)}</span></div>
                             <input type="range" min="0" max="1" step="0.05" value={generationSettings.ambientOcclusion.intensity} onChange={e => onSettingsChange(gs => ({...gs, ambientOcclusion: {...gs.ambientOcclusion, intensity: +e.target.value}}))} className="w-full" disabled={isGenerating}/>
@@ -689,7 +689,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                         </div>
                     </div>
                      <div className="pt-2 border-t border-gray-800 space-y-3">
-                        <h4 className="text-sm font-semibold text-gray-300">Editing & Retouching (Digital Darkroom)</h4>
+                        <h4 className="text-xs font-semibold text-gray-300">Editing & Retouching (Digital Darkroom)</h4>
                         <div className="p-2.5 bg-black/20 rounded-md space-y-3 border border-gray-800">
                              <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Skin & Surface</h5>
                              <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.frequencySeparation} onChange={e => onSettingsChange(gs => ({...gs, digitalDarkroom: {...gs.digitalDarkroom, frequencySeparation: e.target.checked}}))} className="h-4 w-4 rounded" />Frequency Separation</label>
@@ -713,13 +713,13 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                     </div>
 
                     <div className="pt-2 border-t border-gray-800 space-y-3">
-                        <h4 className="text-sm font-semibold text-gray-300">Advanced Color Grading</h4>
+                        <h4 className="text-xs font-semibold text-gray-300">Advanced Color Grading</h4>
                         <ColorWheelControl label="Lift (Shadows)" value={generationSettings.imageProcessing.lift || {r:0,g:0,b:0}} onChange={v => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, lift: v}}))} />
                         <ColorWheelControl label="Gamma (Midtones)" value={generationSettings.imageProcessing.gamma || {r:0,g:0,b:0}} onChange={v => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, gamma: v}}))} />
                         <ColorWheelControl label="Gain (Highlights)" value={generationSettings.imageProcessing.gain || {r:0,g:0,b:0}} onChange={v => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, gain: v}}))} />
                     </div>
                      <div className="pt-2 border-t border-gray-800 space-y-3">
-                        <h4 className="text-sm font-semibold text-gray-300">Split Toning</h4>
+                        <h4 className="text-xs font-semibold text-gray-300">Split Toning</h4>
                         <div>
                             <label className="text-[11px] text-gray-400">Highlights / Shadows</label>
                             <div className="grid grid-cols-2 gap-1.5 mt-0.5">

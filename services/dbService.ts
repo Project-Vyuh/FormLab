@@ -41,7 +41,10 @@ export const clearSyncQueue = () => {
  */
 const queueFirestoreSync = (projectId: string, state: any) => {
   // Skip if no user logged in
-  if (!currentUserId) return;
+  if (!currentUserId) {
+    console.warn('[dbService] Skipping Firestore sync - user not authenticated yet. Project:', projectId);
+    return;
+  }
 
   // Clear existing timer for this project
   if (syncQueue.has(projectId)) {
@@ -51,6 +54,13 @@ const queueFirestoreSync = (projectId: string, state: any) => {
   // Queue new sync (debounced 2 seconds)
   const timer = setTimeout(async () => {
     try {
+      // Re-check userId before sync (in case user logged out during debounce period)
+      if (!currentUserId) {
+        console.warn('[dbService] User logged out before sync could complete. Skipping sync for project:', projectId);
+        syncQueue.delete(projectId);
+        return;
+      }
+
       console.log('[dbService] Starting background Firestore sync for project:', projectId);
 
       // CRITICAL: Reload fresh state from IndexedDB to ensure we sync migrated data
@@ -72,11 +82,18 @@ const queueFirestoreSync = (projectId: string, state: any) => {
         updatedAt: Date.now(),
       };
 
-      await syncProjectToFirestore(projectId, currentUserId!, projectState);
+      await syncProjectToFirestore(projectId, currentUserId, projectState);
       syncQueue.delete(projectId);
       console.log('[dbService] Firestore sync completed successfully');
-    } catch (error) {
-      console.error('[dbService] Firestore sync failed:', error);
+    } catch (error: any) {
+      // Provide more detailed error logging
+      if (error?.code === 'permission-denied') {
+        console.error('[dbService] Firestore sync failed: Permission denied. Check Firestore rules and ensure user is authenticated.');
+      } else if (error?.message?.includes('Missing or insufficient permissions')) {
+        console.error('[dbService] Firestore sync failed: Missing required fields or userId mismatch. Error:', error.message);
+      } else {
+        console.error('[dbService] Firestore sync failed:', error);
+      }
       // Keep in IndexedDB, will retry next time
       syncQueue.delete(projectId);
     }
