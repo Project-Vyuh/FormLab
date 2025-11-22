@@ -16,8 +16,9 @@ const CollapsibleSection: React.FC<{
     isToggleable?: boolean;
     isPanelEnabled?: boolean;
     onPanelToggle?: () => void;
-}> = ({ title, icon, isOpen, onToggle, children, isToggleable, isPanelEnabled, onPanelToggle }) => (
-    <div className="border-t border-gray-800 pt-3">
+    noBorder?: boolean;
+}> = ({ title, icon, isOpen, onToggle, children, isToggleable, isPanelEnabled, onPanelToggle, noBorder }) => (
+    <div className={noBorder ? "pt-3" : "border-t border-gray-800 pt-3"}>
         <div className="w-full flex justify-between items-center text-xs font-semibold text-gray-200">
             <button onClick={onToggle} className="flex items-center gap-1.5 flex-grow text-left min-w-0 overflow-hidden">
                 {icon} <span className="truncate">{title}</span>

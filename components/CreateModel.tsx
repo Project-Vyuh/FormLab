@@ -1333,10 +1333,11 @@ const CreateModel: React.FC<CreateModelProps> = ({
           </div>
         </CollapsibleSection>
 
-        <h2 className="text-sm font-sans font-semibold text-gray-200 mb-3 mt-3">
-            Global Controls
-        </h2>
-        <div className="space-y-3">
+        <div className="border-t border-gray-800 pt-3">
+            <h2 className="text-sm font-sans font-semibold text-gray-200 mb-3">
+                Global Controls
+            </h2>
+            <div className="space-y-3">
             <GlobalControls
                 generationSettings={generationSettings}
                 onSettingsChange={setGenerationSettings}
@@ -1350,6 +1351,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 onRemoveLight={removeLight}
                 onPanelToggle={handlePanelToggle}
             />
+            </div>
         </div>
       </div>
     );

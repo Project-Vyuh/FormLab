@@ -200,7 +200,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
     
     return (
         <div className="space-y-3">
-            <CollapsibleSection title="Composition" icon={<LayoutIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.composition} onToggle={() => onToggleSection('composition')} isToggleable={true} isPanelEnabled={generationSettings.panelToggles.composition} onPanelToggle={() => onPanelToggle('composition')}>
+            <CollapsibleSection title="Composition" icon={<LayoutIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.composition} onToggle={() => onToggleSection('composition')} isToggleable={true} isPanelEnabled={generationSettings.panelToggles.composition} onPanelToggle={() => onPanelToggle('composition')} noBorder={true}>
                 <div className="space-y-3">
                     <div>
                         <label className="text-[11px] font-medium text-gray-400">Framing</label>
