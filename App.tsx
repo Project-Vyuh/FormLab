@@ -21,7 +21,7 @@ import { Model, Project, Notification, User, SelectedStylingModel } from './type
 import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes, migrateBase64ImagesToStorage, migrateIndexedDBToFirestore, setCurrentUserId } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
 import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
-import { loadPredefinedModels } from './services/firestoreService';
+import { loadPredefinedModels, PredefinedModel } from './services/firestoreService';
 import { SyncProvider } from './contexts/SyncContext';
 
 
@@ -498,6 +498,29 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleUseTemplate = useCallback((template: PredefinedModel) => {
+    // For now, we'll just load the template as a base model in the new project
+    // In the future, this could load a full project template
+    console.log("Using template:", template);
+
+    // Add to gallery as a new model
+    const newModel: Model = {
+      id: `${currentProjectId}-${template.id}`,
+      url: template.url,
+      source: 'user',
+      projectId: currentProjectId || undefined,
+      historyItemId: template.id, // Using template ID as history ID for now
+    };
+
+    setModelGallery(prev => [newModel, ...prev]);
+    setActiveModelUrl(newModel.url);
+    setActiveView('imageStudio');
+  }, [currentProjectId]);
+
+  const handleNavigateToCollections = useCallback(() => {
+    setActiveView('templates');
+  }, []);
+
 
 
   useEffect(() => {
@@ -597,6 +620,8 @@ const App: React.FC = () => {
         <CollectionsModal
           isOpen={isCollectionsModalOpen}
           onClose={() => setIsCollectionsModalOpen(false)}
+          onUseTemplate={handleUseTemplate}
+          onNavigateToCollections={handleNavigateToCollections}
         />
 
         {/* Real-time Sync Listener (invisible component) */}

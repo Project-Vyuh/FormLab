@@ -1,13 +1,60 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { XIcon } from './icons';
+import { XIcon, ChevronRightIcon, GridIcon, LayoutIcon, StarIcon } from './icons';
+import { loadPredefinedModels, PredefinedModel } from '../services/firestoreService';
 
 interface CollectionsModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onUseTemplate: (template: PredefinedModel) => void;
+    onNavigateToCollections: () => void;
 }
 
-const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose }) => {
+type MenuSection = 'models';
+type MenuItem = 'featured' | 'latest' | 'categories';
+
+const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, onUseTemplate, onNavigateToCollections }) => {
+    const [activeItem, setActiveItem] = useState<MenuItem>('featured');
+    const [models, setModels] = useState<PredefinedModel[]>([]);
+    const [selectedTemplate, setSelectedTemplate] = useState<PredefinedModel | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            loadContent();
+        }
+    }, [isOpen, activeItem]);
+
+    const loadContent = async () => {
+        setIsLoading(true);
+        try {
+            // For now, both Featured and Latest load all models
+            // Categories is empty as per requirements
+            if (activeItem === 'featured' || activeItem === 'latest') {
+                const data = await loadPredefinedModels();
+                setModels(data);
+            } else {
+                setModels([]);
+            }
+        } catch (error) {
+            console.error("Failed to load models", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleUseTemplate = () => {
+        if (selectedTemplate) {
+            onUseTemplate(selectedTemplate);
+            onClose();
+        }
+    };
+
+    const handleAllCollections = () => {
+        onNavigateToCollections();
+        onClose();
+    };
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -23,28 +70,139 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose }) 
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.95, opacity: 0, y: 20 }}
                         onClick={(e) => e.stopPropagation()}
-                        className="relative w-full max-w-4xl h-[80vh] overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-xl flex flex-col"
+                        className="relative w-full max-w-5xl h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a] shadow-2xl flex flex-col"
                         style={{
                             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
                         }}
                     >
-                        {/* Header */}
-                        <div className="flex items-center justify-between p-6 border-b border-white/10">
+                        {/* Unified Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-black/20">
                             <div>
                                 <h2 className="text-lg font-semibold text-white tracking-tight">Collections</h2>
-                                <p className="text-sm text-gray-400 mt-1">Choose a template to get started</p>
+                                <p className="text-xs text-gray-400 mt-0.5">Choose a template to get started</p>
                             </div>
                             <button
                                 onClick={onClose}
-                                className="rounded-full p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                                className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
                             >
                                 <XIcon className="h-5 w-5" />
                             </button>
                         </div>
 
-                        {/* Content - Empty for now */}
-                        <div className="flex-grow p-6 overflow-y-auto">
-                            {/* Template grid will go here later */}
+                        <div className="flex flex-grow overflow-hidden">
+                            {/* Sidebar */}
+                            <div className="w-72 min-w-[18rem] bg-black/20 border-r border-white/5 flex flex-col flex-shrink-0">
+                                <div className="flex-grow py-4 overflow-y-auto">
+                                    {/* Models Section */}
+                                    <div className="mb-2">
+                                        <div className="px-6 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                            Models
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <button
+                                                onClick={() => setActiveItem('featured')}
+                                                className={`w-full flex items-center gap-3 px-6 py-2 text-sm transition-colors ${activeItem === 'featured'
+                                                        ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
+                                                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                    }`}
+                                            >
+                                                <StarIcon className="w-4 h-4" />
+                                                Featured
+                                            </button>
+                                            <button
+                                                onClick={() => setActiveItem('latest')}
+                                                className={`w-full flex items-center gap-3 px-6 py-2 text-sm transition-colors ${activeItem === 'latest'
+                                                        ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
+                                                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                    }`}
+                                            >
+                                                <GridIcon className="w-4 h-4" />
+                                                Latest
+                                            </button>
+                                            <button
+                                                onClick={() => setActiveItem('categories')}
+                                                className={`w-full flex items-center gap-3 px-6 py-2 text-sm transition-colors ${activeItem === 'categories'
+                                                        ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
+                                                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                    }`}
+                                            >
+                                                <LayoutIcon className="w-4 h-4" />
+                                                Categories
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 border-t border-white/5">
+                                    <button
+                                        onClick={handleAllCollections}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-white/5 rounded-lg hover:bg-white/10 transition-colors whitespace-nowrap"
+                                    >
+                                        All Collections
+                                        <ChevronRightIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Main Content */}
+                            <div className="flex-grow flex flex-col bg-[#1a1a1a] overflow-hidden">
+                                {/* Content Grid */}
+                                <div className="flex-grow p-6 overflow-y-auto">
+                                    {isLoading ? (
+                                        <div className="flex items-center justify-center h-full">
+                                            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                        </div>
+                                    ) : models.length > 0 ? (
+                                        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                            {models.map((model) => (
+                                                <div
+                                                    key={model.id}
+                                                    onClick={() => setSelectedTemplate(prev => prev?.id === model.id ? null : model)}
+                                                    className={`group relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer border transition-all ${selectedTemplate?.id === model.id
+                                                            ? 'border-blue-500 ring-2 ring-blue-500/20'
+                                                            : 'border-white/10 hover:border-white/30'
+                                                        }`}
+                                                >
+                                                    <img
+                                                        src={model.url}
+                                                        alt={model.name}
+                                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                    />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                                                        <p className="text-xs font-medium text-white truncate">{model.name}</p>
+                                                    </div>
+                                                    {selectedTemplate?.id === model.id && (
+                                                        <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center">
+                                                            <div className="bg-blue-500 rounded-full p-1">
+                                                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                                            <LayoutIcon className="w-12 h-12 mb-3 opacity-20" />
+                                            <p>No items found in this category.</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Footer Actions */}
+                                <div className="p-4 border-t border-white/5 flex justify-end bg-[#1a1a1a]">
+                                    <button
+                                        onClick={handleUseTemplate}
+                                        disabled={!selectedTemplate}
+                                        className="px-6 py-2.5 text-sm font-semibold text-white rounded-lg shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                                        style={{ backgroundColor: '#318CE7' }}
+                                    >
+                                        Use Template
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </motion.div>
                 </motion.div>
