@@ -13,7 +13,8 @@ import Projects from './components/Projects';
 import Auth from './components/Auth';
 import EmailVerification from './components/EmailVerification';
 import ProjectOnboarding from './components/ProjectOnboarding';
-import ProjectModal from './components/ProjectModal';
+import CreateProjectModal from './components/CreateProjectModal';
+import CollectionsModal from './components/CollectionsModal';
 import ConflictResolutionModal from './components/ConflictResolutionModal';
 import ProjectSyncListener from './components/ProjectSyncListener';
 import { Model, Project, Notification, User, SelectedStylingModel } from './types';
@@ -59,8 +60,8 @@ const App: React.FC = () => {
   const [projectList, setProjectList] = useState<Project[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
-  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
-  const [projectModalMode, setProjectModalMode] = useState<'create' | 'edit'>('create');
+  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
 
   // Model selection state for CreateModel
   const [selectedHistoryItemId, setSelectedHistoryItemId] = useState<string | null>(null);
@@ -398,7 +399,7 @@ const App: React.FC = () => {
     setModelGallery(prevGallery => {
       const existingModel = prevGallery.find(
         model => model.historyItemId === stylingModelData.baseModelId &&
-                 model.projectId === currentProjectId
+          model.projectId === currentProjectId
       );
 
       // If base model already exists in gallery, don't add duplicate
@@ -468,33 +469,36 @@ const App: React.FC = () => {
   }, [activeView, selectedStylingModel, currentProjectId]);
 
   const handleOpenProjectModal = useCallback((mode: 'create' | 'edit') => {
-    setProjectModalMode(mode);
-    setIsProjectModalOpen(true);
+    if (mode === 'create') {
+      setIsCreateProjectModalOpen(true);
+    }
   }, []);
 
-  const handleSaveProject = useCallback(async (projectData: Project) => {
+  const handleCreateProject = useCallback(async (projectName: string) => {
+    const newProject: Project = {
+      id: `project-${Date.now()}`,
+      title: projectName,
+      description: '',
+      organization: '',
+      clientDetails: { name: '', email: '', phone: '', location: '' },
+      createdAt: new Date().toISOString(),
+      deadline: '',
+      tags: [],
+      status: 'Draft',
+    };
+
     try {
-      await saveProjectMetadata(projectData);
-      let updatedList;
-      const existingIndex = projectList.findIndex(p => p.id === projectData.id);
-      if (existingIndex > -1) {
-        updatedList = projectList.map(p => p.id === projectData.id ? projectData : p);
-      } else {
-        updatedList = [...projectList, projectData];
-      }
-      setProjectList(updatedList);
-
-      if (projectModalMode === 'create') {
-        setCurrentProjectId(projectData.id);
-      } else {
-        setCurrentProject(projectData);
-      }
-
-      setIsProjectModalOpen(false);
+      await saveProjectMetadata(newProject);
+      setProjectList(prev => [...prev, newProject]);
+      setCurrentProjectId(newProject.id);
+      setIsCreateProjectModalOpen(false);
+      setIsCollectionsModalOpen(true);
     } catch (e) {
-      console.error("Failed to save project metadata", e);
+      console.error("Failed to create project", e);
     }
-  }, [projectList, projectModalMode]);
+  }, []);
+
+
 
   useEffect(() => {
     const project = projectList.find(p => p.id === currentProjectId);
@@ -534,70 +538,73 @@ const App: React.FC = () => {
           currentUser={currentUser}
           onLogout={handleLogout}
         />
-      <div className="flex-grow min-h-0 relative">
-        <div className={`${activeView === 'createModel' ? 'block' : 'hidden'} absolute inset-0 bg-[#1a1a1a]`}>
-          <CreateModel
-            onModelFinalized={handleModelCreated}
-            onSaveModelInstance={handleSaveModel}
-            projectList={projectList}
-            currentProjectId={currentProjectId}
-            onProjectChange={handleProjectChange}
-            onOpenProjectModal={handleOpenProjectModal}
-            currentUser={currentUser}
-            modelGallery={currentProjectModels}
-            onSelectModel={handleSelectModelFromGallery}
-            onModelAdded={handleModelAdded}
-            onModelDeleted={handleDeleteModel}
-            selectedHistoryItemId={selectedHistoryItemId}
-            onHistoryItemLoaded={handleHistoryItemLoaded}
-          />
-        </div>
-        <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>
-          <ImageStudio
-            selectedStylingModel={selectedStylingModel}
-            onNavigateToVideoCreator={handleUseAsVideoReference}
-            onNavigateToCreateModel={() => handleNavigate('createModel')}
-            projectList={projectList}
-            currentProjectId={currentProjectId}
-            onProjectChange={handleProjectChange}
-            onOpenProjectModal={handleOpenProjectModal}
-            currentUser={currentUser}
-            onCategoriesChange={setWardrobeCategories}
-            onSaveStylingHistory={handleSaveStylingHistory}
-          />
-        </div>
-        <div className={`${activeView === 'videoCreator' ? 'block' : 'hidden'} absolute inset-0`}>
-          <VideoCreator
-            referenceImageUrl={videoReferenceImageUrl}
-            projectList={projectList}
-            currentProjectId={currentProjectId}
-            onProjectChange={handleProjectChange}
-            onOpenProjectModal={handleOpenProjectModal}
-            currentUser={currentUser}
-          />
-        </div>
-        <div className={`${activeView === 'templates' ? 'block' : 'hidden'} absolute inset-0`}>
-          <Templates wardrobeCategories={wardrobeCategories} currentUser={currentUser} />
-        </div>
-        <div className={`${activeView === 'projects' ? 'block' : 'hidden'} absolute inset-0`}>
-          <Projects />
-        </div>
+        <div className="flex-grow min-h-0 relative">
+          <div className={`${activeView === 'createModel' ? 'block' : 'hidden'} absolute inset-0 bg-[#1a1a1a]`}>
+            <CreateModel
+              onModelFinalized={handleModelCreated}
+              onSaveModelInstance={handleSaveModel}
+              projectList={projectList}
+              currentProjectId={currentProjectId}
+              onProjectChange={handleProjectChange}
+              onOpenProjectModal={handleOpenProjectModal}
+              currentUser={currentUser}
+              modelGallery={currentProjectModels}
+              onSelectModel={handleSelectModelFromGallery}
+              onModelAdded={handleModelAdded}
+              onModelDeleted={handleDeleteModel}
+              selectedHistoryItemId={selectedHistoryItemId}
+              onHistoryItemLoaded={handleHistoryItemLoaded}
+            />
+          </div>
+          <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>
+            <ImageStudio
+              selectedStylingModel={selectedStylingModel}
+              onNavigateToVideoCreator={handleUseAsVideoReference}
+              onNavigateToCreateModel={() => handleNavigate('createModel')}
+              projectList={projectList}
+              currentProjectId={currentProjectId}
+              onProjectChange={handleProjectChange}
+              onOpenProjectModal={handleOpenProjectModal}
+              currentUser={currentUser}
+              onCategoriesChange={setWardrobeCategories}
+              onSaveStylingHistory={handleSaveStylingHistory}
+            />
+          </div>
+          <div className={`${activeView === 'videoCreator' ? 'block' : 'hidden'} absolute inset-0`}>
+            <VideoCreator
+              referenceImageUrl={videoReferenceImageUrl}
+              projectList={projectList}
+              currentProjectId={currentProjectId}
+              onProjectChange={handleProjectChange}
+              onOpenProjectModal={handleOpenProjectModal}
+              currentUser={currentUser}
+            />
+          </div>
+          <div className={`${activeView === 'templates' ? 'block' : 'hidden'} absolute inset-0`}>
+            <Templates wardrobeCategories={wardrobeCategories} currentUser={currentUser} />
+          </div>
+          <div className={`${activeView === 'projects' ? 'block' : 'hidden'} absolute inset-0`}>
+            <Projects />
+          </div>
 
+        </div>
+        <CreateProjectModal
+          isOpen={isCreateProjectModalOpen}
+          onClose={() => setIsCreateProjectModalOpen(false)}
+          onCreate={handleCreateProject}
+        />
+
+        <CollectionsModal
+          isOpen={isCollectionsModalOpen}
+          onClose={() => setIsCollectionsModalOpen(false)}
+        />
+
+        {/* Real-time Sync Listener (invisible component) */}
+        <ProjectSyncListener projectId={currentProjectId} currentUser={currentUser} />
+
+        {/* Sync Conflict Resolution Modal */}
+        <ConflictResolutionModal />
       </div>
-      <ProjectModal
-        isOpen={isProjectModalOpen}
-        onClose={() => setIsProjectModalOpen(false)}
-        onSave={handleSaveProject}
-        mode={projectModalMode}
-        projectData={projectModalMode === 'edit' ? currentProject : null}
-      />
-
-      {/* Real-time Sync Listener (invisible component) */}
-      <ProjectSyncListener projectId={currentProjectId} currentUser={currentUser} />
-
-      {/* Sync Conflict Resolution Modal */}
-      <ConflictResolutionModal />
-    </div>
     </SyncProvider>
   );
 };

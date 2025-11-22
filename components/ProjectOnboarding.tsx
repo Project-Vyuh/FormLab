@@ -4,7 +4,7 @@
 */
 
 import React, { useState } from 'react';
-import ProjectModal from './ProjectModal';
+import CreateProjectModal from './CreateProjectModal';
 import { Project } from '../types';
 import { saveProjectMetadata } from '../services/dbService';
 import { CubeIcon } from './icons';
@@ -16,14 +16,25 @@ interface ProjectOnboardingProps {
 const ProjectOnboarding: React.FC<ProjectOnboardingProps> = ({ onProjectCreated }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const handleSaveProject = async (projectData: Project) => {
+  const handleCreateProject = async (projectName: string) => {
+    const newProject: Project = {
+      id: `project-${Date.now()}`,
+      title: projectName,
+      description: '',
+      organization: '',
+      clientDetails: { name: '', email: '', phone: '', location: '' },
+      createdAt: new Date().toISOString(),
+      deadline: '',
+      tags: [],
+      status: 'Draft',
+    };
+
     try {
-      await saveProjectMetadata(projectData);
+      await saveProjectMetadata(newProject);
       setIsModalOpen(false);
-      onProjectCreated(projectData);
+      onProjectCreated(newProject);
     } catch (e) {
       console.error("Failed to save first project", e);
-      // Future enhancement: show an error toast to the user.
     }
   };
 
@@ -42,11 +53,10 @@ const ProjectOnboarding: React.FC<ProjectOnboardingProps> = ({ onProjectCreated 
           Create Your First Project
         </button>
       </div>
-      <ProjectModal
+      <CreateProjectModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveProject}
-        mode="create"
+        onCreate={handleCreateProject}
       />
     </div>
   );
