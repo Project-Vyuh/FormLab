@@ -1247,7 +1247,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
             className="w-full flex items-center justify-between text-base font-sans font-semibold text-gray-200 mb-3 hover:text-white transition-colors"
           >
             <div className="flex items-center gap-2">
-              <SparklesIcon className="w-5 h-5 text-blue-400" />
+              <LayersIcon className="w-5 h-5 text-blue-400" />
               Model Templates
             </div>
             <ChevronDownIcon className={`w-5 h-5 text-gray-400 transition-transform ${isTemplatesSectionOpen ? 'rotate-180' : ''}`} />
@@ -1261,7 +1261,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <p className="text-xs text-gray-400 mb-3">Pre-defined models to get started</p>
+                <p className="text-xs text-gray-400 mb-3">Ready-made models to get you started</p>
 
                 {isLoadingTemplates ? (
                   <div className="flex items-center justify-center py-8">
@@ -1280,9 +1280,6 @@ const CreateModel: React.FC<CreateModelProps> = ({
                           >
                             <img src={template.thumbnail || template.url} alt={template.name || 'Template'} className="w-full h-full object-cover" />
                           </button>
-                          <div className="absolute top-1 right-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full shadow-lg">
-                            Template
-                          </div>
                         </div>
                       ))}
                     </div>
