@@ -62,6 +62,7 @@ const App: React.FC = () => {
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
   const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
+  const [projectUpdateTrigger, setProjectUpdateTrigger] = useState(0); // Trigger for CreateModel to reload
 
   // Model selection state for CreateModel
   const [selectedHistoryItemId, setSelectedHistoryItemId] = useState<string | null>(null);
@@ -550,6 +551,9 @@ const App: React.FC = () => {
       // Set the selected history item ID so CreateModel loads it
       setSelectedHistoryItemId(newHistoryItemId);
 
+      // Trigger reload in CreateModel
+      setProjectUpdateTrigger(prev => prev + 1);
+
       // Switch view
       setActiveView('createModel');
 
@@ -619,6 +623,7 @@ const App: React.FC = () => {
               selectedHistoryItemId={selectedHistoryItemId}
               onHistoryItemLoaded={() => setSelectedHistoryItemId(null)}
               onOpenCollectionsModal={() => setIsCollectionsModalOpen(true)}
+              lastExternalUpdate={projectUpdateTrigger}
             />
           </div>
           <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>

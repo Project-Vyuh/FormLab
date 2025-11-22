@@ -45,6 +45,7 @@ interface CreateModelProps {
   selectedHistoryItemId?: string | null; // History item to load from gallery selection
   onHistoryItemLoaded?: () => void; // Callback when history item has been loaded
   onOpenCollectionsModal: () => void; // Callback to open collections modal
+  lastExternalUpdate?: number; // Trigger to reload project state
 }
 
 type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
@@ -193,7 +194,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
   onModelDeleted,
   selectedHistoryItemId,
   onHistoryItemLoaded,
-  onOpenCollectionsModal
+  onOpenCollectionsModal,
+  lastExternalUpdate
 }) => {
   // Loading & App State
   const [isLoaded, setIsLoaded] = useState(false);
@@ -437,7 +439,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
     };
 
     loadProject();
-  }, [currentProjectId, resetProjectState, isLoaded, pendingHistoryItemId]);
+  }, [currentProjectId, resetProjectState, isLoaded, pendingHistoryItemId, lastExternalUpdate]);
 
   // Load predefined models when templates section is opened
   useEffect(() => {

@@ -55,6 +55,12 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
         onClose();
     };
 
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedTemplate(null);
+        }
+    }, [isOpen]);
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -102,8 +108,8 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                             <button
                                                 onClick={() => setActiveItem('featured')}
                                                 className={`w-full flex items-center gap-3 px-6 py-2 text-sm transition-colors ${activeItem === 'featured'
-                                                        ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
-                                                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                    ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
+                                                    : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
                                                     }`}
                                             >
                                                 <StarIcon className="w-4 h-4" />
@@ -112,8 +118,8 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                             <button
                                                 onClick={() => setActiveItem('latest')}
                                                 className={`w-full flex items-center gap-3 px-6 py-2 text-sm transition-colors ${activeItem === 'latest'
-                                                        ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
-                                                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                    ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
+                                                    : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
                                                     }`}
                                             >
                                                 <GridIcon className="w-4 h-4" />
@@ -122,8 +128,8 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                             <button
                                                 onClick={() => setActiveItem('categories')}
                                                 className={`w-full flex items-center gap-3 px-6 py-2 text-sm transition-colors ${activeItem === 'categories'
-                                                        ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
-                                                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                    ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
+                                                    : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
                                                     }`}
                                             >
                                                 <LayoutIcon className="w-4 h-4" />
@@ -159,8 +165,8 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                                     key={model.id}
                                                     onClick={() => setSelectedTemplate(prev => prev?.id === model.id ? null : model)}
                                                     className={`group relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer border transition-all ${selectedTemplate?.id === model.id
-                                                            ? 'border-blue-500 ring-2 ring-blue-500/20'
-                                                            : 'border-white/10 hover:border-white/30'
+                                                        ? 'border-blue-500 ring-2 ring-blue-500/20'
+                                                        : 'border-white/10 hover:border-white/30'
                                                         }`}
                                                 >
                                                     <img
