@@ -119,7 +119,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
         }
         return null;
     }, [generationSettings.lightingRig]);
-    
+
     const keyLight = useMemo(() => generationSettings.lightingRig.lights.find(l => l.role === 'key'), [generationSettings.lightingRig.lights]);
     const fillLight = useMemo(() => generationSettings.lightingRig.lights.find(l => l.role === 'fill'), [generationSettings.lightingRig.lights]);
     const rimLight = useMemo(() => generationSettings.lightingRig.lights.find(l => l.role === 'rim'), [generationSettings.lightingRig.lights]);
@@ -197,7 +197,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
     );
 
     const selectedLight = generationSettings.lightingRig.lights.find(l => l.id === selectedLightId);
-    
+
     return (
         <div className="space-y-3">
             <CollapsibleSection title="Composition" icon={<LayoutIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.composition} onToggle={() => onToggleSection('composition')} isToggleable={true} isPanelEnabled={generationSettings.panelToggles.composition} onPanelToggle={() => onPanelToggle('composition')} noBorder={true}>
@@ -297,7 +297,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                     <div>
                         <label className="text-[11px] font-medium text-gray-400">Facial Lighting Presets</label>
                         <div className="grid grid-cols-3 gap-1.5 mt-0.5">
-                            {LIGHTING_PRESETS.map(p => <OptionButton key={p.label} onClick={() => onSettingsChange(gs => ({ ...gs, lightingRig: p.rig, sceneAtmosphere: {...gs.sceneAtmosphere, ...p.atmosphere} }))} isActive={activePresetLabel === p.label} disabled={isGenerating}>{p.label}</OptionButton>)}
+                            {LIGHTING_PRESETS.map(p => <OptionButton key={p.label} onClick={() => onSettingsChange(gs => ({ ...gs, lightingRig: p.rig, sceneAtmosphere: { ...gs.sceneAtmosphere, ...p.atmosphere } }))} isActive={activePresetLabel === p.label} disabled={isGenerating}>{p.label}</OptionButton>)}
                         </div>
                     </div>
 
@@ -321,7 +321,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                             )}
                         </div>
                     </div>
-                    
+
                     <div>
                         <label className="text-[11px] font-medium text-gray-400">Fill Ratio (Key:Fill)</label>
                         {!(keyLight && fillLight) && <p className="text-xs text-gray-500 mt-1">Add both a Key and a Fill light to enable ratio controls.</p>}
@@ -332,13 +332,13 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                             <OptionButton onClick={() => handleSetFillRatio(8)} isActive={activeRatio === 8} disabled={isGenerating || !(keyLight && fillLight)}>8:1</OptionButton>
                         </div>
                     </div>
-                    
+
                     <AnimatePresence>
                         {selectedLight && (
-                           <motion.div initial={{opacity: 0, y: -10}} animate={{opacity: 1, y: 0}} exit={{opacity: 0, y: -10}} className="p-2.5 bg-black/30 rounded-md space-y-2 border border-gray-700">
+                            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="p-2.5 bg-black/30 rounded-md space-y-2 border border-gray-700">
                                 <h5 className="text-xs font-bold text-blue-300 flex justify-between items-center">
                                     {selectedLight.role.charAt(0).toUpperCase() + selectedLight.role.slice(1)} Light Controls
-                                    <button onClick={() => onRemoveLight(selectedLight.id)} className="p-1 text-gray-500 hover:text-red-400"><Trash2Icon className="w-4 h-4"/></button>
+                                    <button onClick={() => onRemoveLight(selectedLight.id)} className="p-1 text-gray-500 hover:text-red-400"><Trash2Icon className="w-4 h-4" /></button>
                                 </h5>
                                 <div>
                                     <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Angle</label><span className="text-[11px] font-mono text-gray-300">{selectedLight.position.angle}°</span></div>
@@ -348,7 +348,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                                     <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Elevation</label><span className="text-[11px] font-mono text-gray-300">{selectedLight.position.elevation}°</span></div>
                                     <input type="range" min="-90" max="90" value={selectedLight.position.elevation} onChange={e => onUpdateLight(selectedLight.id, { position: { elevation: +e.target.value } })} className="w-full" disabled={isGenerating} />
                                 </div>
-                                 <div>
+                                <div>
                                     <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Distance</label><span className="text-[11px] font-mono text-gray-300">{(selectedLight.position.distance || 0).toFixed(2)}</span></div>
                                     <input type="range" min="0" max="1.5" step="0.01" value={selectedLight.position.distance} onChange={e => onUpdateLight(selectedLight.id, { position: { distance: +e.target.value } })} className="w-full" disabled={isGenerating} />
                                 </div>
@@ -372,10 +372,10 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                                     <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Saturation</label><span className="text-[11px] font-mono text-gray-300">{(selectedLight.saturation || 0).toFixed(2)}</span></div>
                                     <input type="range" min="0" max="1" step="0.01" value={selectedLight.saturation} onChange={e => onUpdateLight(selectedLight.id, { saturation: +e.target.value })} className="w-full" disabled={isGenerating} />
                                 </div>
-                           </motion.div>
+                            </motion.div>
                         )}
                     </AnimatePresence>
-                    
+
                     <div className="mt-4">
                         <label className="text-[11px] font-medium text-gray-400">HDRI Studio Dome</label>
                         <div className="grid grid-cols-4 gap-1.5 mt-0.5">
@@ -386,15 +386,15 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                             ))}
                         </div>
                         <div className="mt-2">
-                             <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Rotation</label><span className="text-[11px] font-mono text-gray-300 bg-black/30 px-1 py-0.5 rounded">{generationSettings.lightingRig.hdri.rotation}°</span></div>
-                            <input type="range" min="0" max="360" value={generationSettings.lightingRig.hdri.rotation} onChange={e => onSettingsChange(gs => ({...gs, lightingRig: {...gs.lightingRig, hdri: {...gs.lightingRig.hdri, rotation: +e.target.value }}}))} className="w-full" disabled={isGenerating} />
+                            <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Rotation</label><span className="text-[11px] font-mono text-gray-300 bg-black/30 px-1 py-0.5 rounded">{generationSettings.lightingRig.hdri.rotation}°</span></div>
+                            <input type="range" min="0" max="360" value={generationSettings.lightingRig.hdri.rotation} onChange={e => onSettingsChange(gs => ({ ...gs, lightingRig: { ...gs.lightingRig, hdri: { ...gs.lightingRig.hdri, rotation: +e.target.value } } }))} className="w-full" disabled={isGenerating} />
                         </div>
                     </div>
                 </div>
             </CollapsibleSection>
 
             <CollapsibleSection title="Environment" icon={<LayersIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.environment} onToggle={() => onToggleSection('environment')} isToggleable isPanelEnabled={generationSettings.panelToggles.environment} onPanelToggle={() => onPanelToggle('environment')}>
-                 <div className="space-y-3">
+                <div className="space-y-3">
                     <div className="grid grid-cols-4 gap-2">
                         {(['high-key', 'mid-gray', 'textured', 'colored-seamless', 'gradient', 'transparent', 'custom'] as StudioEnvironmentType[]).map(type => (
                             <OptionButton key={type} onClick={() => handleStudioEnvironmentChange(type)} isActive={generationSettings.studioEnvironment.type === type} disabled={isGenerating}>
@@ -482,7 +482,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                             )}
                         </motion.div>
                     </AnimatePresence>
-                    
+
                     {generationSettings.studioEnvironment.type !== 'transparent' && generationSettings.studioEnvironment.type !== 'custom' && (
                         <div>
                             <div className="flex justify-between items-center">
@@ -494,7 +494,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                             <input
                                 type="range" min="0" max="1" step="0.05"
                                 value={(generationSettings.studioEnvironment as any).cycloramaCurve ?? 0}
-                                onChange={e => onSettingsChange(gs => ({...gs, studioEnvironment: {...gs.studioEnvironment, cycloramaCurve: +e.target.value}}))}
+                                onChange={e => onSettingsChange(gs => ({ ...gs, studioEnvironment: { ...gs.studioEnvironment, cycloramaCurve: +e.target.value } }))}
                                 className="w-full" disabled={isGenerating}
                             />
                         </div>
@@ -507,7 +507,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                                 <input
                                     type="checkbox"
                                     checked={generationSettings.shadowSculpting.flags.left}
-                                    onChange={e => onSettingsChange(gs => ({...gs, shadowSculpting: {...gs.shadowSculpting, flags: {...gs.shadowSculpting.flags, left: e.target.checked}}}))}
+                                    onChange={e => onSettingsChange(gs => ({ ...gs, shadowSculpting: { ...gs.shadowSculpting, flags: { ...gs.shadowSculpting.flags, left: e.target.checked } } }))}
                                     className="h-4 w-4 rounded bg-black/30 border-gray-600 text-blue-500 focus:ring-blue-500"
                                     disabled={isGenerating}
                                 />
@@ -517,7 +517,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                                 <input
                                     type="checkbox"
                                     checked={generationSettings.shadowSculpting.flags.right}
-                                    onChange={e => onSettingsChange(gs => ({...gs, shadowSculpting: {...gs.shadowSculpting, flags: {...gs.shadowSculpting.flags, right: e.target.checked}}}))}
+                                    onChange={e => onSettingsChange(gs => ({ ...gs, shadowSculpting: { ...gs.shadowSculpting, flags: { ...gs.shadowSculpting.flags, right: e.target.checked } } }))}
                                     className="h-4 w-4 rounded bg-black/30 border-gray-600 text-blue-500 focus:ring-blue-500"
                                     disabled={isGenerating}
                                 />
@@ -525,12 +525,12 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                             </label>
                         </div>
                     </div>
-                    
+
                     <div>
                         <label className="text-[11px] font-medium text-gray-400">Floor Material</label>
                         <div className="grid grid-cols-4 gap-1.5 mt-0.5">
                             {(['matte', 'glossy', 'concrete', 'velvet'] as FloorMaterial[]).map(mat => (
-                                <OptionButton key={mat} onClick={() => onSettingsChange(gs => ({...gs, floorSettings: {...gs.floorSettings, material: mat}}))} isActive={generationSettings.floorSettings.material === mat} disabled={isGenerating}>
+                                <OptionButton key={mat} onClick={() => onSettingsChange(gs => ({ ...gs, floorSettings: { ...gs.floorSettings, material: mat } }))} isActive={generationSettings.floorSettings.material === mat} disabled={isGenerating}>
                                     {mat.charAt(0).toUpperCase() + mat.slice(1)}
                                 </OptionButton>
                             ))}
@@ -549,11 +549,11 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                                 <input
                                     type="range" min="0" max="1" step="0.05"
                                     value={generationSettings.floorSettings.glossiness}
-                                    onChange={e => onSettingsChange(gs => ({...gs, floorSettings: {...gs.floorSettings, glossiness: +e.target.value}}))}
+                                    onChange={e => onSettingsChange(gs => ({ ...gs, floorSettings: { ...gs.floorSettings, glossiness: +e.target.value } }))}
                                     className="w-full" disabled={isGenerating}
                                 />
                             </div>
-                             <div>
+                            <div>
                                 <div className="flex justify-between items-center">
                                     <label className="text-[11px] text-gray-400">Reflection Length</label>
                                     <span className="text-[11px] font-mono text-gray-300 bg-black/30 px-1 py-0.5 rounded">
@@ -563,7 +563,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                                 <input
                                     type="range" min="0" max="1" step="0.05"
                                     value={generationSettings.floorSettings.reflectionLength}
-                                    onChange={e => onSettingsChange(gs => ({...gs, floorSettings: {...gs.floorSettings, reflectionLength: +e.target.value}}))}
+                                    onChange={e => onSettingsChange(gs => ({ ...gs, floorSettings: { ...gs.floorSettings, reflectionLength: +e.target.value } }))}
                                     className="w-full" disabled={isGenerating}
                                 />
                             </div>
@@ -574,45 +574,45 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
 
             <CollapsibleSection title="Image Finishing" icon={<WandIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.finishing} onToggle={() => onToggleSection('finishing')} isToggleable isPanelEnabled={generationSettings.panelToggles.imageFinishing} onPanelToggle={() => onPanelToggle('imageFinishing')}>
                 <div className="space-y-3">
-                     <div>
+                    <div>
                         <label className="text-[11px] font-medium text-gray-400">Sensor Size</label>
                         <div className="grid grid-cols-2 gap-1.5 mt-0.5">
-                            {(['full-frame', 'medium-format'] as SensorSize[]).map(size => <OptionButton key={size} onClick={() => onSettingsChange(gs => ({...gs, sensorSize: gs.sensorSize === size ? undefined : size}))} isActive={generationSettings.sensorSize === size} disabled={isGenerating}>{size.replace('-',' ')}</OptionButton>)}
+                            {(['full-frame', 'medium-format'] as SensorSize[]).map(size => <OptionButton key={size} onClick={() => onSettingsChange(gs => ({ ...gs, sensorSize: gs.sensorSize === size ? undefined : size }))} isActive={generationSettings.sensorSize === size} disabled={isGenerating}>{size.replace('-', ' ')}</OptionButton>)}
                         </div>
                     </div>
-                     <div>
+                    <div>
                         <label className="text-[11px] font-medium text-gray-400">Camera Profile</label>
                         <div className="grid grid-cols-4 gap-1.5 mt-0.5">
-                            {cameraProfileOptions.map(p => <OptionButton key={p.id} onClick={() => onSettingsChange(gs => ({...gs, cameraProfile: gs.cameraProfile === p.id ? 'none' : p.id}))} isActive={generationSettings.cameraProfile === p.id} disabled={isGenerating}>{p.label}</OptionButton>)}
+                            {cameraProfileOptions.map(p => <OptionButton key={p.id} onClick={() => onSettingsChange(gs => ({ ...gs, cameraProfile: gs.cameraProfile === p.id ? 'none' : p.id }))} isActive={generationSettings.cameraProfile === p.id} disabled={isGenerating}>{p.label}</OptionButton>)}
                         </div>
                     </div>
 
                     <div>
                         <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Exposure Bias</label><span className="text-[11px] font-mono text-gray-300">{generationSettings.imageProcessing.exposureBias.toFixed(2)}</span></div>
-                        <input type="range" min="-1" max="1" step="0.05" value={generationSettings.imageProcessing.exposureBias} onChange={e => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, exposureBias: +e.target.value}}))} className="w-full" disabled={isGenerating}/>
+                        <input type="range" min="-1" max="1" step="0.05" value={generationSettings.imageProcessing.exposureBias} onChange={e => onSettingsChange(gs => ({ ...gs, imageProcessing: { ...gs.imageProcessing, exposureBias: +e.target.value } }))} className="w-full" disabled={isGenerating} />
                     </div>
-                     <div>
+                    <div>
                         <label className="text-[11px] font-medium text-gray-400">Contrast</label>
                         <div className="grid grid-cols-4 gap-1.5 mt-0.5">
-                            {(['low', 'neutral', 'high', 'punchy'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, contrast: c}}))} isActive={generationSettings.imageProcessing.contrast === c} disabled={isGenerating}>{c}</OptionButton>)}
+                            {(['low', 'neutral', 'high', 'punchy'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({ ...gs, imageProcessing: { ...gs.imageProcessing, contrast: c } }))} isActive={generationSettings.imageProcessing.contrast === c} disabled={isGenerating}>{c}</OptionButton>)}
                         </div>
                     </div>
-                     <div>
+                    <div>
                         <label className="text-[11px] font-medium text-gray-400">Color Grade</label>
                         <div className="grid grid-cols-4 gap-1.5 mt-0.5">
-                            {(['none', 'cinematic', 'commercial', 'vintage'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, colorGrade: c}}))} isActive={generationSettings.imageProcessing.colorGrade === c} disabled={isGenerating}>{c}</OptionButton>)}
+                            {(['none', 'cinematic', 'commercial', 'vintage'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({ ...gs, imageProcessing: { ...gs.imageProcessing, colorGrade: c } }))} isActive={generationSettings.imageProcessing.colorGrade === c} disabled={isGenerating}>{c}</OptionButton>)}
                         </div>
                     </div>
-                     <div>
+                    <div>
                         <label className="text-[11px] font-medium text-gray-400">Highlight Roll-off</label>
                         <div className="grid grid-cols-3 gap-1.5 mt-0.5">
-                            {(['soft', 'medium', 'hard'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, highlightRollOff: c}}))} isActive={generationSettings.imageProcessing.highlightRollOff === c} disabled={isGenerating}>{c}</OptionButton>)}
+                            {(['soft', 'medium', 'hard'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({ ...gs, imageProcessing: { ...gs.imageProcessing, highlightRollOff: c } }))} isActive={generationSettings.imageProcessing.highlightRollOff === c} disabled={isGenerating}>{c}</OptionButton>)}
                         </div>
                     </div>
-                     <div>
+                    <div>
                         <label className="text-[11px] font-medium text-gray-400">Shadow Crush</label>
                         <div className="grid grid-cols-3 gap-1.5 mt-0.5">
-                            {(['none', 'low', 'medium'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, shadowCrush: c}}))} isActive={generationSettings.imageProcessing.shadowCrush === c} disabled={isGenerating}>{c}</OptionButton>)}
+                            {(['none', 'low', 'medium'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({ ...gs, imageProcessing: { ...gs.imageProcessing, shadowCrush: c } }))} isActive={generationSettings.imageProcessing.shadowCrush === c} disabled={isGenerating}>{c}</OptionButton>)}
                         </div>
                     </div>
 
@@ -620,46 +620,46 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                         <h4 className="text-xs font-semibold text-gray-300">Atmosphere & Effects</h4>
                         <div>
                             <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Background Exposure</label><span className="text-[11px] font-mono text-gray-300">{generationSettings.sceneAtmosphere.backgroundExposure.toFixed(2)}</span></div>
-                            <input type="range" min="-1" max="1" step="0.05" value={generationSettings.sceneAtmosphere.backgroundExposure} onChange={e => onSettingsChange(gs => ({...gs, sceneAtmosphere: {...gs.sceneAtmosphere, backgroundExposure: +e.target.value}}))} className="w-full" disabled={isGenerating}/>
+                            <input type="range" min="-1" max="1" step="0.05" value={generationSettings.sceneAtmosphere.backgroundExposure} onChange={e => onSettingsChange(gs => ({ ...gs, sceneAtmosphere: { ...gs.sceneAtmosphere, backgroundExposure: +e.target.value } }))} className="w-full" disabled={isGenerating} />
                         </div>
                         <div>
                             <label className="text-[11px] font-medium text-gray-400">Background Blur</label>
                             <div className="grid grid-cols-4 gap-1.5 mt-0.5">
-                                {(['none', 'low', 'medium', 'high'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({...gs, sceneAtmosphere: {...gs.sceneAtmosphere, backgroundBlur: c}}))} isActive={generationSettings.sceneAtmosphere.backgroundBlur === c} disabled={isGenerating}>{c}</OptionButton>)}
+                                {(['none', 'low', 'medium', 'high'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({ ...gs, sceneAtmosphere: { ...gs.sceneAtmosphere, backgroundBlur: c } }))} isActive={generationSettings.sceneAtmosphere.backgroundBlur === c} disabled={isGenerating}>{c}</OptionButton>)}
                             </div>
                         </div>
                         <div>
                             <label className="text-[11px] font-medium text-gray-400">Light Wrap</label>
                             <div className="grid grid-cols-3 gap-1.5 mt-0.5">
-                                {(['none', 'subtle', 'strong'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({...gs, sceneAtmosphere: {...gs.sceneAtmosphere, lightWrap: c}}))} isActive={generationSettings.sceneAtmosphere.lightWrap === c} disabled={isGenerating}>{c}</OptionButton>)}
+                                {(['none', 'subtle', 'strong'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({ ...gs, sceneAtmosphere: { ...gs.sceneAtmosphere, lightWrap: c } }))} isActive={generationSettings.sceneAtmosphere.lightWrap === c} disabled={isGenerating}>{c}</OptionButton>)}
                             </div>
                         </div>
-                         <div>
+                        <div>
                             <label className="text-[11px] font-medium text-gray-400">Separation Contrast</label>
                             <div className="grid grid-cols-3 gap-1.5 mt-0.5">
-                                {(['soft', 'neutral', 'sharp'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({...gs, sceneAtmosphere: {...gs.sceneAtmosphere, separationContrast: c}}))} isActive={generationSettings.sceneAtmosphere.separationContrast === c} disabled={isGenerating}>{c}</OptionButton>)}
+                                {(['soft', 'neutral', 'sharp'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({ ...gs, sceneAtmosphere: { ...gs.sceneAtmosphere, separationContrast: c } }))} isActive={generationSettings.sceneAtmosphere.separationContrast === c} disabled={isGenerating}>{c}</OptionButton>)}
                             </div>
                         </div>
-                         <div>
+                        <div>
                             <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Vignette Strength</label><span className="text-[11px] font-mono text-gray-300">{generationSettings.sceneAtmosphere.vignetting.strength.toFixed(2)}</span></div>
-                            <input type="range" min="0" max="1" step="0.05" value={generationSettings.sceneAtmosphere.vignetting.strength} onChange={e => onSettingsChange(gs => ({...gs, sceneAtmosphere: {...gs.sceneAtmosphere, vignetting: {...gs.sceneAtmosphere.vignetting, strength: +e.target.value}}}))} className="w-full" disabled={isGenerating}/>
+                            <input type="range" min="0" max="1" step="0.05" value={generationSettings.sceneAtmosphere.vignetting.strength} onChange={e => onSettingsChange(gs => ({ ...gs, sceneAtmosphere: { ...gs.sceneAtmosphere, vignetting: { ...gs.sceneAtmosphere.vignetting, strength: +e.target.value } } }))} className="w-full" disabled={isGenerating} />
                         </div>
                     </div>
-                    
+
                     <div className="pt-2 border-t border-gray-800 space-y-3">
                         <h4 className="text-xs font-semibold text-gray-300">Noise & Grain</h4>
                         <div>
                             <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Grain Amount</label><span className="text-[11px] font-mono text-gray-300">{generationSettings.noiseAndGrain.amount.toFixed(2)}</span></div>
-                            <input type="range" min="0" max="1" step="0.05" value={generationSettings.noiseAndGrain.amount} onChange={e => onSettingsChange(gs => ({...gs, noiseAndGrain: {...gs.noiseAndGrain, amount: +e.target.value}}))} className="w-full" disabled={isGenerating}/>
+                            <input type="range" min="0" max="1" step="0.05" value={generationSettings.noiseAndGrain.amount} onChange={e => onSettingsChange(gs => ({ ...gs, noiseAndGrain: { ...gs.noiseAndGrain, amount: +e.target.value } }))} className="w-full" disabled={isGenerating} />
                         </div>
                         <div>
                             <label className="text-[11px] font-medium text-gray-400">Grain Type</label>
                             <div className="grid grid-cols-3 gap-1.5 mt-0.5">
-                                {(['fine', 'medium', 'coarse'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({...gs, noiseAndGrain: {...gs.noiseAndGrain, type: c}}))} isActive={generationSettings.noiseAndGrain.type === c} disabled={isGenerating}>{c}</OptionButton>)}
+                                {(['fine', 'medium', 'coarse'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({ ...gs, noiseAndGrain: { ...gs.noiseAndGrain, type: c } }))} isActive={generationSettings.noiseAndGrain.type === c} disabled={isGenerating}>{c}</OptionButton>)}
                             </div>
                         </div>
                         <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
-                            <input type="checkbox" checked={generationSettings.noiseAndGrain.chromaticAberration} onChange={e => onSettingsChange(gs => ({...gs, noiseAndGrain: {...gs.noiseAndGrain, chromaticAberration: e.target.checked}}))} className="h-4 w-4 rounded bg-black/30 border-gray-600 text-blue-500 focus:ring-blue-500" />
+                            <input type="checkbox" checked={generationSettings.noiseAndGrain.chromaticAberration} onChange={e => onSettingsChange(gs => ({ ...gs, noiseAndGrain: { ...gs.noiseAndGrain, chromaticAberration: e.target.checked } }))} className="h-4 w-4 rounded bg-black/30 border-gray-600 text-blue-500 focus:ring-blue-500" />
                             Chromatic Aberration
                         </label>
                     </div>
@@ -667,69 +667,69 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                     <div className="pt-2 border-t border-gray-800 space-y-3">
                         <h4 className="text-xs font-semibold text-gray-300">Ambient Bounce</h4>
                         <div className="flex items-center gap-3">
-                            <input type="color" value={generationSettings.ambientBounce.color} onChange={e => onSettingsChange(gs => ({...gs, ambientBounce: {...gs.ambientBounce, color: e.target.value}}))} className="w-8 h-8 p-0 border-none rounded-md cursor-pointer" disabled={isGenerating} />
+                            <input type="color" value={generationSettings.ambientBounce.color} onChange={e => onSettingsChange(gs => ({ ...gs, ambientBounce: { ...gs.ambientBounce, color: e.target.value } }))} className="w-8 h-8 p-0 border-none rounded-md cursor-pointer" disabled={isGenerating} />
                             <div className="flex-grow">
                                 <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Strength</label><span className="text-[11px] font-mono text-gray-300">{generationSettings.ambientBounce.strength.toFixed(2)}</span></div>
-                                <input type="range" min="0" max="1" step="0.05" value={generationSettings.ambientBounce.strength} onChange={e => onSettingsChange(gs => ({...gs, ambientBounce: {...gs.ambientBounce, strength: +e.target.value}}))} className="w-full" disabled={isGenerating}/>
+                                <input type="range" min="0" max="1" step="0.05" value={generationSettings.ambientBounce.strength} onChange={e => onSettingsChange(gs => ({ ...gs, ambientBounce: { ...gs.ambientBounce, strength: +e.target.value } }))} className="w-full" disabled={isGenerating} />
                             </div>
                         </div>
-                         <div className="grid grid-cols-5 gap-2">
-                            {(['uniform', 'left', 'right', 'top', 'bottom'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({...gs, ambientBounce: {...gs.ambientBounce, bias: c}}))} isActive={generationSettings.ambientBounce.bias === c} disabled={isGenerating}>{c}</OptionButton>)}
+                        <div className="grid grid-cols-5 gap-2">
+                            {(['uniform', 'left', 'right', 'top', 'bottom'] as const).map(c => <OptionButton key={c} onClick={() => onSettingsChange(gs => ({ ...gs, ambientBounce: { ...gs.ambientBounce, bias: c } }))} isActive={generationSettings.ambientBounce.bias === c} disabled={isGenerating}>{c}</OptionButton>)}
                         </div>
                     </div>
-                     <div className="pt-2 border-t border-gray-800 space-y-3">
+                    <div className="pt-2 border-t border-gray-800 space-y-3">
                         <h4 className="text-xs font-semibold text-gray-300">Ambient Occlusion</h4>
                         <div>
                             <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Intensity</label><span className="text-[11px] font-mono text-gray-300">{generationSettings.ambientOcclusion.intensity.toFixed(2)}</span></div>
-                            <input type="range" min="0" max="1" step="0.05" value={generationSettings.ambientOcclusion.intensity} onChange={e => onSettingsChange(gs => ({...gs, ambientOcclusion: {...gs.ambientOcclusion, intensity: +e.target.value}}))} className="w-full" disabled={isGenerating}/>
+                            <input type="range" min="0" max="1" step="0.05" value={generationSettings.ambientOcclusion.intensity} onChange={e => onSettingsChange(gs => ({ ...gs, ambientOcclusion: { ...gs.ambientOcclusion, intensity: +e.target.value } }))} className="w-full" disabled={isGenerating} />
                         </div>
                         <div>
                             <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Radius</label><span className="text-[11px] font-mono text-gray-300">{generationSettings.ambientOcclusion.radius.toFixed(2)}</span></div>
-                            <input type="range" min="0" max="1" step="0.05" value={generationSettings.ambientOcclusion.radius} onChange={e => onSettingsChange(gs => ({...gs, ambientOcclusion: {...gs.ambientOcclusion, radius: +e.target.value}}))} className="w-full" disabled={isGenerating}/>
+                            <input type="range" min="0" max="1" step="0.05" value={generationSettings.ambientOcclusion.radius} onChange={e => onSettingsChange(gs => ({ ...gs, ambientOcclusion: { ...gs.ambientOcclusion, radius: +e.target.value } }))} className="w-full" disabled={isGenerating} />
                         </div>
                     </div>
-                     <div className="pt-2 border-t border-gray-800 space-y-3">
+                    <div className="pt-2 border-t border-gray-800 space-y-3">
                         <h4 className="text-xs font-semibold text-gray-300">Editing & Retouching (Digital Darkroom)</h4>
                         <div className="p-2.5 bg-black/20 rounded-md space-y-3 border border-gray-800">
-                             <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Skin & Surface</h5>
-                             <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.frequencySeparation} onChange={e => onSettingsChange(gs => ({...gs, digitalDarkroom: {...gs.digitalDarkroom, frequencySeparation: e.target.checked}}))} className="h-4 w-4 rounded" />Frequency Separation</label>
-                             <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.skinToneHarmonization} onChange={e => onSettingsChange(gs => ({...gs, digitalDarkroom: {...gs.digitalDarkroom, skinToneHarmonization: e.target.checked}}))} className="h-4 w-4 rounded" />Skin Tone Harmonization</label>
+                            <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Skin & Surface</h5>
+                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.frequencySeparation} onChange={e => onSettingsChange(gs => ({ ...gs, digitalDarkroom: { ...gs.digitalDarkroom, frequencySeparation: e.target.checked } }))} className="h-4 w-4 rounded" />Frequency Separation</label>
+                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.skinToneHarmonization} onChange={e => onSettingsChange(gs => ({ ...gs, digitalDarkroom: { ...gs.digitalDarkroom, skinToneHarmonization: e.target.checked } }))} className="h-4 w-4 rounded" />Skin Tone Harmonization</label>
                             <div>
                                 <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Shine Control</label><span className="text-[11px] font-mono text-gray-300">{(generationSettings.digitalDarkroom?.shineControl || 0).toFixed(2)}</span></div>
-                                <input type="range" min="0" max="1" step="0.05" value={generationSettings.digitalDarkroom?.shineControl || 0} onChange={e => onSettingsChange(gs => ({...gs, digitalDarkroom: {...gs.digitalDarkroom, shineControl: +e.target.value}}))} className="w-full" disabled={isGenerating}/>
+                                <input type="range" min="0" max="1" step="0.05" value={generationSettings.digitalDarkroom?.shineControl || 0} onChange={e => onSettingsChange(gs => ({ ...gs, digitalDarkroom: { ...gs.digitalDarkroom, shineControl: +e.target.value } }))} className="w-full" disabled={isGenerating} />
                             </div>
                         </div>
-                         <div className="p-2.5 bg-black/20 rounded-md space-y-3 border border-gray-800">
-                             <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Geometry & Cleanup</h5>
-                             <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.lensCorrection} onChange={e => onSettingsChange(gs => ({...gs, digitalDarkroom: {...gs.digitalDarkroom, lensCorrection: e.target.checked}}))} className="h-4 w-4 rounded" />Lens Correction</label>
-                             <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.bodyWarpCorrection} onChange={e => onSettingsChange(gs => ({...gs, digitalDarkroom: {...gs.digitalDarkroom, bodyWarpCorrection: e.target.checked}}))} className="h-4 w-4 rounded" />Body Warp Correction</label>
-                             <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.cleanup} onChange={e => onSettingsChange(gs => ({...gs, digitalDarkroom: {...gs.digitalDarkroom, cleanup: e.target.checked}}))} className="h-4 w-4 rounded" />Cleanup (Dust, Flyaways)</label>
+                        <div className="p-2.5 bg-black/20 rounded-md space-y-3 border border-gray-800">
+                            <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Geometry & Cleanup</h5>
+                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.lensCorrection} onChange={e => onSettingsChange(gs => ({ ...gs, digitalDarkroom: { ...gs.digitalDarkroom, lensCorrection: e.target.checked } }))} className="h-4 w-4 rounded" />Lens Correction</label>
+                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.bodyWarpCorrection} onChange={e => onSettingsChange(gs => ({ ...gs, digitalDarkroom: { ...gs.digitalDarkroom, bodyWarpCorrection: e.target.checked } }))} className="h-4 w-4 rounded" />Body Warp Correction</label>
+                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.cleanup} onChange={e => onSettingsChange(gs => ({ ...gs, digitalDarkroom: { ...gs.digitalDarkroom, cleanup: e.target.checked } }))} className="h-4 w-4 rounded" />Cleanup (Dust, Flyaways)</label>
                         </div>
-                         <div className="p-2.5 bg-black/20 rounded-md space-y-3 border border-gray-800">
-                             <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Render Finishing</h5>
-                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.studioSharpening} onChange={e => onSettingsChange(gs => ({...gs, digitalDarkroom: {...gs.digitalDarkroom, studioSharpening: e.target.checked}}))} className="h-4 w-4 rounded" />Studio Sharpening</label>
-                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.dynamicRangeTuning} onChange={e => onSettingsChange(gs => ({...gs, digitalDarkroom: {...gs.digitalDarkroom, dynamicRangeTuning: e.target.checked}}))} className="h-4 w-4 rounded" />Dynamic Range Tuning</label>
+                        <div className="p-2.5 bg-black/20 rounded-md space-y-3 border border-gray-800">
+                            <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Render Finishing</h5>
+                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.studioSharpening} onChange={e => onSettingsChange(gs => ({ ...gs, digitalDarkroom: { ...gs.digitalDarkroom, studioSharpening: e.target.checked } }))} className="h-4 w-4 rounded" />Studio Sharpening</label>
+                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"><input type="checkbox" checked={!!generationSettings.digitalDarkroom?.dynamicRangeTuning} onChange={e => onSettingsChange(gs => ({ ...gs, digitalDarkroom: { ...gs.digitalDarkroom, dynamicRangeTuning: e.target.checked } }))} className="h-4 w-4 rounded" />Dynamic Range Tuning</label>
                         </div>
                     </div>
 
                     <div className="pt-2 border-t border-gray-800 space-y-3">
                         <h4 className="text-xs font-semibold text-gray-300">Advanced Color Grading</h4>
-                        <ColorWheelControl label="Lift (Shadows)" value={generationSettings.imageProcessing.lift || {r:0,g:0,b:0}} onChange={v => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, lift: v}}))} />
-                        <ColorWheelControl label="Gamma (Midtones)" value={generationSettings.imageProcessing.gamma || {r:0,g:0,b:0}} onChange={v => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, gamma: v}}))} />
-                        <ColorWheelControl label="Gain (Highlights)" value={generationSettings.imageProcessing.gain || {r:0,g:0,b:0}} onChange={v => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, gain: v}}))} />
+                        <ColorWheelControl label="Lift (Shadows)" value={generationSettings.imageProcessing.lift || { r: 0, g: 0, b: 0 }} onChange={v => onSettingsChange(gs => ({ ...gs, imageProcessing: { ...gs.imageProcessing, lift: v } }))} />
+                        <ColorWheelControl label="Gamma (Midtones)" value={generationSettings.imageProcessing.gamma || { r: 0, g: 0, b: 0 }} onChange={v => onSettingsChange(gs => ({ ...gs, imageProcessing: { ...gs.imageProcessing, gamma: v } }))} />
+                        <ColorWheelControl label="Gain (Highlights)" value={generationSettings.imageProcessing.gain || { r: 0, g: 0, b: 0 }} onChange={v => onSettingsChange(gs => ({ ...gs, imageProcessing: { ...gs.imageProcessing, gain: v } }))} />
                     </div>
-                     <div className="pt-2 border-t border-gray-800 space-y-3">
+                    <div className="pt-2 border-t border-gray-800 space-y-3">
                         <h4 className="text-xs font-semibold text-gray-300">Split Toning</h4>
                         <div>
                             <label className="text-[11px] text-gray-400">Highlights / Shadows</label>
                             <div className="grid grid-cols-2 gap-1.5 mt-0.5">
-                                <input type="color" value={generationSettings.imageProcessing.splitToning?.highlights.color || '#ffffff'} onChange={e => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, splitToning: {...gs.imageProcessing.splitToning!, highlights: {...gs.imageProcessing.splitToning!.highlights, color: e.target.value}}}}))} className="w-full h-8 p-0 border-none rounded-md cursor-pointer" disabled={isGenerating} />
-                                <input type="color" value={generationSettings.imageProcessing.splitToning?.shadows.color || '#ffffff'} onChange={e => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, splitToning: {...gs.imageProcessing.splitToning!, shadows: {...gs.imageProcessing.splitToning!.shadows, color: e.target.value}}}}))} className="w-full h-8 p-0 border-none rounded-md cursor-pointer" disabled={isGenerating} />
+                                <input type="color" value={generationSettings.imageProcessing.splitToning?.highlights.color || '#ffffff'} onChange={e => onSettingsChange(gs => ({ ...gs, imageProcessing: { ...gs.imageProcessing, splitToning: { ...gs.imageProcessing.splitToning!, highlights: { ...gs.imageProcessing.splitToning!.highlights, color: e.target.value } } } }))} className="w-full h-8 p-0 border-none rounded-md cursor-pointer" disabled={isGenerating} />
+                                <input type="color" value={generationSettings.imageProcessing.splitToning?.shadows.color || '#ffffff'} onChange={e => onSettingsChange(gs => ({ ...gs, imageProcessing: { ...gs.imageProcessing, splitToning: { ...gs.imageProcessing.splitToning!, shadows: { ...gs.imageProcessing.splitToning!.shadows, color: e.target.value } } } }))} className="w-full h-8 p-0 border-none rounded-md cursor-pointer" disabled={isGenerating} />
                             </div>
                         </div>
                         <div>
                             <div className="flex justify-between items-center"><label className="text-[11px] text-gray-400">Balance</label><span className="text-[11px] font-mono text-gray-300">{(generationSettings.imageProcessing.splitToning?.highlights.balance || 0.5).toFixed(2)}</span></div>
-                            <input type="range" min="0" max="1" step="0.05" value={generationSettings.imageProcessing.splitToning?.highlights.balance || 0.5} onChange={e => onSettingsChange(gs => ({...gs, imageProcessing: {...gs.imageProcessing, splitToning: {...gs.imageProcessing.splitToning!, highlights: {...gs.imageProcessing.splitToning!.highlights, balance: +e.target.value}}}}))} className="w-full" disabled={isGenerating}/>
+                            <input type="range" min="0" max="1" step="0.05" value={generationSettings.imageProcessing.splitToning?.highlights.balance || 0.5} onChange={e => onSettingsChange(gs => ({ ...gs, imageProcessing: { ...gs.imageProcessing, splitToning: { ...gs.imageProcessing.splitToning!, highlights: { ...gs.imageProcessing.splitToning!.highlights, balance: +e.target.value } } } }))} className="w-full" disabled={isGenerating} />
                         </div>
                     </div>
                 </div>
@@ -737,7 +737,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
 
             <CollapsibleSection title="Advanced" icon={<SlidersHorizontalIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.advanced} onToggle={() => onToggleSection('advanced')}>
                 <label className="text-[11px] text-gray-400">Negative Prompt</label>
-                <textarea value={generationSettings.negativePrompt} onChange={(e) => onSettingsChange(gs => ({ ...gs, negativePrompt: e.target.value }))} placeholder="e.g. blurry, text, watermark" rows={2} className="w-full p-2 bg-black/30 text-gray-200 border border-gray-700 rounded-md text-sm" />
+                <textarea value={generationSettings.negativePrompt} onChange={(e) => onSettingsChange(gs => ({ ...gs, negativePrompt: e.target.value }))} placeholder="e.g. blurry, text, watermark" rows={2} className="w-full p-3 bg-black/20 text-gray-200 border border-white/10 rounded-lg text-xs placeholder-gray-600 focus:border-white/20 focus:bg-black/30 focus:ring-0 outline-none transition-all resize-none" />
             </CollapsibleSection>
         </div>
     );

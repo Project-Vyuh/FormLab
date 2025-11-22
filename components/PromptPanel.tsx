@@ -7,21 +7,21 @@ import React from 'react';
 import { UploadCloudIcon, WandIcon } from './icons';
 
 interface PromptPanelProps {
-  prompt: string;
-  onPromptChange: (value: string) => void;
-  placeholder: string;
-  rows?: number;
-  isGenerating: boolean;
+    prompt: string;
+    onPromptChange: (value: string) => void;
+    placeholder: string;
+    rows?: number;
+    isGenerating: boolean;
 
-  showEnhanceButton: boolean;
-  onEnhance?: () => void;
-  isEnhancing?: boolean;
-  enhanceButtonText?: string;
+    showEnhanceButton: boolean;
+    onEnhance?: () => void;
+    isEnhancing?: boolean;
+    enhanceButtonText?: string;
 
-  showUploadButton: boolean;
-  onFileUpload?: (file: File) => void;
-  uploadDisabled?: boolean;
-  uploadDisabledTooltip?: string;
+    showUploadButton: boolean;
+    onFileUpload?: (file: File) => void;
+    uploadDisabled?: boolean;
+    uploadDisabledTooltip?: string;
 }
 
 const PromptPanel: React.FC<PromptPanelProps> = ({
@@ -48,25 +48,29 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     };
 
     return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
             <textarea
                 value={prompt}
                 onChange={(e) => onPromptChange(e.target.value)}
                 placeholder={placeholder}
                 rows={rows}
-                className="w-full p-2.5 bg-black/30 text-gray-200 border border-gray-700 rounded-md text-xs disabled:opacity-50"
+                className="w-full p-3 bg-black/20 text-gray-200 border border-white/10 rounded-lg text-xs placeholder-gray-600 focus:border-white/20 focus:bg-black/30 focus:ring-0 outline-none transition-all resize-none disabled:opacity-50"
                 disabled={isGenerating}
             />
-            <div className="flex items-end justify-between gap-1.5">
+            <div className="flex items-center justify-between gap-2">
                 {showEnhanceButton && (
-                    <button onClick={onEnhance} disabled={isGenerating || isEnhancing} className="text-[11px] text-blue-400 flex items-center gap-1 px-1.5 py-1 rounded hover:bg-blue-500/10 disabled:opacity-50">
+                    <button
+                        onClick={onEnhance}
+                        disabled={isGenerating || isEnhancing}
+                        className="text-[10px] font-medium text-purple-300 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-purple-500/20 bg-purple-500/10 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                    >
                         <WandIcon className="w-3 h-3" />
                         {enhanceButtonText}
                     </button>
                 )}
                 {showUploadButton &&
                     <label
-                        className={`flex items-center gap-1 px-1.5 py-1 border border-dashed border-gray-700 rounded text-[11px] text-gray-400 ${uploadDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-gray-600 cursor-pointer'}`}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 border border-dashed border-white/10 rounded-md text-[10px] font-medium text-gray-400 bg-white/5 transition-colors ${uploadDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-white/20 hover:bg-white/10 hover:text-gray-300 cursor-pointer'}`}
                         title={uploadDisabledTooltip}
                     >
                         <UploadCloudIcon className="w-3 h-3" />

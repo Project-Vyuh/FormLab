@@ -6,7 +6,14 @@
 import React from 'react';
 
 const OptionButton: React.FC<{ onClick: () => void; isActive: boolean; disabled: boolean; children: React.ReactNode }> = ({ onClick, isActive, disabled, children }) => (
-    <button onClick={onClick} disabled={disabled} className={`w-full text-center text-[11px] font-semibold py-0.5 px-1.5 rounded transition-all duration-200 border ${isActive ? 'bg-gray-100 text-gray-900 border-gray-100' : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'} disabled:opacity-50`}>
+    <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`w-full text-center text-[11px] font-medium py-1.5 px-2 rounded-lg transition-all duration-200 border ${isActive
+                ? 'bg-white text-black border-white shadow-lg shadow-white/10'
+                : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:border-white/20 hover:text-gray-200'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+    >
         {children}
     </button>
 );
