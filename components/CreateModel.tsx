@@ -5,7 +5,7 @@
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UploadCloudIcon, PenLineIcon, CubeIcon, UndoIcon, RedoIcon, BookmarkIcon, DownloadIcon, CameraIcon, ZapIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon, Share2Icon, UserIcon, SparklesIcon, TagIcon, SettingsIcon, LayersIcon } from './icons';
+import { UploadCloudIcon, PenLineIcon, CubeIcon, UndoIcon, RedoIcon, BookmarkIcon, DownloadIcon, CameraIcon, ZapIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon, Share2Icon, UserIcon, SparklesIcon, SettingsIcon, LayersIcon } from './icons';
 
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
 import Spinner from './Spinner';
@@ -1327,7 +1327,6 @@ const CreateModel: React.FC<CreateModelProps> = ({
           </div>
           <div className="mt-3">
             <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <TagIcon className="w-3.5 h-3.5 text-gray-600" />
               Brand Kit
             </label>
             <div className="flex gap-1.5">
@@ -1461,23 +1460,51 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 <button onClick={handleRedo} disabled={!canRedo || isGenerating} className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30 transition-colors text-gray-400 hover:text-white" title="Redo"><RedoIcon className="w-4 h-4" /></button>
               </div>
               <div className="w-px h-6 bg-white/10 mx-2"></div>
-              <button onClick={() => setIsMaskingMode(p => !p)} disabled={!isResultView} className={`p-2 rounded-md border transition-all flex items-center gap-2 text-sm ${isMaskingMode ? 'bg-purple-500/20 border-purple-500/30 text-purple-300' : 'bg-transparent border-transparent hover:bg-white/5 text-gray-400 hover:text-white'} disabled:opacity-30`} title="Masking Brush"><PenLineIcon className="w-4 h-4" /></button>
+              <button onClick={() => setIsMaskingMode(p => !p)} disabled={!isResultView} className={`p-2 rounded-md border transition-all flex items-center gap-2 text-sm ${isMaskingMode ? 'bg-white/5 border-white/5 text-gray-300' : 'bg-transparent border-transparent hover:bg-white/5 text-gray-400 hover:text-white'} disabled:opacity-30 focus:outline-none`} title="Masking Brush"><PenLineIcon className="w-4 h-4" /></button>
               {isMaskingMode && (
-                <div className="flex items-center gap-2 text-xs text-gray-400 ml-2">
-                  <span>Brush Size:</span>
-                  <input type="range" min="10" max="100" value={brushSize} onChange={(e) => setBrushSize(Number(e.target.value))} className="w-24 accent-purple-500" />
+                <div className="flex items-center gap-3 text-[10px] font-medium text-gray-400 ml-2 bg-black/20 px-3 py-1.5 rounded-full border border-white/5">
+                  <span>Brush Size</span>
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    value={brushSize}
+                    onChange={(e) => setBrushSize(Number(e.target.value))}
+                    className="w-20 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-[#318CE7] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:transition-all hover:[&::-webkit-slider-thumb]:bg-[#318CE7]/80"
+                  />
+                  <span className="w-4 text-right">{brushSize}</span>
                 </div>
               )}
               <div ref={upscaleMenuRef} className="relative">
-                <button onClick={() => setIsUpscaleMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-sm text-gray-400 hover:text-white disabled:opacity-30 transition-colors" title="Enhance & Upscale"><ZapIcon className="w-4 h-4 text-yellow-400/80" /></button>
-                {isUpscaleMenuOpen && <div className="absolute top-full left-0 mt-2 w-48 bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl z-20 overflow-hidden"><button onClick={() => handleUpscale('2k')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">Upscale to 2K</button><button onClick={() => handleUpscale('4k')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">Upscale to 4K</button><div className="h-px bg-white/10 my-1"></div><button onClick={() => handleSelectiveEnhance('face')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">Enhance Face</button><button onClick={() => handleSelectiveEnhance('fabric')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">Enhance Fabric</button><button onClick={() => handleSelectiveEnhance('accessories')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">Enhance Accessories</button></div>}
+                <button onClick={() => setIsUpscaleMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-sm text-gray-400 hover:text-white disabled:opacity-30 transition-colors focus:outline-none" title="Enhance & Upscale"><ZapIcon className="w-4 h-4 text-[#318CE7] group-hover:text-[#318CE7]/80 transition-colors" /></button>
+                {isUpscaleMenuOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden py-1">
+                    <button onClick={() => handleUpscale('2k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span> Upscale to 2K
+                    </button>
+                    <button onClick={() => handleUpscale('4k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500/50"></span> Upscale to 4K
+                    </button>
+                    <div className="h-px bg-white/5 my-1 mx-2"></div>
+                    <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Enhance Details</div>
+                    <button onClick={() => handleSelectiveEnhance('face')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6">Face & Skin</button>
+                    <button onClick={() => handleSelectiveEnhance('fabric')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6">Fabric & Texture</button>
+                    <button onClick={() => handleSelectiveEnhance('accessories')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6">Accessories</button>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs font-mono text-gray-500">
               {isResultView && <div className="flex items-center gap-1 bg-white/5 border border-white/5 rounded-lg px-2 py-1 text-gray-400">{Math.round(zoom * 100)}%</div>}
               <div ref={downloadMenuRef} className="relative">
-                <button onClick={() => setIsDownloadMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md bg-white/5 border border-white/5 hover:bg-white/10 text-gray-300 disabled:opacity-30 transition-colors" title="Download"><DownloadIcon className="w-4 h-4" /></button>
-                {isDownloadMenuOpen && <div className="absolute top-full right-0 mt-2 w-40 bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl z-20 overflow-hidden"><button onClick={() => handleDownload('png')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">PNG</button><button onClick={() => handleDownload('jpeg')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">JPEG</button><button onClick={() => handleDownload('webp')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">WEBP</button></div>}
+                <button onClick={() => setIsDownloadMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md bg-white/5 border border-white/5 hover:bg-white/10 text-gray-300 disabled:opacity-30 transition-colors focus:outline-none" title="Download"><DownloadIcon className="w-4 h-4" /></button>
+                {isDownloadMenuOpen && (
+                  <div className="absolute top-full right-0 mt-2 w-32 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden py-1">
+                    <button onClick={() => handleDownload('png')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors">PNG Image</button>
+                    <button onClick={() => handleDownload('jpeg')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors">JPEG Image</button>
+                    <button onClick={() => handleDownload('webp')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors">WEBP Image</button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1522,7 +1549,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
         title="Switch Model?"
         message="This will discard your current creation. Are you sure you want to start over with a new model?"
         confirmText="Confirm Switch"
-        confirmButtonClass="bg-gray-700 hover:bg-gray-600"
+        confirmButtonClass="bg-[#318CE7] hover:bg-[#318CE7]/90 shadow-blue-500/30"
       />
 
       {/* Template Preview Modal */}

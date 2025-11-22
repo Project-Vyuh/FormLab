@@ -200,7 +200,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
 
     return (
         <div className="space-y-3">
-            <CollapsibleSection title="Composition" icon={<LayoutIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.composition} onToggle={() => onToggleSection('composition')} isToggleable={true} isPanelEnabled={generationSettings.panelToggles.composition} onPanelToggle={() => onPanelToggle('composition')} noBorder={true}>
+            <CollapsibleSection title="Composition" icon={<LayoutIcon className="w-3.5 h-3.5 text-gray-600" />} isOpen={openSections.composition} onToggle={() => onToggleSection('composition')} isToggleable={true} isPanelEnabled={generationSettings.panelToggles.composition} onPanelToggle={() => onPanelToggle('composition')} noBorder={true}>
                 <div className="space-y-3">
                     <div>
                         <label className="text-[11px] font-medium text-gray-400">Framing</label>
@@ -230,7 +230,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                 </div>
             </CollapsibleSection>
 
-            <CollapsibleSection title="Camera & Lens" icon={<CameraIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.camera} onToggle={() => onToggleSection('camera')} isToggleable={true} isPanelEnabled={generationSettings.panelToggles.cameraAndLens} onPanelToggle={() => onPanelToggle('cameraAndLens')}>
+            <CollapsibleSection title="Camera & Lens" icon={<CameraIcon className="w-3.5 h-3.5 text-gray-600" />} isOpen={openSections.camera} onToggle={() => onToggleSection('camera')} isToggleable={true} isPanelEnabled={generationSettings.panelToggles.cameraAndLens} onPanelToggle={() => onPanelToggle('cameraAndLens')}>
                 <div className="space-y-3">
                     <p className="text-[11px] text-gray-500 -mt-2">Note: Aperture and Lens Profile settings can influence the characteristics of bokeh from the lighting setup.</p>
                     <div>
@@ -291,7 +291,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                 </div>
             </CollapsibleSection>
 
-            <CollapsibleSection title="Lighting" icon={<SunIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.lighting} onToggle={() => onToggleSection('lighting')} isToggleable isPanelEnabled={generationSettings.panelToggles.lighting} onPanelToggle={() => onPanelToggle('lighting')}>
+            <CollapsibleSection title="Lighting" icon={<SunIcon className="w-3.5 h-3.5 text-gray-600" />} isOpen={openSections.lighting} onToggle={() => onToggleSection('lighting')} isToggleable isPanelEnabled={generationSettings.panelToggles.lighting} onPanelToggle={() => onPanelToggle('lighting')}>
                 <div className="space-y-3">
                     <p className="text-[11px] text-gray-500 -mt-2">Note: The position and size of lights affect shadows and specular highlights. These are also influenced by the camera's lens profile.</p>
                     <div>
@@ -393,7 +393,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                 </div>
             </CollapsibleSection>
 
-            <CollapsibleSection title="Environment" icon={<LayersIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.environment} onToggle={() => onToggleSection('environment')} isToggleable isPanelEnabled={generationSettings.panelToggles.environment} onPanelToggle={() => onPanelToggle('environment')}>
+            <CollapsibleSection title="Environment" icon={<LayersIcon className="w-3.5 h-3.5 text-gray-600" />} isOpen={openSections.environment} onToggle={() => onToggleSection('environment')} isToggleable isPanelEnabled={generationSettings.panelToggles.environment} onPanelToggle={() => onPanelToggle('environment')}>
                 <div className="space-y-3">
                     <div className="grid grid-cols-4 gap-2">
                         {(['high-key', 'mid-gray', 'textured', 'colored-seamless', 'gradient', 'transparent', 'custom'] as StudioEnvironmentType[]).map(type => (
@@ -572,7 +572,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                 </div>
             </CollapsibleSection>
 
-            <CollapsibleSection title="Image Finishing" icon={<WandIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.finishing} onToggle={() => onToggleSection('finishing')} isToggleable isPanelEnabled={generationSettings.panelToggles.imageFinishing} onPanelToggle={() => onPanelToggle('imageFinishing')}>
+            <CollapsibleSection title="Image Finishing" icon={<WandIcon className="w-3.5 h-3.5 text-gray-600" />} isOpen={openSections.finishing} onToggle={() => onToggleSection('finishing')} isToggleable isPanelEnabled={generationSettings.panelToggles.imageFinishing} onPanelToggle={() => onPanelToggle('imageFinishing')}>
                 <div className="space-y-3">
                     <div>
                         <label className="text-[11px] font-medium text-gray-400">Sensor Size</label>
@@ -735,7 +735,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                 </div>
             </CollapsibleSection>
 
-            <CollapsibleSection title="Advanced" icon={<SlidersHorizontalIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.advanced} onToggle={() => onToggleSection('advanced')}>
+            <CollapsibleSection title="Advanced" icon={<SlidersHorizontalIcon className="w-3.5 h-3.5 text-gray-600" />} isOpen={openSections.advanced} onToggle={() => onToggleSection('advanced')}>
                 <label className="text-[11px] text-gray-400">Negative Prompt</label>
                 <textarea value={generationSettings.negativePrompt} onChange={(e) => onSettingsChange(gs => ({ ...gs, negativePrompt: e.target.value }))} placeholder="e.g. blurry, text, watermark" rows={2} className="w-full p-3 bg-black/20 text-gray-200 border border-white/10 rounded-lg text-xs placeholder-gray-600 focus:border-white/20 focus:bg-black/30 focus:ring-0 outline-none transition-all resize-none" />
             </CollapsibleSection>

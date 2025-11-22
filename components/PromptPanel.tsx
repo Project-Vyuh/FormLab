@@ -62,9 +62,9 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                     <button
                         onClick={onEnhance}
                         disabled={isGenerating || isEnhancing}
-                        className="text-[10px] font-medium text-purple-300 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-purple-500/20 bg-purple-500/10 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                        className="text-[10px] font-medium text-white flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-transparent bg-[#318CE7] hover:bg-[#318CE7]/90 transition-colors disabled:opacity-50"
                     >
-                        <WandIcon className="w-3 h-3" />
+                        <WandIcon className="w-3 h-3 text-white" />
                         {enhanceButtonText}
                     </button>
                 )}

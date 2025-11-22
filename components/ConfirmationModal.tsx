@@ -41,31 +41,47 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.95, y: 20 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative bg-[#2a2a2a] rounded-2xl w-full max-w-md flex flex-col shadow-xl border border-gray-700"
+            className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur-xl"
+            style={{
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            }}
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="dialog-title"
             aria-describedby="dialog-description"
           >
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
-              <h2 id="dialog-title" className="text-xl font-sans font-semibold text-gray-200">{title}</h2>
-              <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:bg-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 id="dialog-title" className="text-lg font-semibold text-white tracking-tight">
+                {title}
+              </h2>
+              <button
+                onClick={onClose}
+                className="rounded-full p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label="Close"
+              >
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6">
-              <p id="dialog-description" className="text-gray-300">{message}</p>
+
+            <div className="mb-6">
+              <p id="dialog-description" className="text-sm text-gray-300 leading-relaxed">
+                {message}
+              </p>
             </div>
-            <div className="flex justify-end items-center gap-3 p-4 bg-[#1a1a1a] border-t border-gray-700 rounded-b-2xl">
+
+            <div className="flex justify-end gap-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-sm font-semibold text-gray-300 bg-gray-700 border border-gray-600 rounded-md hover:bg-gray-600 transition-colors"
+                className="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={onConfirm}
-                className={`px-4 py-2 text-sm font-semibold text-white rounded-md transition-colors ${confirmButtonClass}`}
+                onClick={() => {
+                  onConfirm();
+                  onClose();
+                }}
+                className={`rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:shadow-lg disabled:opacity-50 ${confirmButtonClass}`}
               >
                 {confirmText}
               </button>
