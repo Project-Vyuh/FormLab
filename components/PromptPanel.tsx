@@ -48,28 +48,28 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     };
 
     return (
-        <div className="space-y-2">
-            <textarea 
-                value={prompt} 
-                onChange={(e) => onPromptChange(e.target.value)} 
-                placeholder={placeholder} 
-                rows={rows} 
-                className="w-full p-3 bg-black/30 text-gray-200 border border-gray-700 rounded-lg text-sm disabled:opacity-50"
+        <div className="space-y-1.5">
+            <textarea
+                value={prompt}
+                onChange={(e) => onPromptChange(e.target.value)}
+                placeholder={placeholder}
+                rows={rows}
+                className="w-full p-2.5 bg-black/30 text-gray-200 border border-gray-700 rounded-md text-xs disabled:opacity-50"
                 disabled={isGenerating}
             />
-            <div className="flex items-end justify-between gap-2">
+            <div className="flex items-end justify-between gap-1.5">
                 {showEnhanceButton && (
-                    <button onClick={onEnhance} disabled={isGenerating || isEnhancing} className="text-xs text-blue-400 flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-blue-500/10 disabled:opacity-50">
-                        <WandIcon className="w-3.5 h-3.5" />
+                    <button onClick={onEnhance} disabled={isGenerating || isEnhancing} className="text-[11px] text-blue-400 flex items-center gap-1 px-1.5 py-1 rounded hover:bg-blue-500/10 disabled:opacity-50">
+                        <WandIcon className="w-3 h-3" />
                         {enhanceButtonText}
                     </button>
                 )}
-                {showUploadButton && 
-                    <label 
-                        className={`flex items-center gap-1.5 px-2 py-1.5 border border-dashed border-gray-700 rounded-md text-xs text-gray-400 ${uploadDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-gray-600 cursor-pointer'}`}
+                {showUploadButton &&
+                    <label
+                        className={`flex items-center gap-1 px-1.5 py-1 border border-dashed border-gray-700 rounded text-[11px] text-gray-400 ${uploadDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-gray-600 cursor-pointer'}`}
                         title={uploadDisabledTooltip}
                     >
-                        <UploadCloudIcon className="w-3.5 h-3.5" />
+                        <UploadCloudIcon className="w-3 h-3" />
                         <span>Upload Photo</span>
                         <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={uploadDisabled || isGenerating} />
                     </label>

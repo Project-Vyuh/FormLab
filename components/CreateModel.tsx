@@ -1191,22 +1191,22 @@ const CreateModel: React.FC<CreateModelProps> = ({
     const isUploadDisabled = selectedModelName === 'Imagen 4';
 
     return (
-      <div className="flex-grow p-6 space-y-4 overflow-y-auto">
+      <div className="flex-grow p-4 space-y-3 overflow-y-auto">
         {/* Your Models Section */}
         <div className="flex-shrink-0">
-          <h2 className="text-base font-sans font-semibold text-gray-200 flex items-center gap-2 mb-3">
-            <UserIcon className="w-5 h-5" />
+          <h2 className="text-sm font-sans font-semibold text-gray-200 flex items-center gap-2 mb-2">
+            <UserIcon className="w-4 h-4" />
             Your Models
           </h2>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-[repeat(auto-fill,72px)] gap-2">
             {/* Add New Model Card */}
             <button
               onClick={handleStartNewModel}
               disabled={isGenerating}
-              className="w-full aspect-square rounded-lg border-2 border-dashed border-gray-600 hover:border-gray-400 transition-all duration-200 flex items-center justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-[72px] h-[72px] rounded-md border border-dashed border-gray-600 hover:border-gray-400 transition-all duration-200 flex items-center justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Create new model"
             >
-              <PlusIcon className="w-10 h-10 text-gray-500 group-hover:text-gray-300 transition-colors" />
+              <PlusIcon className="w-8 h-8 text-gray-500 group-hover:text-gray-300 transition-colors" />
             </button>
 
             {/* Existing Models */}
@@ -1220,7 +1220,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
                     onClick={() => onSelectModel(model)}
                     onContextMenu={(e) => handleContextMenu(e, model)}
                     disabled={isGenerating || isSelected}
-                    className={`w-full aspect-square rounded-lg overflow-hidden border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 group disabled:cursor-not-allowed ${
+                    className={`w-[72px] h-[72px] rounded-md overflow-hidden border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 group disabled:cursor-not-allowed ${
                       isSelected
                         ? 'border-gray-100 shadow-md'
                         : 'border-gray-700 hover:border-gray-500'
@@ -1234,23 +1234,23 @@ const CreateModel: React.FC<CreateModelProps> = ({
             })}
           </div>
           {modelGallery.length === 0 && (
-            <div className="text-sm text-gray-400 py-3 text-center">
+            <div className="text-xs text-gray-400 py-2 text-center">
               Create a model through prompt or upload photo
             </div>
           )}
         </div>
 
         {/* Model Templates Section */}
-        <div className="flex-shrink-0 mt-4">
+        <div className="flex-shrink-0 mt-3">
           <button
             onClick={() => setIsTemplatesSectionOpen(!isTemplatesSectionOpen)}
-            className="w-full flex items-center justify-between text-base font-sans font-semibold text-gray-200 mb-3 hover:text-white transition-colors"
+            className="w-full flex items-center justify-between text-sm font-sans font-semibold text-gray-200 mb-2 hover:text-white transition-colors"
           >
             <div className="flex items-center gap-2">
-              <LayersIcon className="w-5 h-5 text-blue-400" />
+              <LayersIcon className="w-4 h-4 text-blue-400" />
               Model Templates
             </div>
-            <ChevronDownIcon className={`w-5 h-5 text-gray-400 transition-transform ${isTemplatesSectionOpen ? 'rotate-180' : ''}`} />
+            <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${isTemplatesSectionOpen ? 'rotate-180' : ''}`} />
           </button>
 
           <AnimatePresence>
@@ -1261,21 +1261,21 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <p className="text-xs text-gray-400 mb-3">Ready-made models to get you started</p>
+                <p className="text-[11px] text-gray-400 mb-2">Ready-made models to get you started</p>
 
                 {isLoadingTemplates ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Spinner className="w-6 h-6" />
+                  <div className="flex items-center justify-center py-6">
+                    <Spinner className="w-5 h-5" />
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-[repeat(auto-fill,72px)] gap-2">
                       {predefinedModels.slice(0, 9).map(template => (
                         <div key={template.id} className="relative">
                           <button
                             onClick={() => setSelectedTemplateForPreview(template)}
                             disabled={isGenerating}
-                            className="w-full aspect-square rounded-lg overflow-hidden border-2 border-gray-700 hover:border-blue-500 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 group disabled:cursor-not-allowed disabled:opacity-50"
+                            className="w-[72px] h-[72px] rounded-md overflow-hidden border border-gray-700 hover:border-blue-500 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 group disabled:cursor-not-allowed disabled:opacity-50"
                             aria-label={`Preview template: ${template.name || template.id}`}
                           >
                             <img src={template.thumbnail || template.url} alt={template.name || 'Template'} className="w-full h-full object-cover" />
@@ -1290,9 +1290,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
                           // Navigate to Collections screen - to be implemented
                           setToastMessage('Navigation to Collections screen - coming soon!');
                         }}
-                        className="w-full mt-3 py-2 text-sm text-blue-400 hover:text-blue-300 transition-colors flex items-center justify-center gap-1"
+                        className="w-full mt-2 py-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center justify-center gap-1"
                       >
-                        See all models <ChevronRightIcon className="w-4 h-4" />
+                        See all models <ChevronRightIcon className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </>
@@ -1302,7 +1302,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
           </AnimatePresence>
         </div>
 
-        <CollapsibleSection title={isResultView ? "Revision" : "Prompt"} icon={<PenLineIcon className="w-4 h-4 text-gray-400" />} isOpen={openSections.prompt} onToggle={() => setOpenSections(p => ({ ...p, prompt: !p.prompt }))}>
+        <CollapsibleSection title={isResultView ? "Revision" : "Prompt"} icon={<PenLineIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.prompt} onToggle={() => setOpenSections(p => ({ ...p, prompt: !p.prompt }))}>
           <PromptPanel
             prompt={isResultView ? revisionPrompt : modelDescription}
             onPromptChange={isResultView ? setRevisionPrompt : setModelDescription}
@@ -1320,23 +1320,23 @@ const CreateModel: React.FC<CreateModelProps> = ({
           />
         </CollapsibleSection>
 
-        <CollapsibleSection title="Style Presets" icon={<BookmarkIcon className="w-4 h-4 text-gray-400" />} isOpen={openSections.presets} onToggle={() => setOpenSections(p => ({...p, presets: !p.presets}))}>
-          <div className="grid grid-cols-2 gap-2">
+        <CollapsibleSection title="Style Presets" icon={<BookmarkIcon className="w-3.5 h-3.5 text-gray-400" />} isOpen={openSections.presets} onToggle={() => setOpenSections(p => ({...p, presets: !p.presets}))}>
+          <div className="grid grid-cols-2 gap-1.5">
               {STYLE_PRESETS.map(p => <OptionButton key={p.label} onClick={() => setGenerationSettings(gs => ({...gs, ...p.settings}))} isActive={activePreset?.label === p.label} disabled={isGenerating}>{p.label}</OptionButton>)}
           </div>
-          <div className="mt-4">
-            <label className="text-xs text-gray-400 mb-2 block">Brand Kit</label>
-            <div className="flex gap-2">
-              <select onChange={(e) => { const s = brandStyles.find(bs => bs.id === e.target.value); if (s) setGenerationSettings(s.settings); }} disabled={isGenerating || brandStyles.length === 0} className="w-full text-sm p-2 bg-black/30 border border-gray-700 text-gray-200 rounded-md"><option>Load style...</option>{brandStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
-              <button onClick={() => { const name = prompt("Style Name:"); if (name) handleSaveBrandStyle(name); }} disabled={isGenerating} className="px-3 text-sm rounded-md border border-gray-700 text-gray-300">Save</button>
+          <div className="mt-3">
+            <label className="text-[11px] text-gray-400 mb-1.5 block">Brand Kit</label>
+            <div className="flex gap-1.5">
+              <select onChange={(e) => { const s = brandStyles.find(bs => bs.id === e.target.value); if (s) setGenerationSettings(s.settings); }} disabled={isGenerating || brandStyles.length === 0} className="w-full text-xs p-1.5 bg-black/30 border border-gray-700 text-gray-200 rounded"><option>Load style...</option>{brandStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+              <button onClick={() => { const name = prompt("Style Name:"); if (name) handleSaveBrandStyle(name); }} disabled={isGenerating} className="px-2.5 text-xs rounded border border-gray-700 text-gray-300">Save</button>
             </div>
           </div>
         </CollapsibleSection>
 
-        <h2 className="text-base font-sans font-semibold text-gray-200 mb-4 mt-4">
+        <h2 className="text-sm font-sans font-semibold text-gray-200 mb-3 mt-3">
             Global Controls
         </h2>
-        <div className="space-y-4">
+        <div className="space-y-3">
             <GlobalControls
                 generationSettings={generationSettings}
                 onSettingsChange={setGenerationSettings}
@@ -1405,20 +1405,20 @@ const CreateModel: React.FC<CreateModelProps> = ({
                   onCreateProject={() => onOpenProjectModal('create')}
               />
               {renderLeftPanelContent()}
-              <div className="p-6 border-t border-gray-800 mt-auto">
-                 <div className="mb-4">
-                    <label className="text-xs font-medium text-gray-400 mb-2 block flex items-center gap-2">
-                        <CubeIcon className="w-4 h-4 text-gray-500" />
+              <div className="p-4 border-t border-gray-800 mt-auto">
+                 <div className="mb-3">
+                    <label className="text-[11px] font-medium text-gray-400 mb-1.5 block flex items-center gap-1.5">
+                        <CubeIcon className="w-3.5 h-3.5 text-gray-500" />
                         Generation Model
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-1.5">
                         {generationModels.map(model => (
                             <button
                                 key={model.name}
                                 onClick={() => !model.disabled && handleModelSelect(model.name)}
                                 title={model.title}
                                 disabled={isGenerating || model.disabled}
-                                className={`w-full text-center text-xs font-semibold py-1.5 px-2 rounded-md transition-all duration-200 border
+                                className={`w-full text-center text-[11px] font-semibold py-1 px-1.5 rounded transition-all duration-200 border
                                     ${selectedModelName === model.name ? 'bg-gray-100 text-gray-900 border-gray-100' : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'}
                                     ${model.disabled ? 'opacity-50 cursor-not-allowed' : ''}
                                     disabled:opacity-50 disabled:cursor-not-allowed`}
@@ -1428,10 +1428,10 @@ const CreateModel: React.FC<CreateModelProps> = ({
                         ))}
                     </div>
                 </div>
-                 <button 
-                    onClick={isResultView ? handleApplyChanges : () => handleGenerate()} 
-                    disabled={isGenerating || (isResultView && !revisionPrompt.trim() && !hasSettingsChanged) || (!isResultView && !modelDescription.trim()) } 
-                    className="w-full py-3 bg-gray-100 hover:bg-white text-gray-900 text-sm font-bold rounded-lg disabled:opacity-50"
+                 <button
+                    onClick={isResultView ? handleApplyChanges : () => handleGenerate()}
+                    disabled={isGenerating || (isResultView && !revisionPrompt.trim() && !hasSettingsChanged) || (!isResultView && !modelDescription.trim()) }
+                    className="w-full py-2.5 bg-gray-100 hover:bg-white text-gray-900 text-xs font-bold rounded-md disabled:opacity-50"
                   >
                     {isGenerating ? loadingMessage : 
                         isResultView ? 
