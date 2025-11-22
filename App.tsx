@@ -5,7 +5,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Header from './components/Header';
-import CreateModel from './components/CreateModel';
+import CreateModel, { initialGenerationSettings } from './components/CreateModel';
 import ImageStudio from './components/ImageStudio';
 import VideoCreator from './components/VideoCreator';
 import Templates from './components/Templates';
@@ -17,8 +17,8 @@ import CreateProjectModal from './components/CreateProjectModal';
 import CollectionsModal from './components/CollectionsModal';
 import ConflictResolutionModal from './components/ConflictResolutionModal';
 import ProjectSyncListener from './components/ProjectSyncListener';
-import { Model, Project, Notification, User, SelectedStylingModel } from './types';
-import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes, migrateBase64ImagesToStorage, migrateIndexedDBToFirestore, setCurrentUserId } from './services/dbService';
+import { Model, Project, Notification, User, SelectedStylingModel, HistoryItem } from './types';
+import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, saveProjectState, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes, migrateBase64ImagesToStorage, migrateIndexedDBToFirestore, setCurrentUserId } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
 import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
 import { loadPredefinedModels, PredefinedModel } from './services/firestoreService';
@@ -498,23 +498,64 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleUseTemplate = useCallback((template: PredefinedModel) => {
-    // For now, we'll just load the template as a base model in the new project
-    // In the future, this could load a full project template
-    console.log("Using template:", template);
+  const handleUseTemplate = useCallback(async (template: PredefinedModel) => {
+    if (!currentProjectId) return;
 
-    // Add to gallery as a new model
-    const newModel: Model = {
-      id: `${currentProjectId}-${template.id}`,
-      url: template.url,
-      source: 'user',
-      projectId: currentProjectId || undefined,
-      historyItemId: template.id, // Using template ID as history ID for now
-    };
+    try {
+      // 1. Load current project state
+      const projectState = await loadProjectState(currentProjectId) || {};
+      const currentHistory = projectState.generatedModelHistory || [];
 
-    setModelGallery(prev => [newModel, ...prev]);
-    setActiveModelUrl(newModel.url);
-    setActiveView('imageStudio');
+      // 2. Check if already saved (optional, but good for avoiding duplicates)
+      // For now, we'll allow duplicates as "copies" like CreateModel does
+
+      // 3. Create new HistoryItem
+      const newHistoryItemId = `rev-${Date.now()}`;
+      const newHistoryItem: HistoryItem = {
+        id: newHistoryItemId,
+        parentId: null, // Base model
+        imageUrl: template.url,
+        prompt: `Saved from template: ${template.name || template.id}`,
+        settings: initialGenerationSettings, // Use default settings
+        modelName: 'Nano Banana', // Default model
+        name: `${template.name || 'Template'} - Copy`,
+        isStarred: true,
+        type: 'model-generation',
+        baseModelId: newHistoryItemId,
+      };
+
+      // 4. Update Project State
+      const updatedHistory = [...currentHistory, newHistoryItem];
+      const updatedState = {
+        ...projectState,
+        generatedModelHistory: updatedHistory,
+        // We don't set currentHistoryItemId here in DB necessarily, 
+        // but we want CreateModel to load it.
+      };
+
+      await saveProjectState(currentProjectId, updatedState);
+
+      // 5. Update Gallery (App state)
+      const newModel: Model = {
+        id: `${currentProjectId}-${newHistoryItemId}`,
+        url: template.url,
+        source: 'user',
+        projectId: currentProjectId,
+        historyItemId: newHistoryItemId,
+      };
+
+      setModelGallery(prev => [newModel, ...prev]);
+
+      // 6. Select and Navigate
+      // Set the selected history item ID so CreateModel loads it
+      setSelectedHistoryItemId(newHistoryItemId);
+
+      // Switch view
+      setActiveView('createModel');
+
+    } catch (error) {
+      console.error("Failed to use template:", error);
+    }
   }, [currentProjectId]);
 
   const handleNavigateToCollections = useCallback(() => {
@@ -576,7 +617,8 @@ const App: React.FC = () => {
               onModelAdded={handleModelAdded}
               onModelDeleted={handleDeleteModel}
               selectedHistoryItemId={selectedHistoryItemId}
-              onHistoryItemLoaded={handleHistoryItemLoaded}
+              onHistoryItemLoaded={() => setSelectedHistoryItemId(null)}
+              onOpenCollectionsModal={() => setIsCollectionsModalOpen(true)}
             />
           </div>
           <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>
