@@ -8,15 +8,17 @@ interface CollectionsModalProps {
     onClose: () => void;
     onUseTemplate: (template: PredefinedModel) => void;
     onNavigateToCollections: () => void;
+    onStartBlankCanvas: () => void;
 }
 
 type MenuSection = 'models';
 type MenuItem = 'featured' | 'latest' | 'categories';
 
-const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, onUseTemplate, onNavigateToCollections }) => {
+const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, onUseTemplate, onNavigateToCollections, onStartBlankCanvas }) => {
     const [activeItem, setActiveItem] = useState<MenuItem>('featured');
     const [models, setModels] = useState<PredefinedModel[]>([]);
     const [selectedTemplate, setSelectedTemplate] = useState<PredefinedModel | null>(null);
+    const [isBlankCanvasSelected, setIsBlankCanvasSelected] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
@@ -44,7 +46,10 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
     };
 
     const handleUseTemplate = () => {
-        if (selectedTemplate) {
+        if (isBlankCanvasSelected) {
+            onStartBlankCanvas();
+            onClose();
+        } else if (selectedTemplate) {
             onUseTemplate(selectedTemplate);
             onClose();
         }
@@ -58,6 +63,7 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
     useEffect(() => {
         if (isOpen) {
             setSelectedTemplate(null);
+            setIsBlankCanvasSelected(false);
         }
     }, [isOpen]);
 
@@ -160,10 +166,41 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                         </div>
                                     ) : models.length > 0 ? (
                                         <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                            {/* Blank Canvas Option */}
+                                            <div
+                                                onClick={() => {
+                                                    setIsBlankCanvasSelected(true);
+                                                    setSelectedTemplate(null);
+                                                }}
+                                                className={`group relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer border transition-all flex flex-col items-center justify-center ${isBlankCanvasSelected
+                                                    ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-500/10'
+                                                    : 'border-white/10 hover:border-white/30 bg-white/5 hover:bg-white/10'
+                                                    }`}
+                                            >
+                                                <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform ${isBlankCanvasSelected ? 'bg-blue-500 text-white' : 'bg-white/10 text-gray-400 group-hover:text-white'}`}>
+                                                    <LayoutIcon className="w-6 h-6" />
+                                                </div>
+                                                <p className={`text-sm font-medium group-hover:text-white ${isBlankCanvasSelected ? 'text-white' : 'text-gray-300'}`}>Blank Canvas</p>
+                                                <p className="text-xs text-gray-500 mt-1">Start from scratch</p>
+
+                                                {isBlankCanvasSelected && (
+                                                    <div className="absolute top-3 right-3">
+                                                        <div className="bg-blue-500 rounded-full p-1">
+                                                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
                                             {models.map((model) => (
                                                 <div
                                                     key={model.id}
-                                                    onClick={() => setSelectedTemplate(prev => prev?.id === model.id ? null : model)}
+                                                    onClick={() => {
+                                                        setSelectedTemplate(prev => prev?.id === model.id ? null : model);
+                                                        setIsBlankCanvasSelected(false);
+                                                    }}
                                                     className={`group relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer border transition-all ${selectedTemplate?.id === model.id
                                                         ? 'border-blue-500 ring-2 ring-blue-500/20'
                                                         : 'border-white/10 hover:border-white/30'
@@ -201,11 +238,11 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                 <div className="p-4 border-t border-white/5 flex justify-end bg-[#1a1a1a]">
                                     <button
                                         onClick={handleUseTemplate}
-                                        disabled={!selectedTemplate}
+                                        disabled={!selectedTemplate && !isBlankCanvasSelected}
                                         className="px-6 py-2.5 text-sm font-semibold text-white rounded-lg shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                                         style={{ backgroundColor: '#318CE7' }}
                                     >
-                                        Use Template
+                                        {isBlankCanvasSelected ? 'Start from scratch' : 'Use Template'}
                                     </button>
                                 </div>
                             </div>

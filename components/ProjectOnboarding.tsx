@@ -40,15 +40,17 @@ const ProjectOnboarding: React.FC<ProjectOnboardingProps> = ({ onProjectCreated 
 
   return (
     <div className="w-full h-full flex items-center justify-center bg-[#1a1a1a] p-4">
-      <div className="text-center">
-        <CubeIcon className="w-16 h-16 text-gray-700 mx-auto mb-6" />
-        <h2 className="text-4xl font-sans font-semibold text-gray-200">Welcome to FormLab</h2>
-        <p className="text-lg text-gray-400 mt-4 max-w-md">
+      <div className="text-center max-w-lg mx-auto">
+        <div className="w-12 h-12 bg-gray-800/50 rounded-xl flex items-center justify-center mx-auto mb-6 border border-gray-700/50">
+          <CubeIcon className="w-6 h-6 text-gray-400" />
+        </div>
+        <h2 className="text-xl font-sans font-semibold text-white mb-3">Welcome to FormLab</h2>
+        <p className="text-sm text-gray-400 leading-relaxed max-w-md mx-auto">
           To get started, you need to create a project. Projects help you organize your models, styles, and creative assets.
         </p>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="mt-8 px-8 py-3 text-base font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+          className="mt-8 px-6 py-2 text-xs font-medium text-white bg-[#318CE7] rounded-lg hover:bg-[#2b7bc0] transition-all shadow-lg shadow-blue-500/20"
         >
           Create Your First Project
         </button>

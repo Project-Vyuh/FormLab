@@ -695,9 +695,47 @@ export const MonitorIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export const GitMergeIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 26 26" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    {...props}
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="18" cy="18" r="3" />
     <circle cx="6" cy="6" r="3" />
     <path d="M6 21V9a9 9 0 0 0 9 9" />
+  </svg>
+);
+
+export const BuildingIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    {...props}
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+    <path d="M9 22v-4h6v4" />
+    <path d="M8 6h.01" />
+    <path d="M16 6h.01" />
+    <path d="M12 6h.01" />
+    <path d="M12 10h.01" />
+    <path d="M12 14h.01" />
+    <path d="M16 10h.01" />
+    <path d="M16 14h.01" />
+    <path d="M8 10h.01" />
+    <path d="M8 14h.01" />
   </svg>
 );

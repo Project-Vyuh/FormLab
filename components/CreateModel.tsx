@@ -25,6 +25,7 @@ import CollapsibleSection from './shared/CollapsibleSection';
 import OptionButton from './shared/OptionButton';
 import VersionHistoryPanel from './VersionHistoryPanel';
 import ProjectSelectorPanel from './ProjectSelectorPanel';
+import SwitchProjectModal from './SwitchProjectModal';
 import PromptPanel from './PromptPanel';
 import ContextMenu from './ContextMenu';
 import { loadPredefinedModels } from '../services/firestoreService';
@@ -46,6 +47,7 @@ interface CreateModelProps {
   onHistoryItemLoaded?: () => void; // Callback when history item has been loaded
   onOpenCollectionsModal: () => void; // Callback to open collections modal
   lastExternalUpdate?: number; // Trigger to reload project state
+  onDeleteProject: (projectId: string) => void;
 }
 
 type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
@@ -195,7 +197,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
   selectedHistoryItemId,
   onHistoryItemLoaded,
   onOpenCollectionsModal,
-  lastExternalUpdate
+  lastExternalUpdate,
+  onDeleteProject
 }) => {
   // Loading & App State
   const [isLoaded, setIsLoaded] = useState(false);
@@ -237,6 +240,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [isSwitchModelModalOpen, setIsSwitchModelModalOpen] = useState(false);
+  const [isSwitchProjectModalOpen, setIsSwitchProjectModalOpen] = useState(false);
   const [pendingModelSwitch, setPendingModelSwitch] = useState<string | null>(null);
   const [hasSavedInstance, setHasSavedInstance] = useState(false);
 
@@ -1403,6 +1407,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
             onProjectChange={onProjectChange}
             onEditProject={() => onOpenProjectModal('edit')}
             onCreateProject={() => onOpenProjectModal('create')}
+            onOpenSwitchModal={() => setIsSwitchProjectModalOpen(true)}
+            isCreateDisabled={false}
           />
           {renderLeftPanelContent()}
           <div className="p-4 border-t border-gray-800 mt-auto">
@@ -1655,6 +1661,16 @@ const CreateModel: React.FC<CreateModelProps> = ({
         message="Do you want to permanently delete this model? This action cannot be undone."
         confirmText="Delete Model"
       />
+      {/* Switch Project Modal */}
+      <SwitchProjectModal
+        isOpen={isSwitchProjectModalOpen}
+        onClose={() => setIsSwitchProjectModalOpen(false)}
+        projects={projectList}
+        currentProjectId={currentProjectId}
+        onSwitchProject={onProjectChange}
+        onDeleteProject={onDeleteProject}
+      />
+
     </div>
   );
 };
