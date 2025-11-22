@@ -504,7 +504,13 @@ const App: React.FC = () => {
       await deleteProjectState(projectId);
       await deleteProjectMetadata(projectId);
 
-      setProjectList(prev => prev.filter(p => p.id !== projectId));
+      setProjectList(prev => {
+        const newList = prev.filter(p => p.id !== projectId);
+        if (newList.length === 0) {
+          setNeedsOnboarding(true);
+        }
+        return newList;
+      });
 
       if (currentProjectId === projectId) {
         setCurrentProjectId(null);
