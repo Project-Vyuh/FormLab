@@ -41,8 +41,8 @@ const ProjectOnboarding: React.FC<ProjectOnboardingProps> = ({ onProjectCreated 
   return (
     <div className="w-full h-full flex items-center justify-center bg-[#1a1a1a] p-4">
       <div className="text-center max-w-lg mx-auto">
-        <div className="w-12 h-12 bg-gray-800/50 rounded-xl flex items-center justify-center mx-auto mb-6 border border-gray-700/50">
-          <CubeIcon className="w-6 h-6 text-gray-400" />
+        <div className="flex items-center justify-center mx-auto mb-8">
+          <CubeIcon className="w-16 h-16 text-gray-200 drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]" />
         </div>
         <h2 className="text-xl font-sans font-semibold text-white mb-3">Welcome to FormLab</h2>
         <p className="text-sm text-gray-400 leading-relaxed max-w-md mx-auto">

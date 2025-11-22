@@ -47,7 +47,7 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isApiKeySelected, setIsApiKeySelected] = useState(false);
-  
+
   const [leftPanelWidth, setLeftPanelWidth] = useState(320);
   const [rightPanelWidth, setRightPanelWidth] = useState(288);
 
@@ -92,7 +92,7 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
     setError(null);
     setSettings(initialVideoSettings);
   }, []);
-  
+
   const handleDownloadVideo = () => {
     if (!videoUrl) return;
     const link = document.createElement('a');
@@ -149,80 +149,80 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
     const startX = e.clientX;
     const startWidth = leftPanelWidth;
     const handleMouseMove = (moveEvent: MouseEvent) => {
-        const newWidth = startWidth + (moveEvent.clientX - startX);
-        setLeftPanelWidth(Math.max(280, Math.min(newWidth, 500)));
+      const newWidth = startWidth + (moveEvent.clientX - startX);
+      setLeftPanelWidth(Math.max(280, Math.min(newWidth, 500)));
     };
     const handleMouseUp = () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
   }, [leftPanelWidth]);
 
   const handleRightDrag = useCallback((e: React.MouseEvent) => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = rightPanelWidth;
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-          const newWidth = startWidth - (moveEvent.clientX - startX);
-          setRightPanelWidth(Math.max(240, Math.min(newWidth, 400)));
-      };
-      const handleMouseUp = () => {
-          window.removeEventListener('mousemove', handleMouseMove);
-          window.removeEventListener('mouseup', handleMouseUp);
-      };
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = rightPanelWidth;
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const newWidth = startWidth - (moveEvent.clientX - startX);
+      setRightPanelWidth(Math.max(240, Math.min(newWidth, 400)));
+    };
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
   }, [rightPanelWidth]);
 
   return (
     <div className="flex flex-col h-full">
-        <div className="h-16 border-b border-gray-800 bg-[#1a1a1a] flex items-center justify-between px-6 flex-shrink-0 z-20">
-            <h1 className="text-lg font-sans font-semibold text-gray-200">Video Creator</h1>
-            <div className="flex items-center gap-4">
-                <button onClick={handleStartOver} className="text-sm text-gray-400 hover:text-white">Start Over</button>
-                <button onClick={handleDownloadVideo} disabled={!videoUrl || isLoading} className="px-5 py-2 bg-gray-100 hover:bg-white text-gray-900 text-sm font-bold rounded-lg shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                    Download Video <DownloadIcon className="w-4 h-4" />
-                </button>
-            </div>
+      <div className="h-14 border-b border-white/5 bg-[#1a1a1a]/80 backdrop-blur-md flex items-center justify-between px-6 flex-shrink-0 z-20">
+        <h1 className="text-[15px] font-medium text-white/90">Video Creator</h1>
+        <div className="flex items-center gap-3">
+          <button onClick={handleStartOver} className="text-[13px] font-medium text-gray-400 hover:text-white transition-colors">Start Over</button>
+          <button onClick={handleDownloadVideo} disabled={!videoUrl || isLoading} className="px-4 py-1.5 bg-white hover:bg-gray-100 text-black text-[13px] font-semibold rounded-lg shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            Download Video <DownloadIcon className="w-3.5 h-3.5" />
+          </button>
         </div>
-        <div className="flex flex-row h-full flex-grow min-h-0">
-          <div style={{ width: `${leftPanelWidth}px` }} className="flex-shrink-0 h-full">
-            <VideoControlPanel
-                referenceImageUrl={referenceImageUrl}
-                settings={settings}
-                onSettingsChange={handleSettingsChange}
-                onGenerate={handleGenerateVideo}
-                isLoading={isLoading}
-                isApiKeySelected={isApiKeySelected}
-                onSelectApiKey={handleSelectApiKey}
-                projectList={projectList}
-                currentProjectId={currentProjectId}
-                onProjectChange={onProjectChange}
-                onOpenProjectModal={onOpenProjectModal}
-            />
-          </div>
-          <ResizeHandle onMouseDown={handleLeftDrag} />
-          <div className="flex-grow h-full flex items-center justify-center bg-[#EEEEEE] dark:bg-[#1a1a1a] relative p-4">
-            <VideoCanvas 
-                videoUrl={videoUrl}
-                isLoading={isLoading}
-                error={error}
-                aspectRatio={settings.aspectRatio}
-            />
-          </div>
-          <ResizeHandle onMouseDown={handleRightDrag} />
-          <div style={{ width: `${rightPanelWidth}px` }} className="flex-shrink-0 h-full">
-            <VideoRightPanel
-                settings={settings}
-                onSettingsChange={handleSettingsChange}
-                isLoading={isLoading}
-                videoUrl={videoUrl}
-                onExport={handleDownloadVideo}
-            />
-          </div>
+      </div>
+      <div className="flex flex-row h-full flex-grow min-h-0">
+        <div style={{ width: `${leftPanelWidth}px` }} className="flex-shrink-0 h-full">
+          <VideoControlPanel
+            referenceImageUrl={referenceImageUrl}
+            settings={settings}
+            onSettingsChange={handleSettingsChange}
+            onGenerate={handleGenerateVideo}
+            isLoading={isLoading}
+            isApiKeySelected={isApiKeySelected}
+            onSelectApiKey={handleSelectApiKey}
+            projectList={projectList}
+            currentProjectId={currentProjectId}
+            onProjectChange={onProjectChange}
+            onOpenProjectModal={onOpenProjectModal}
+          />
         </div>
+        <ResizeHandle onMouseDown={handleLeftDrag} />
+        <div className="flex-grow h-full flex items-center justify-center bg-[#EEEEEE] dark:bg-[#1a1a1a] relative p-4">
+          <VideoCanvas
+            videoUrl={videoUrl}
+            isLoading={isLoading}
+            error={error}
+            aspectRatio={settings.aspectRatio}
+          />
+        </div>
+        <ResizeHandle onMouseDown={handleRightDrag} />
+        <div style={{ width: `${rightPanelWidth}px` }} className="flex-shrink-0 h-full">
+          <VideoRightPanel
+            settings={settings}
+            onSettingsChange={handleSettingsChange}
+            isLoading={isLoading}
+            videoUrl={videoUrl}
+            onExport={handleDownloadVideo}
+          />
+        </div>
+      </div>
     </div>
   );
 };

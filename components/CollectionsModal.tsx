@@ -82,13 +82,13 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.95, opacity: 0, y: 20 }}
                         onClick={(e) => e.stopPropagation()}
-                        className="relative w-full max-w-5xl h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a] shadow-2xl flex flex-col"
+                        className="relative w-full max-w-5xl h-[70vh] overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a]/80 backdrop-blur-xl shadow-2xl flex flex-col"
                         style={{
                             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
                         }}
                     >
                         {/* Unified Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-black/20">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5">
                             <div>
                                 <h2 className="text-lg font-semibold text-white tracking-tight">Collections</h2>
                                 <p className="text-xs text-gray-400 mt-0.5">Choose a template to get started</p>
@@ -103,7 +103,7 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
 
                         <div className="flex flex-grow overflow-hidden">
                             {/* Sidebar */}
-                            <div className="w-72 min-w-[18rem] bg-black/20 border-r border-white/5 flex flex-col flex-shrink-0">
+                            <div className="w-72 min-w-[18rem] bg-white/5 border-r border-white/5 flex flex-col flex-shrink-0">
                                 <div className="flex-grow py-4 overflow-y-auto">
                                     {/* Models Section */}
                                     <div className="mb-2">
@@ -148,7 +148,7 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                 <div className="p-4 border-t border-white/5">
                                     <button
                                         onClick={handleAllCollections}
-                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-white/5 rounded-lg hover:bg-white/10 transition-colors whitespace-nowrap"
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-300 bg-white/5 rounded-lg hover:bg-white/10 transition-colors whitespace-nowrap"
                                     >
                                         All Collections
                                         <ChevronRightIcon className="w-4 h-4" />
@@ -157,7 +157,7 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                             </div>
 
                             {/* Main Content */}
-                            <div className="flex-grow flex flex-col bg-[#1a1a1a] overflow-hidden">
+                            <div className="flex-grow flex flex-col bg-transparent overflow-hidden">
                                 {/* Content Grid */}
                                 <div className="flex-grow p-6 overflow-y-auto">
                                     {isLoading ? (
@@ -169,7 +169,7 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                             {/* Blank Canvas Option */}
                                             <div
                                                 onClick={() => {
-                                                    setIsBlankCanvasSelected(true);
+                                                    setIsBlankCanvasSelected(!isBlankCanvasSelected);
                                                     setSelectedTemplate(null);
                                                 }}
                                                 className={`group relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer border transition-all flex flex-col items-center justify-center ${isBlankCanvasSelected
@@ -235,7 +235,7 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                 </div>
 
                                 {/* Footer Actions */}
-                                <div className="p-4 border-t border-white/5 flex justify-end bg-[#1a1a1a]">
+                                <div className="p-4 border-t border-white/5 flex justify-end bg-white/5">
                                     <button
                                         onClick={handleUseTemplate}
                                         disabled={!selectedTemplate && !isBlankCanvasSelected}

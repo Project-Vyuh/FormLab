@@ -65,6 +65,9 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
   const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
 
+  // Custom collections (folders) state
+  const [customCollections, setCustomCollections] = useState<string[]>([]);
+
   const filterDropdownRef = useRef<HTMLDivElement>(null);
 
   // Computed: Get current templates based on selected section
@@ -162,6 +165,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
 
   const handleSaveFolder = (folderData: any) => {
     console.log('Folder created:', folderData);
+    setCustomCollections(prev => [...prev, folderData.name]);
     // TODO: Save folder to database/storage
   };
 
@@ -192,8 +196,8 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
   // Quick filter options for Pre-Defined section
   const quickFilterOptions = selectedSection === 'predefined'
     ? (activeCategory === 'models'
-        ? ['Male', 'Female', 'Non-Binary']
-        : ['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Footwear', 'Accessories'])
+      ? ['Male', 'Female', 'Non-Binary']
+      : ['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Footwear', 'Accessories'])
     : [];
 
   const handleQuickFilterToggle = (filter: string) => {
@@ -208,61 +212,46 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
   // Filter pre-defined models based on selected quick filter
   const filteredPredefinedModels = selectedSection === 'predefined' && activeCategory === 'models'
     ? (selectedQuickFilter
-        ? predefinedModels.filter(model => {
-            const genderMap: { [key: string]: string } = {
-              'Male': 'male',
-              'Female': 'female',
-              'Non-Binary': 'non-binary'
-            };
-            return model.gender === genderMap[selectedQuickFilter];
-          })
-        : predefinedModels)
+      ? predefinedModels.filter(model => {
+        const genderMap: { [key: string]: string } = {
+          'Male': 'male',
+          'Female': 'female',
+          'Non-Binary': 'non-binary'
+        };
+        return model.gender === genderMap[selectedQuickFilter];
+      })
+      : predefinedModels)
     : [];
 
   return (
     <div className="w-full h-full flex flex-col relative bg-[#111111]">
       {/* Header */}
-      <div className="h-16 border-b border-gray-800 bg-[#1a1a1a] flex items-center justify-between px-6 flex-shrink-0 z-20">
-        <h1 className="text-lg font-sans font-semibold text-gray-200">Collections</h1>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-            title={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view`}
-          >
-            <LayoutIcon className="w-5 h-5" />
-          </button>
-          <button
-            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-            title="Filter collections"
-          >
-            <FilterIcon className="w-5 h-5" />
-          </button>
-        </div>
+      <div className="h-14 border-b border-white/5 bg-[#1a1a1a]/80 backdrop-blur-md flex items-center justify-between px-6 flex-shrink-0 z-20">
+        <h1 className="text-[15px] font-medium text-white/90">Collections</h1>
       </div>
 
       {/* Main Content Area */}
       <div className="flex-grow flex min-h-0">
         {/* Sidebar */}
-        <div className="w-64 bg-[#1a1a1a] border-r border-gray-800 flex flex-col flex-shrink-0 h-full overflow-y-auto">
+        <div className="w-64 bg-white/5 border-r border-white/5 flex flex-col flex-shrink-0 h-full overflow-y-auto">
           <div className="p-4 space-y-3">
             {/* Create Collection Button */}
             <button
               onClick={handleCreateTemplate}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-colors shadow-sm"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white hover:bg-gray-200 text-black text-[13px] font-semibold rounded-lg transition-colors shadow-lg"
             >
-              <PlusIcon className="w-4 h-4" />
+              <PlusIcon className="w-3.5 h-3.5" />
               Create Collection
             </button>
 
             {/* Divider */}
-            <div className="h-px bg-gray-800"></div>
+            <div className="h-px bg-white/5"></div>
 
             {/* USER DEFINED Section */}
             <div className="space-y-1">
               <button
                 onClick={() => setIsUserDefinedExpanded(!isUserDefinedExpanded)}
-                className="w-full flex items-center justify-between text-xs font-bold text-gray-500 uppercase tracking-wider px-2 py-2 hover:text-gray-400 transition-colors"
+                className="w-full flex items-center justify-between text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2 hover:text-gray-400 transition-colors"
               >
                 <div className="flex items-center gap-2">
                   <span>User Defined</span>
@@ -271,7 +260,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                       e.stopPropagation();
                       handleCreateFolder();
                     }}
-                    className="p-0.5 hover:bg-gray-800 rounded"
+                    className="p-0.5 hover:bg-white/10 rounded"
                     title="Create folder"
                   >
                     <FolderPlusIcon className="w-3.5 h-3.5" />
@@ -281,7 +270,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                       e.stopPropagation();
                       handleAddItem();
                     }}
-                    className="p-0.5 hover:bg-gray-800 rounded"
+                    className="p-0.5 hover:bg-white/10 rounded"
                     title="Add item"
                   >
                     <FilePlusIcon className="w-3.5 h-3.5" />
@@ -301,11 +290,10 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                       setActiveCategory('models');
                       setSelectedSection('user');
                     }}
-                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                      activeCategory === 'models' && selectedSection === 'user'
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }`}
+                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${activeCategory === 'models' && selectedSection === 'user'
+                      ? 'bg-white/10 text-white font-medium'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
                   >
                     Models
                   </button>
@@ -314,26 +302,33 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                       setActiveCategory('wardrobe');
                       setSelectedSection('user');
                     }}
-                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                      activeCategory === 'wardrobe' && selectedSection === 'user'
+                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${activeCategory === 'wardrobe' && selectedSection === 'user'
                         ? 'bg-white/10 text-white font-medium'
                         : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }`}
+                      }`}
                   >
                     Wardrobe
                   </button>
+                  {customCollections.map((collection, idx) => (
+                    <button
+                      key={idx}
+                      className="w-full text-left px-3 py-2 rounded text-sm transition-colors text-gray-400 hover:text-white hover:bg-white/5"
+                    >
+                      {collection}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
 
             {/* Divider */}
-            <div className="h-px bg-gray-800"></div>
+            <div className="h-px bg-white/5"></div>
 
             {/* PRE-DEFINED Section */}
             <div className="space-y-1">
               <button
                 onClick={() => setIsPreDefinedExpanded(!isPreDefinedExpanded)}
-                className="w-full flex items-center justify-between text-xs font-bold text-gray-500 uppercase tracking-wider px-2 py-2 hover:text-gray-400 transition-colors"
+                className="w-full flex items-center justify-between text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2 hover:text-gray-400 transition-colors"
               >
                 <span>Pre-Defined</span>
                 {isPreDefinedExpanded ? (
@@ -350,11 +345,10 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                       setActiveCategory('models');
                       setSelectedSection('predefined');
                     }}
-                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                      activeCategory === 'models' && selectedSection === 'predefined'
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }`}
+                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${activeCategory === 'models' && selectedSection === 'predefined'
+                      ? 'bg-white/10 text-white font-medium'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
                   >
                     Models
                   </button>
@@ -363,11 +357,10 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                       setActiveCategory('wardrobe');
                       setSelectedSection('predefined');
                     }}
-                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                      activeCategory === 'wardrobe' && selectedSection === 'predefined'
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }`}
+                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${activeCategory === 'wardrobe' && selectedSection === 'predefined'
+                      ? 'bg-white/10 text-white font-medium'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
                   >
                     Wardrobe
                   </button>
@@ -380,7 +373,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
         {/* Content Area */}
         <div className="flex-1 bg-[#111111] flex flex-col min-h-0">
           {/* Toolbar */}
-          <div className="border-b border-gray-800 bg-[#1a1a1a] px-6 py-4 flex items-center justify-between flex-shrink-0">
+          <div className="border-b border-white/5 bg-[#1a1a1a]/80 backdrop-blur-md px-6 py-3 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3 flex-1">
               <div className="relative flex-1 max-w-md">
                 <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -389,7 +382,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                   placeholder="Search collections..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-black/30 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-200 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-1.5 bg-white/5 border border-white/5 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:bg-white/10 focus:border-white/10 transition-colors"
                 />
               </div>
 
@@ -400,11 +393,10 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                     <button
                       key={filter}
                       onClick={() => handleQuickFilterToggle(filter)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
-                        selectedQuickFilter === filter
-                          ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
-                          : 'bg-transparent border-gray-600 text-gray-400 hover:bg-gray-800 hover:border-gray-500 hover:text-gray-200'
-                      }`}
+                      className={`px-3 py-1 text-xs font-medium rounded-full border transition-all ${selectedQuickFilter === filter
+                        ? 'bg-blue-500/20 text-blue-200 border-blue-500/30 shadow-sm'
+                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-gray-200'
+                        }`}
                     >
                       {filter}
                     </button>
@@ -417,16 +409,15 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                 <div ref={filterDropdownRef} className="relative">
                   <button
                     onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-                    className={`p-2 rounded-lg transition-colors flex items-center gap-2 ${
-                      activeFilterCount > 0 || isFilterDropdownOpen
-                        ? 'bg-blue-500 text-white'
-                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                    }`}
+                    className={`p-1.5 rounded-lg transition-colors flex items-center gap-2 ${activeFilterCount > 0 || isFilterDropdownOpen
+                      ? 'bg-white/10 text-white border border-white/10'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
                     title="Filter collections"
                   >
-                    <FilterIcon className="w-5 h-5" />
+                    <FilterIcon className="w-4 h-4" />
                     {activeFilterCount > 0 && (
-                      <span className="text-xs font-semibold">{activeFilterCount}</span>
+                      <span className="text-[10px] font-semibold">{activeFilterCount}</span>
                     )}
                   </button>
 
@@ -438,44 +429,41 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: -10 }}
                         transition={{ duration: 0.15, ease: 'easeOut' }}
-                        className="absolute right-0 mt-2 w-56 bg-[#2a2a2a] border border-gray-700 rounded-lg shadow-xl z-50 origin-top-right"
+                        className="absolute right-0 mt-2 w-48 bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl z-50 origin-top-right"
                       >
-                        <div className="p-3 border-b border-gray-700">
-                          <h3 className="text-sm font-semibold text-gray-200">
+                        <div className="p-2.5 border-b border-white/10">
+                          <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                             Filter by {activeCategory === 'models' ? 'Gender' : 'Category'}
                           </h3>
                         </div>
-                        <div className="p-3 space-y-2">
+                        <div className="p-2 space-y-1">
                           {activeCategory === 'models' ? (
                             // Gender filters for Models
                             <>
                               <button
                                 onClick={() => handleGenderFilterToggle('male')}
-                                className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                                  selectedGenderFilters.includes('male')
-                                    ? 'bg-blue-500 text-white border border-blue-500'
-                                    : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
-                                }`}
+                                className={`w-full text-left px-2.5 py-1.5 rounded text-xs transition-colors ${selectedGenderFilters.includes('male')
+                                  ? 'bg-white/10 text-white border border-white/10'
+                                  : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10 hover:text-gray-200'
+                                  }`}
                               >
                                 Male
                               </button>
                               <button
                                 onClick={() => handleGenderFilterToggle('female')}
-                                className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                                  selectedGenderFilters.includes('female')
-                                    ? 'bg-blue-500 text-white border border-blue-500'
-                                    : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
-                                }`}
+                                className={`w-full text-left px-2.5 py-1.5 rounded text-xs transition-colors ${selectedGenderFilters.includes('female')
+                                  ? 'bg-white/10 text-white border border-white/10'
+                                  : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10 hover:text-gray-200'
+                                  }`}
                               >
                                 Female
                               </button>
                               <button
                                 onClick={() => handleGenderFilterToggle('lgbtq+')}
-                                className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                                  selectedGenderFilters.includes('lgbtq+')
-                                    ? 'bg-blue-500 text-white border border-blue-500'
-                                    : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
-                                }`}
+                                className={`w-full text-left px-2.5 py-1.5 rounded text-xs transition-colors ${selectedGenderFilters.includes('lgbtq+')
+                                  ? 'bg-white/10 text-white border border-white/10'
+                                  : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10 hover:text-gray-200'
+                                  }`}
                               >
                                 LGBTQ+
                               </button>
@@ -488,17 +476,16 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                                   <button
                                     key={category}
                                     onClick={() => handleWardrobeFilterToggle(category)}
-                                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                                      selectedWardrobeFilters.includes(category)
-                                        ? 'bg-blue-500 text-white border border-blue-500'
-                                        : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
-                                    }`}
+                                    className={`w-full text-left px-2.5 py-1.5 rounded text-xs transition-colors ${selectedWardrobeFilters.includes(category)
+                                      ? 'bg-white/10 text-white border border-white/10'
+                                      : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10 hover:text-gray-200'
+                                      }`}
                                   >
                                     {category}
                                   </button>
                                 ))
                               ) : (
-                                <p className="text-sm text-gray-400 px-3 py-2 text-center">
+                                <p className="text-xs text-gray-400 px-2.5 py-1.5 text-center">
                                   No categories available
                                 </p>
                               )}
@@ -506,13 +493,13 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                           )}
                         </div>
                         {activeFilterCount > 0 && (
-                          <div className="p-3 border-t border-gray-700">
+                          <div className="p-2.5 border-t border-white/10">
                             <button
                               onClick={() => {
                                 setSelectedGenderFilters([]);
                                 setSelectedWardrobeFilters([]);
                               }}
-                              className="w-full text-center text-sm text-gray-400 hover:text-white transition-colors"
+                              className="w-full text-center text-xs text-gray-400 hover:text-white transition-colors"
                             >
                               Clear All Filters
                             </button>
@@ -524,11 +511,20 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2 text-sm text-gray-400">
+            <div className="flex items-center gap-3 text-sm text-gray-400">
+              <button
+                onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                title={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view`}
+              >
+                <LayoutIcon className="w-4 h-4" />
+              </button>
               <span>
                 {selectedSection === 'predefined' && activeCategory === 'models'
                   ? `${filteredPredefinedModels.length} models`
-                  : `${templates.length} collections`}
+                  : selectedSection === 'user'
+                    ? `${2 + customCollections.length} collections`
+                    : `${templates.length} collections`}
               </span>
             </div>
           </div>
@@ -540,13 +536,13 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
               <>
                 {filteredPredefinedModels.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center">
-                    <div className="w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center mb-4">
-                      <LayoutIcon className="w-8 h-8 text-gray-600" />
+                    <div className="flex items-center justify-center mx-auto mb-8">
+                      <LayoutIcon className="w-16 h-16 text-gray-200 drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-300 mb-2">
+                    <h3 className="text-xl font-sans font-semibold text-white mb-3">
                       No Pre-Defined Models Yet
                     </h3>
-                    <p className="text-sm text-gray-500 max-w-sm mb-6">
+                    <p className="text-sm text-gray-400 leading-relaxed max-w-md mx-auto">
                       Pre-defined models from the library will appear here.
                     </p>
                   </div>
@@ -562,7 +558,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                             className="group relative cursor-pointer"
                             onClick={() => setSelectedModel(model)}
                           >
-                            <div className="w-32 h-48 bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-500 transition-all hover:shadow-lg">
+                            <div className="w-32 h-48 bg-white/5 rounded-lg overflow-hidden border border-white/5 hover:border-white/20 transition-all hover:shadow-lg">
                               <img
                                 src={model.thumbnail || model.url}
                                 alt={model.name}
@@ -574,13 +570,13 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                               {model.tags.slice(0, 2).map((tag, idx) => (
                                 <span
                                   key={idx}
-                                  className="text-[10px] px-2 py-0.5 bg-gray-800 text-gray-400 rounded-full border border-gray-700"
+                                  className="text-[10px] px-2 py-0.5 bg-white/5 text-gray-400 rounded-full border border-white/5"
                                 >
                                   {tag}
                                 </span>
                               ))}
                               {model.tags.length > 2 && (
-                                <span className="text-[10px] px-2 py-0.5 bg-gray-800 text-gray-400 rounded-full border border-gray-700">
+                                <span className="text-[10px] px-2 py-0.5 bg-white/5 text-gray-400 rounded-full border border-white/5">
                                   +{model.tags.length - 2}
                                 </span>
                               )}
@@ -600,13 +596,13 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
               <>
                 {templates.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center">
-                    <div className="w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center mb-4">
-                      <LayoutIcon className="w-8 h-8 text-gray-600" />
+                    <div className="flex items-center justify-center mx-auto mb-8">
+                      <LayoutIcon className="w-16 h-16 text-gray-200 drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-300 mb-2">
+                    <h3 className="text-xl font-sans font-semibold text-white mb-3">
                       No {selectedSection === 'user' ? 'User-Defined' : 'Pre-Defined'} Collections Yet
                     </h3>
-                    <p className="text-sm text-gray-500 max-w-sm mb-6">
+                    <p className="text-sm text-gray-400 leading-relaxed max-w-md mx-auto mb-6">
                       {selectedSection === 'user'
                         ? 'Create your first custom collection to get started. Collections help you reuse models and wardrobes across projects.'
                         : 'Pre-defined collections from the library will appear here.'}
@@ -614,9 +610,9 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                     {selectedSection === 'user' && (
                       <button
                         onClick={handleCreateTemplate}
-                        className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-colors flex items-center gap-2"
+                        className="px-4 py-1.5 bg-white hover:bg-gray-100 text-black text-[13px] font-semibold rounded-lg transition-colors flex items-center gap-2"
                       >
-                        <PlusIcon className="w-4 h-4" />
+                        <PlusIcon className="w-3.5 h-3.5" />
                         Create Your First Collection
                       </button>
                     )}
@@ -632,11 +628,10 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                     {templates.map((template) => (
                       <div
                         key={template.id}
-                        className={`group relative ${
-                          viewMode === 'grid'
-                            ? 'aspect-[3/4] bg-gray-800/50 rounded-lg border border-gray-700 hover:border-gray-600 overflow-hidden cursor-pointer transition-all hover:scale-105'
-                            : 'flex items-center gap-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-gray-600 cursor-pointer transition-colors'
-                        }`}
+                        className={`group relative ${viewMode === 'grid'
+                          ? 'aspect-[3/4] bg-white/5 rounded-lg border border-white/5 hover:border-white/10 overflow-hidden cursor-pointer transition-all hover:scale-105'
+                          : 'flex items-center gap-4 p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/10 cursor-pointer transition-colors'
+                          }`}
                       >
                         {/* Template card content would go here */}
                       </div>
@@ -675,32 +670,32 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
             onClick={() => setSelectedModel(null)}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#1a1a1a] rounded-xl border border-gray-700 max-w-6xl w-full max-h-[90vh] overflow-hidden flex"
+              className="bg-[#1a1a1a]/90 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl max-w-5xl w-full max-h-[85vh] overflow-hidden flex"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Main Image Area */}
-              <div className="flex-1 flex items-center justify-center bg-black p-8">
+              <div className="flex-1 flex items-center justify-center bg-black/40 p-8 relative">
                 <img
                   src={selectedModel.url}
                   alt={selectedModel.name}
-                  className="max-w-full max-h-full object-contain"
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
                 />
               </div>
 
               {/* Sidebar with Metadata */}
-              <div className="w-80 bg-[#1a1a1a] border-l border-gray-700 flex flex-col">
+              <div className="w-80 bg-white/5 border-l border-white/10 flex flex-col">
                 {/* Header */}
-                <div className="p-6 border-b border-gray-700">
-                  <h2 className="text-xl font-semibold text-white mb-2">{selectedModel.name}</h2>
+                <div className="p-6 border-b border-white/10">
+                  <h2 className="text-lg font-medium text-white/90 mb-2">{selectedModel.name}</h2>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs px-2 py-1 bg-gray-800 text-gray-300 rounded-full border border-gray-700 capitalize">
+                    <span className="text-xs px-2.5 py-1 bg-white/10 text-gray-200 rounded-full border border-white/5 capitalize font-medium">
                       {selectedModel.gender}
                     </span>
                   </div>
@@ -710,24 +705,24 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                   {/* ID */}
                   <div>
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Model ID</h3>
-                    <p className="text-sm text-gray-300 font-mono">{selectedModel.id}</p>
+                    <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Model ID</h3>
+                    <p className="text-sm text-gray-200 font-mono bg-white/5 p-2 rounded border border-white/5">{selectedModel.id}</p>
                   </div>
 
                   {/* Gender */}
                   <div>
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Gender</h3>
-                    <p className="text-sm text-gray-300 capitalize">{selectedModel.gender}</p>
+                    <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Gender</h3>
+                    <p className="text-sm text-gray-200 capitalize">{selectedModel.gender}</p>
                   </div>
 
                   {/* Tags */}
                   <div>
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Tags</h3>
+                    <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Tags</h3>
                     <div className="flex flex-wrap gap-2">
                       {selectedModel.tags.map((tag, idx) => (
                         <span
                           key={idx}
-                          className="text-xs px-3 py-1.5 bg-gray-800 text-gray-300 rounded-full border border-gray-700"
+                          className="text-xs px-2.5 py-1 bg-white/5 text-gray-300 rounded-full border border-white/5"
                         >
                           {tag}
                         </span>
@@ -737,24 +732,24 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
 
                   {/* URL */}
                   <div>
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Image URL</h3>
-                    <p className="text-xs text-gray-400 break-all font-mono">{selectedModel.url}</p>
+                    <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Image URL</h3>
+                    <p className="text-[10px] text-gray-400 break-all font-mono leading-relaxed">{selectedModel.url}</p>
                   </div>
 
                   {/* Thumbnail URL if different */}
                   {selectedModel.thumbnail && selectedModel.thumbnail !== selectedModel.url && (
                     <div>
-                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Thumbnail URL</h3>
-                      <p className="text-xs text-gray-400 break-all font-mono">{selectedModel.thumbnail}</p>
+                      <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Thumbnail URL</h3>
+                      <p className="text-[10px] text-gray-400 break-all font-mono leading-relaxed">{selectedModel.thumbnail}</p>
                     </div>
                   )}
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-6 border-t border-gray-700">
+                <div className="p-6 border-t border-white/10 bg-white/5">
                   <button
                     onClick={() => setSelectedModel(null)}
-                    className="w-full px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium"
+                    className="w-full px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-lg transition-colors font-medium text-sm"
                   >
                     Close
                   </button>

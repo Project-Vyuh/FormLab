@@ -64,10 +64,10 @@ const SwitchProjectModal: React.FC<SwitchProjectModalProps> = ({
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="bg-[#1a1a1a] w-full max-w-4xl h-[60vh] rounded-xl border border-gray-800 shadow-2xl flex flex-col overflow-hidden"
+                            className="bg-[#1a1a1a]/80 backdrop-blur-xl w-full max-w-4xl h-[60vh] rounded-xl border border-white/10 shadow-2xl flex flex-col overflow-hidden"
                         >
                             {/* Header */}
-                            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-[#1a1a1a]">
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5">
                                 <div>
                                     <h2 className="text-lg font-semibold text-white">Projects</h2>
                                     <p className="text-xs text-gray-400 mt-0.5">All your created projects appear here.</p>
@@ -83,7 +83,7 @@ const SwitchProjectModal: React.FC<SwitchProjectModalProps> = ({
                             {/* Content */}
                             <div className="flex flex-1 overflow-hidden">
                                 {/* Sidebar - Project List */}
-                                <div className="w-72 border-r border-gray-800 overflow-y-auto bg-[#141414]">
+                                <div className="w-72 border-r border-white/5 overflow-y-auto bg-white/5">
                                     <div className="p-3 space-y-1">
                                         {projects.map(project => (
                                             <button
@@ -94,7 +94,7 @@ const SwitchProjectModal: React.FC<SwitchProjectModalProps> = ({
                                                     : 'hover:bg-white/5 border border-transparent'
                                                     }`}
                                             >
-                                                <div className={`p-2 rounded-md ${selectedProjectId === project.id ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-800 text-gray-400 group-hover:bg-gray-700 group-hover:text-gray-300'}`}>
+                                                <div className={`p-2 rounded-md ${selectedProjectId === project.id ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-400 group-hover:text-gray-300'}`}>
                                                     <FolderIcon className="w-4 h-4" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
@@ -116,13 +116,13 @@ const SwitchProjectModal: React.FC<SwitchProjectModalProps> = ({
                                 </div>
 
                                 {/* Main Content - Project Details */}
-                                <div className="flex-1 bg-[#1a1a1a] p-8 flex flex-col">
+                                <div className="flex-1 bg-transparent p-8 flex flex-col">
                                     {selectedProject ? (
                                         <>
                                             <div className="flex-1">
                                                 <div className="flex items-start justify-between mb-6">
                                                     <div>
-                                                        <h1 className="text-2xl font-bold text-white mb-2">{selectedProject.title}</h1>
+                                                        <h1 className="text-xl font-bold text-white mb-2">{selectedProject.title}</h1>
                                                         <div className="flex items-center gap-4 text-xs text-gray-400">
                                                             <span className="flex items-center gap-1.5">
                                                                 <CalendarIcon className="w-3.5 h-3.5" />
@@ -139,7 +139,7 @@ const SwitchProjectModal: React.FC<SwitchProjectModalProps> = ({
                                                 </div>
                                             </div>
 
-                                            <div className="mt-auto pt-6 border-t border-gray-800">
+                                            <div className="mt-auto pt-6 border-t border-white/5">
                                                 <div className="mb-6">
                                                     <h3 className="text-sm font-semibold text-red-400 mb-1">Danger Zone</h3>
                                                     <div className="p-4 rounded-lg border border-red-500/20 bg-red-500/5 flex items-center justify-between">

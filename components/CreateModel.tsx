@@ -1361,10 +1361,10 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
   return (
     <div className="w-full h-full flex flex-col relative bg-[#111111]">
-      <div className="h-16 border-b border-gray-800 bg-[#1a1a1a] flex items-center justify-between px-6 flex-shrink-0 z-20">
-        <h1 className="text-lg font-sans font-semibold text-gray-200">Create Model</h1>
-        <div className="flex items-center gap-4">
-          {isResultView && <button onClick={() => { if (window.confirm("Start a new project? This will clear your current model creation.")) { reset(); } }} className="text-sm text-gray-400 hover:text-white">Start Over</button>}
+      <div className="h-14 border-b border-white/5 bg-[#1a1a1a]/80 backdrop-blur-md flex items-center justify-between px-6 flex-shrink-0 z-20">
+        <h1 className="text-[15px] font-medium text-white/90">Create Model</h1>
+        <div className="flex items-center gap-3">
+          {isResultView && <button onClick={() => { if (window.confirm("Start a new project? This will clear your current model creation.")) { reset(); } }} className="text-[13px] font-medium text-gray-400 hover:text-white transition-colors">Start Over</button>}
           <button
             onClick={() => {
               if (generatedModelUrl) {
@@ -1373,10 +1373,10 @@ const CreateModel: React.FC<CreateModelProps> = ({
               }
             }}
             disabled={!generatedModelUrl}
-            className="p-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 bg-white/5 hover:bg-white/10 border border-white/5 text-gray-200 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             title="Share model"
           >
-            <Share2Icon className="w-5 h-5" />
+            <Share2Icon className="w-4 h-4" />
           </button>
           <button
             onClick={() => {
@@ -1392,9 +1392,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
               }
             }}
             disabled={!generatedModelUrl}
-            className="px-5 py-2 bg-gray-100 hover:bg-white text-gray-900 text-sm font-bold rounded-lg shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-1.5 bg-white hover:bg-gray-100 text-black text-[13px] font-semibold rounded-lg shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Proceed to Styling <ChevronRightIcon className="w-4 h-4" />
+            Proceed to Styling <ChevronRightIcon className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -1451,33 +1451,32 @@ const CreateModel: React.FC<CreateModelProps> = ({
         <ResizeHandle onMouseDown={handleLeftDrag} />
 
         <div className="flex-grow relative bg-[#0f0f0f] flex flex-col min-h-0">
-          <div className="flex-shrink-0 flex items-center justify-between gap-2 p-2 bg-[#2a2a2a] border-b border-gray-700">
+          <div className="flex-shrink-0 flex items-center justify-between gap-2 p-2 bg-[#1a1a1a]/80 backdrop-blur-md border-b border-white/5">
             <div className="flex items-center gap-1">
-              <div className="flex items-center bg-black/30 border border-gray-700 rounded-lg p-1">
-                <button onClick={handleUndo} disabled={!canUndo || isGenerating} className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30" title="Undo"><UndoIcon className="w-4 h-4 text-gray-300" /></button>
-                <button onClick={handleRedo} disabled={!canRedo || isGenerating} className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30" title="Redo"><RedoIcon className="w-4 h-4 text-gray-300" /></button>
+              <div className="flex items-center gap-1">
+                <button onClick={handleUndo} disabled={!canUndo || isGenerating} className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30 transition-colors text-gray-400 hover:text-white" title="Undo"><UndoIcon className="w-4 h-4" /></button>
+                <button onClick={handleRedo} disabled={!canRedo || isGenerating} className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30 transition-colors text-gray-400 hover:text-white" title="Redo"><RedoIcon className="w-4 h-4" /></button>
               </div>
-              <div className="w-px h-6 bg-gray-700 mx-2"></div>
-              <button onClick={() => setIsCompareMode(!isCompareMode)} disabled={!canUndo || !isResultView} className={`p-2 rounded-md border transition-colors flex items-center gap-2 text-sm ${isCompareMode ? 'bg-blue-600/20 border-blue-500/50 text-blue-200' : 'bg-transparent border-transparent hover:bg-white/10 text-gray-300'} disabled:opacity-30`} title="Compare"><LayoutIcon className="w-4 h-4" /></button>
-              <button onClick={() => setIsMaskingMode(p => !p)} disabled={!isResultView} className={`p-2 rounded-md border transition-colors flex items-center gap-2 text-sm ${isMaskingMode ? 'bg-purple-600/20 border-purple-500/50 text-purple-200' : 'bg-transparent border-transparent hover:bg-white/10 text-gray-300'} disabled:opacity-30`} title="Masking Brush"><PenLineIcon className="w-4 h-4" /></button>
+              <div className="w-px h-6 bg-white/10 mx-2"></div>
+              <button onClick={() => setIsCompareMode(!isCompareMode)} disabled={!canUndo || !isResultView} className={`p-2 rounded-md border transition-all flex items-center gap-2 text-sm ${isCompareMode ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' : 'bg-transparent border-transparent hover:bg-white/5 text-gray-400 hover:text-white'} disabled:opacity-30`} title="Compare"><LayoutIcon className="w-4 h-4" /></button>
+              <button onClick={() => setIsMaskingMode(p => !p)} disabled={!isResultView} className={`p-2 rounded-md border transition-all flex items-center gap-2 text-sm ${isMaskingMode ? 'bg-purple-500/20 border-purple-500/30 text-purple-300' : 'bg-transparent border-transparent hover:bg-white/5 text-gray-400 hover:text-white'} disabled:opacity-30`} title="Masking Brush"><PenLineIcon className="w-4 h-4" /></button>
               {isMaskingMode && (
                 <div className="flex items-center gap-2 text-xs text-gray-400 ml-2">
                   <span>Brush Size:</span>
-                  <input type="range" min="10" max="100" value={brushSize} onChange={(e) => setBrushSize(Number(e.target.value))} className="w-24" />
+                  <input type="range" min="10" max="100" value={brushSize} onChange={(e) => setBrushSize(Number(e.target.value))} className="w-24 accent-purple-500" />
                 </div>
               )}
               <div ref={upscaleMenuRef} className="relative">
-                <button onClick={() => setIsUpscaleMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md hover:bg-white/10 flex items-center gap-2 text-sm text-gray-300 disabled:opacity-30" title="Enhance & Upscale"><ZapIcon className="w-4 h-4 text-yellow-400" /></button>
-                {isUpscaleMenuOpen && <div className="absolute top-full left-0 mt-2 w-48 bg-[#1f1f1f] border border-gray-700 rounded-lg shadow-xl z-20"><button onClick={() => handleUpscale('2k')} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10">Upscale to 2K</button><button onClick={() => handleUpscale('4k')} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10">Upscale to 4K</button><div className="h-px bg-gray-700 my-1"></div><button onClick={() => handleSelectiveEnhance('face')} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10">Enhance Face</button><button onClick={() => handleSelectiveEnhance('fabric')} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10">Enhance Fabric</button><button onClick={() => handleSelectiveEnhance('accessories')} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10">Enhance Accessories</button></div>}
+                <button onClick={() => setIsUpscaleMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-sm text-gray-400 hover:text-white disabled:opacity-30 transition-colors" title="Enhance & Upscale"><ZapIcon className="w-4 h-4 text-yellow-400/80" /></button>
+                {isUpscaleMenuOpen && <div className="absolute top-full left-0 mt-2 w-48 bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl z-20 overflow-hidden"><button onClick={() => handleUpscale('2k')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">Upscale to 2K</button><button onClick={() => handleUpscale('4k')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">Upscale to 4K</button><div className="h-px bg-white/10 my-1"></div><button onClick={() => handleSelectiveEnhance('face')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">Enhance Face</button><button onClick={() => handleSelectiveEnhance('fabric')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">Enhance Fabric</button><button onClick={() => handleSelectiveEnhance('accessories')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">Enhance Accessories</button></div>}
               </div>
-              <button title="Identity Lock (Coming Soon)" disabled className="p-2 rounded-md flex items-center gap-2 text-sm text-gray-300 disabled:opacity-30 cursor-not-allowed"><LayersIcon className="w-4 h-4" /></button>
+              <button title="Identity Lock (Coming Soon)" disabled className="p-2 rounded-md flex items-center gap-2 text-sm text-gray-500 disabled:opacity-30 cursor-not-allowed"><LayersIcon className="w-4 h-4" /></button>
             </div>
             <div className="flex items-center gap-2 text-xs font-mono text-gray-500">
-              {isResultView && <div className="flex items-center gap-1 bg-black/30 border border-gray-700 rounded-lg px-2 py-1">{Math.round(zoom * 100)}%</div>}
-              <button onClick={handleSaveInstance} disabled={isGenerating || !isResultView} className="p-2 rounded-md bg-black/30 border border-gray-700 hover:bg-white/10 text-gray-300 disabled:opacity-30" title="Save to Gallery"><BookmarkIcon className="w-4 h-4" /></button>
+              {isResultView && <div className="flex items-center gap-1 bg-white/5 border border-white/5 rounded-lg px-2 py-1 text-gray-400">{Math.round(zoom * 100)}%</div>}
               <div ref={downloadMenuRef} className="relative">
-                <button onClick={() => setIsDownloadMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md bg-black/30 border border-gray-700 hover:bg-white/10 text-gray-300 disabled:opacity-30" title="Download"><DownloadIcon className="w-4 h-4" /></button>
-                {isDownloadMenuOpen && <div className="absolute top-full right-0 mt-2 w-40 bg-[#1f1f1f] border border-gray-700 rounded-lg shadow-xl z-20"><button onClick={() => handleDownload('png')} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10">PNG</button><button onClick={() => handleDownload('jpeg')} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10">JPEG</button><button onClick={() => handleDownload('webp')} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10">WEBP</button></div>}
+                <button onClick={() => setIsDownloadMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md bg-white/5 border border-white/5 hover:bg-white/10 text-gray-300 disabled:opacity-30 transition-colors" title="Download"><DownloadIcon className="w-4 h-4" /></button>
+                {isDownloadMenuOpen && <div className="absolute top-full right-0 mt-2 w-40 bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl z-20 overflow-hidden"><button onClick={() => handleDownload('png')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">PNG</button><button onClick={() => handleDownload('jpeg')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">JPEG</button><button onClick={() => handleDownload('webp')} className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors">WEBP</button></div>}
               </div>
             </div>
           </div>
@@ -1485,10 +1484,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
             <div className="flex-grow w-full relative overflow-hidden flex justify-center items-center p-4 min-h-0" ref={imageContainerRef} onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave} style={{ cursor: getCursor() }}>
               {isGenerating && <div className="absolute inset-0 z-30 bg-black/50 backdrop-blur-sm flex flex-col items-center justify-center"><Spinner /><p className="mt-4 text-gray-300 font-medium">{loadingMessage}</p></div>}
               {!isResultView ? (
-                <div className="flex flex-col items-center justify-center text-center p-8">
-                  <CubeIcon className="w-16 h-16 text-gray-800 mb-4" />
-                  <h2 className="text-3xl font-sans font-bold text-gray-400">Model Creation Studio</h2>
-                  <p className="text-gray-600 mt-2">Use the panel on the left to generate your first model.</p>
+                <div className="flex flex-col items-center justify-center text-center p-8 max-w-lg mx-auto">
+                  <h2 className="text-xl font-sans font-semibold text-white mb-3">Model Creation Studio</h2>
+                  <p className="text-sm text-gray-400 leading-relaxed max-w-md mx-auto">Use the panel on the left to generate your first model.</p>
                 </div>
               ) : isCompareMode && canUndo ? (
                 <div className="w-full h-full relative flex items-center justify-center"><Compare firstImage={generatedModelUrl!} secondImage={compareModelUrl!} slideMode="drag" className="w-auto h-full rounded-lg" /></div>
@@ -1535,63 +1533,63 @@ const CreateModel: React.FC<CreateModelProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setSelectedTemplateForPreview(null)}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[#1a1a1a] rounded-xl border border-gray-700 max-w-6xl w-full max-h-[90vh] overflow-hidden flex"
+              className="bg-[#1a1a1a]/90 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl max-w-5xl w-full max-h-[85vh] overflow-hidden flex"
             >
               {/* Main Image Area */}
-              <div className="flex-1 flex items-center justify-center bg-black p-8">
+              <div className="flex-1 flex items-center justify-center bg-black/40 p-8 relative">
                 <img
                   src={selectedTemplateForPreview.url}
                   alt={selectedTemplateForPreview.name || 'Template'}
-                  className="max-w-full max-h-full object-contain"
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
                 />
               </div>
 
               {/* Metadata Sidebar */}
-              <div className="w-80 bg-[#1a1a1a] border-l border-gray-700 flex flex-col">
+              <div className="w-80 bg-white/5 border-l border-white/10 flex flex-col">
                 {/* Header */}
-                <div className="p-6 border-b border-gray-700">
-                  <h2 className="text-xl font-semibold text-white mb-2">
+                <div className="p-6 border-b border-white/10">
+                  <h2 className="text-lg font-medium text-white/90 mb-2">
                     {selectedTemplateForPreview.name || 'Template Model'}
                   </h2>
                   {selectedTemplateForPreview.gender && (
-                    <span className="inline-block px-3 py-1 bg-gray-800 text-gray-300 text-sm rounded-full capitalize">
+                    <span className="inline-block px-3 py-1 bg-white/10 border border-white/5 text-gray-200 text-xs font-medium rounded-full capitalize">
                       {selectedTemplateForPreview.gender}
                     </span>
                   )}
                 </div>
 
                 {/* Metadata Content */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                <div className="flex-1 overflow-y-auto p-6 space-y-5">
                   {/* Model ID */}
                   <div>
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Model ID</h3>
-                    <p className="text-sm text-gray-300 font-mono break-all">{selectedTemplateForPreview.id}</p>
+                    <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Model ID</h3>
+                    <p className="text-sm text-gray-200 font-mono break-all bg-white/5 p-2 rounded border border-white/5">{selectedTemplateForPreview.id}</p>
                   </div>
 
                   {/* Gender */}
                   {selectedTemplateForPreview.gender && (
                     <div>
-                      <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Gender</h3>
-                      <p className="text-sm text-gray-300 capitalize">{selectedTemplateForPreview.gender}</p>
+                      <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Gender</h3>
+                      <p className="text-sm text-gray-200 capitalize">{selectedTemplateForPreview.gender}</p>
                     </div>
                   )}
 
                   {/* Tags */}
                   {selectedTemplateForPreview.tags && selectedTemplateForPreview.tags.length > 0 && (
                     <div>
-                      <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Tags</h3>
+                      <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Tags</h3>
                       <div className="flex flex-wrap gap-2">
                         {selectedTemplateForPreview.tags.map((tag, idx) => (
                           <span
                             key={idx}
-                            className="px-3 py-1 bg-gray-800 text-gray-300 text-sm rounded-full"
+                            className="px-2.5 py-1 bg-white/5 border border-white/10 text-gray-300 text-xs rounded-full"
                           >
                             {tag}
                           </span>
@@ -1602,29 +1600,29 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
                   {/* Image URL */}
                   <div>
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Image URL</h3>
-                    <p className="text-xs text-gray-500 font-mono break-all">{selectedTemplateForPreview.url}</p>
+                    <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Image URL</h3>
+                    <p className="text-[10px] text-gray-400 font-mono break-all leading-relaxed">{selectedTemplateForPreview.url}</p>
                   </div>
 
                   {/* Thumbnail URL (if different) */}
                   {selectedTemplateForPreview.thumbnail && selectedTemplateForPreview.thumbnail !== selectedTemplateForPreview.url && (
                     <div>
-                      <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Thumbnail URL</h3>
-                      <p className="text-xs text-gray-500 font-mono break-all">{selectedTemplateForPreview.thumbnail}</p>
+                      <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Thumbnail URL</h3>
+                      <p className="text-[10px] text-gray-400 font-mono break-all leading-relaxed">{selectedTemplateForPreview.thumbnail}</p>
                     </div>
                   )}
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-6 border-t border-gray-700 space-y-3">
+                <div className="p-6 border-t border-white/10 space-y-3 bg-white/5">
                   <button
                     onClick={() => handleSaveTemplateFromModal(selectedTemplateForPreview)}
                     disabled={isSavingTemplate || !currentProjectId}
-                    className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-2.5 px-4 bg-white hover:bg-gray-100 text-black rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                   >
                     {isSavingTemplate ? (
                       <>
-                        <Spinner className="w-4 h-4" />
+                        <Spinner className="w-3.5 h-3.5 text-black" />
                         Saving...
                       </>
                     ) : (
@@ -1633,7 +1631,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
                   </button>
                   <button
                     onClick={() => setSelectedTemplateForPreview(null)}
-                    className="w-full py-3 px-4 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg font-medium transition-colors"
+                    className="w-full py-2.5 px-4 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-lg text-sm font-medium transition-colors"
                   >
                     Close
                   </button>

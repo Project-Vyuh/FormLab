@@ -631,6 +631,7 @@ const App: React.FC = () => {
           notifications={notifications}
           currentUser={currentUser}
           onLogout={handleLogout}
+          hasProjects={projectList.length > 0}
         />
         <div className="flex-grow min-h-0 relative">
           {needsOnboarding ? (

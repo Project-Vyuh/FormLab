@@ -32,27 +32,27 @@ import { loadUnifiedHistory, saveStylingHistory } from '../services/dbService';
 
 // Helper to convert data URL to File
 const urlToFile = async (url: string, filename: string): Promise<File> => {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return new File([blob], filename, { type: blob.type || 'image/png' });
+  const response = await fetch(url);
+  const blob = await response.blob();
+  return new File([blob], filename, { type: blob.type || 'image/png' });
 };
 
 // Helper to convert Blob URL to Data URL (Base64)
 const resolveImageUrl = async (url: string): Promise<string> => {
-    if (url.startsWith('data:')) return url;
-    try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-        });
-    } catch (e) {
-        console.error("Failed to convert blob URL", e);
-        throw new Error("Could not process model image. Please try uploading the model again.");
-    }
+  if (url.startsWith('data:')) return url;
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.error("Failed to convert blob URL", e);
+    throw new Error("Could not process model image. Please try uploading the model again.");
+  }
 };
 
 // Helper for deep copying objects
@@ -67,19 +67,19 @@ const POSE_INSTRUCTIONS = [
 ];
 
 const initialImageProcessing: ImageProcessingSettings = {
-    exposureBias: 0,
-    contrast: 'neutral',
-    colorGrade: 'none',
-    highlightRollOff: 'medium',
-    shadowCrush: 'none',
+  exposureBias: 0,
+  contrast: 'neutral',
+  colorGrade: 'none',
+  highlightRollOff: 'medium',
+  shadowCrush: 'none',
 };
 
 const initialSceneAtmosphere: SceneAtmosphere = {
-    backgroundExposure: 0,
-    backgroundBlur: 'none',
-    vignetting: { strength: 0, shape: 'round', bias: 'center' },
-    lightWrap: 'none',
-    separationContrast: 'neutral',
+  backgroundExposure: 0,
+  backgroundBlur: 'none',
+  vignetting: { strength: 0, shape: 'round', bias: 'center' },
+  lightWrap: 'none',
+  separationContrast: 'neutral',
 };
 
 const initialLightingRig: LightingRig = {
@@ -90,15 +90,15 @@ const initialLightingRig: LightingRig = {
 };
 
 const initialShutterSettings: ShutterSettings = {
-    motionBlur: 0,
-    blurAngle: 0,
-    microGhosting: false,
+  motionBlur: 0,
+  blurAngle: 0,
+  microGhosting: false,
 };
 
 const initialNoiseAndGrain: NoiseAndGrainSettings = {
-    amount: 0,
-    type: 'fine',
-    chromaticAberration: false,
+  amount: 0,
+  type: 'fine',
+  chromaticAberration: false,
 };
 
 const initialStudioEnvironment: StudioEnvironment = { type: 'mid-gray', cycloramaCurve: 0.5 };
@@ -116,32 +116,32 @@ const initialPanelToggles: PanelToggles = {
 };
 
 const initialGenerationSettings: GenerationSettings = {
-    quality: 'standard',
-    studioEnvironment: initialStudioEnvironment,
-    floorSettings: initialFloorSettings,
-    ambientBounce: initialAmbientBounce,
-    ambientOcclusion: initialAmbientOcclusion,
-    shadowSculpting: initialShadowSculpting,
-    photoStyle: 'none',
-    accessoryPrompt: '',
-    shotFraming: 'full',
-    posePrompt: '',
-    negativePrompt: '',
-    aspectRatio: '2:3',
-    poseReferenceUrl: null,
-    poseReferenceFile: null,
-    apertureSettings: { aperture: 5.6, bokehShape: 'round' },
-    lensProfile: '50mm',
-    shutterSettings: initialShutterSettings,
-    lightingRig: initialLightingRig,
-    sceneAtmosphere: initialSceneAtmosphere,
-    imageProcessing: initialImageProcessing,
-    sensorSize: 'full-frame',
-    cameraPosition: { height: 1.5, tilt: 0 },
-    focusPlaneSettings: { focusDistance: 0.5, faceAutofocus: true },
-    cameraProfile: 'none',
-    noiseAndGrain: initialNoiseAndGrain,
-    panelToggles: initialPanelToggles,
+  quality: 'standard',
+  studioEnvironment: initialStudioEnvironment,
+  floorSettings: initialFloorSettings,
+  ambientBounce: initialAmbientBounce,
+  ambientOcclusion: initialAmbientOcclusion,
+  shadowSculpting: initialShadowSculpting,
+  photoStyle: 'none',
+  accessoryPrompt: '',
+  shotFraming: 'full',
+  posePrompt: '',
+  negativePrompt: '',
+  aspectRatio: '2:3',
+  poseReferenceUrl: null,
+  poseReferenceFile: null,
+  apertureSettings: { aperture: 5.6, bokehShape: 'round' },
+  lensProfile: '50mm',
+  shutterSettings: initialShutterSettings,
+  lightingRig: initialLightingRig,
+  sceneAtmosphere: initialSceneAtmosphere,
+  imageProcessing: initialImageProcessing,
+  sensorSize: 'full-frame',
+  cameraPosition: { height: 1.5, tilt: 0 },
+  focusPlaneSettings: { focusDistance: 0.5, faceAutofocus: true },
+  cameraProfile: 'none',
+  noiseAndGrain: initialNoiseAndGrain,
+  panelToggles: initialPanelToggles,
 };
 
 interface ImageStudioProps {
@@ -160,9 +160,9 @@ interface ImageStudioProps {
 type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
 
 const generationModels: { name: string, id: GenerationModel | null, disabled?: boolean, title?: string }[] = [
-    { name: 'Nano Banana', id: 'gemini-2.5-flash-image' },
-    { name: 'Imagen 4', id: 'imagen-4.0-generate-001', disabled: true, title: 'Imagen 4 is for text-to-image generation and not supported in the Image Studio workflow.' },
-    { name: 'Imagen 4 Ultra', id: null, disabled: true, title: 'Imagen 4 Ultra is not yet available.' },
+  { name: 'Nano Banana', id: 'gemini-2.5-flash-image' },
+  { name: 'Imagen 4', id: 'imagen-4.0-generate-001', disabled: true, title: 'Imagen 4 is for text-to-image generation and not supported in the Image Studio workflow.' },
+  { name: 'Imagen 4 Ultra', id: null, disabled: true, title: 'Imagen 4 Ultra is not yet available.' },
 ];
 
 
@@ -182,11 +182,11 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   const [modelImageUrl, setModelImageUrl] = useState<string | null>(null);
   const [outfitStack, setOutfitStack] = useState<OutfitLayer[]>([]);
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(initialGenerationSettings);
-  
+
   // UI Interaction State
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [hasPendingStackChanges, setHasPendingStackChanges] = useState(false);
-  
+
   // Generation & History State (NEW UNIFIED SYSTEM)
   const [generatedModelHistory, setGeneratedModelHistory] = useState<HistoryItem[]>([]);
   const [currentHistoryItemId, setCurrentHistoryItemId] = useState<string | null>(null);
@@ -199,22 +199,22 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  
+
   // Layout State
   const [leftPanelWidth, setLeftPanelWidth] = useState(320);
   const [rightPanelWidth, setRightPanelWidth] = useState(320); // Increased width for new panel
   const [isSheetCollapsed, setIsSheetCollapsed] = useState(true);
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
-  
+
   const [openSections, setOpenSections] = useState({
     composition: true,
     camera: false,
-    lighting: false, 
-    environment: false, 
-    finishing: false, 
+    lighting: false,
+    environment: false,
+    finishing: false,
     advanced: false
   });
-  
+
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
 
   // New Wardrobe State
@@ -241,7 +241,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
   const currentHistoryItem = useMemo(() => generatedModelHistory.find(item => item.id === currentHistoryItemId), [generatedModelHistory, currentHistoryItemId]);
   const displayImageUrl = useMemo(() => currentHistoryItem?.imageUrl || modelImageUrl, [currentHistoryItem, modelImageUrl]);
-  
+
   const canUndo = useMemo(() => !!currentHistoryItem?.parentId, [currentHistoryItem]);
   const canRedo = redoStack.length > 0;
   const hasPendingChanges = hasPendingStackChanges;
@@ -350,7 +350,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  
+
   // --- Local Storage Persistence + Pre-Defined Content ---
   useEffect(() => {
     const loadWardrobeData = async () => {
@@ -382,9 +382,9 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         const savedCategories = localStorage.getItem('formlab-categories');
         if (savedCategories) setCategories(JSON.parse(savedCategories));
         const savedFavorites = localStorage.getItem('formlab-favorites');
-        if(savedFavorites) setFavorites(JSON.parse(savedFavorites));
+        if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
         const savedRecentlyUsed = localStorage.getItem('formlab-recently-used');
-        if(savedRecentlyUsed) setRecentlyUsed(JSON.parse(savedRecentlyUsed));
+        if (savedRecentlyUsed) setRecentlyUsed(JSON.parse(savedRecentlyUsed));
       } catch (e) {
         console.error("Failed to load data from localStorage", e);
       }
@@ -392,7 +392,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
     loadWardrobeData();
   }, []);
-  
+
   useEffect(() => {
     try {
       // Only save user wardrobe items to localStorage, not pre-defined ones
@@ -403,13 +403,13 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       localStorage.setItem('formlab-recently-used', JSON.stringify(recentlyUsed));
     } catch (e) { console.error("Failed to save data to localStorage", e); }
   }, [wardrobe, categories, favorites, recentlyUsed]);
-  
+
   // --- Stack Manipulation Handlers ---
   const handleAddItemToStack = useCallback((item: WardrobeItem) => {
     const newLayer: OutfitLayer = {
-        id: `layer-${Date.now()}`,
-        garment: item,
-        isVisible: true,
+      id: `layer-${Date.now()}`,
+      garment: item,
+      isVisible: true,
     };
     setOutfitStack(prev => [...prev, newLayer]);
     setHasPendingStackChanges(true);
@@ -418,24 +418,24 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
   const handleMoveLayerUp = useCallback((layerId: string) => {
     setOutfitStack(prevStack => {
-        const index = prevStack.findIndex(l => l.id === layerId);
-        if (index <= 1) return prevStack;
-        const newStack = [...prevStack];
-        [newStack[index - 1], newStack[index]] = [newStack[index], newStack[index - 1]];
-        return newStack;
+      const index = prevStack.findIndex(l => l.id === layerId);
+      if (index <= 1) return prevStack;
+      const newStack = [...prevStack];
+      [newStack[index - 1], newStack[index]] = [newStack[index], newStack[index - 1]];
+      return newStack;
     });
     setHasPendingStackChanges(true);
   }, []);
 
   const handleMoveLayerDown = useCallback((layerId: string) => {
-      setOutfitStack(prevStack => {
-          const index = prevStack.findIndex(l => l.id === layerId);
-          if (index === -1 || index >= prevStack.length - 1) return prevStack;
-          const newStack = [...prevStack];
-          [newStack[index + 1], newStack[index]] = [newStack[index], newStack[index + 1]];
-          return newStack;
-      });
-      setHasPendingStackChanges(true);
+    setOutfitStack(prevStack => {
+      const index = prevStack.findIndex(l => l.id === layerId);
+      if (index === -1 || index >= prevStack.length - 1) return prevStack;
+      const newStack = [...prevStack];
+      [newStack[index + 1], newStack[index]] = [newStack[index], newStack[index + 1]];
+      return newStack;
+    });
+    setHasPendingStackChanges(true);
   }, []);
 
   const handleToggleVisibility = useCallback((layerId: string) => {
@@ -446,13 +446,13 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   const handleRemoveLayer = useCallback((layerId: string) => {
     setOutfitStack(prev => prev.filter(l => l.id !== layerId));
     setHasPendingStackChanges(true);
-    if(selectedLayerId === layerId) setSelectedLayerId(null);
+    if (selectedLayerId === layerId) setSelectedLayerId(null);
   }, [selectedLayerId]);
-  
+
   const handleSelectLayer = useCallback((layerId: string | null) => {
     setSelectedLayerId(layerId);
   }, []);
-  
+
   const handleQuickReplace = useCallback((category: string) => {
     setToastMessage(`Quick Replace for category "${category}" activated.`);
     setSelectedCategories([category]);
@@ -470,63 +470,63 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     setError(null);
 
     try {
-        const resolvedBaseImage = await resolveImageUrl(modelImageUrl);
-        const visibleGarmentLayers = outfitStack.filter(l => l.isVisible && l.garment);
+      const resolvedBaseImage = await resolveImageUrl(modelImageUrl);
+      const visibleGarmentLayers = outfitStack.filter(l => l.isVisible && l.garment);
 
-        if (visibleGarmentLayers.length === 0) {
-            handleStartOver();
-            return;
+      if (visibleGarmentLayers.length === 0) {
+        handleStartOver();
+        return;
+      }
+
+      let currentImageUrl = resolvedBaseImage;
+
+      for (let i = 0; i < visibleGarmentLayers.length; i++) {
+        const layer = visibleGarmentLayers[i];
+        setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
+        const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
+        currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings);
+      }
+
+      // Upload to Firebase Storage if user is logged in and result is base64
+      let finalImageUrl = currentImageUrl;
+      if (currentUser && isBase64Url(currentImageUrl)) {
+        try {
+          finalImageUrl = await uploadBase64Image(
+            currentImageUrl,
+            currentUser.uid,
+            'tryons',
+            `tryon_${Date.now()}.jpg`,
+            currentProjectId || undefined
+          );
+          console.log('Try-on image uploaded to Firebase Storage:', finalImageUrl);
+        } catch (error) {
+          console.error('Failed to upload try-on image to Firebase Storage, using base64:', error);
+          // Fallback to base64 if upload fails
         }
+      }
 
-        let currentImageUrl = resolvedBaseImage;
+      const newHistoryItem: HistoryItem = {
+        id: `hist-${Date.now()}`,
+        parentId: currentHistoryItemId,
+        imageUrl: finalImageUrl,
+        prompt: "Applied " + visibleGarmentLayers.map(l => l.garment!.name).join(', '),
+        settings: deepCopy(generationSettings),
+        modelName: "gemini-2.5-flash-image",
+        isStarred: false,
+        type: 'try-on',
+        baseModelId: selectedStylingModel!.baseModelId,
+      };
 
-        for (let i = 0; i < visibleGarmentLayers.length; i++) {
-            const layer = visibleGarmentLayers[i];
-            setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
-            const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
-            currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings);
-        }
-
-        // Upload to Firebase Storage if user is logged in and result is base64
-        let finalImageUrl = currentImageUrl;
-        if (currentUser && isBase64Url(currentImageUrl)) {
-            try {
-                finalImageUrl = await uploadBase64Image(
-                    currentImageUrl,
-                    currentUser.uid,
-                    'tryons',
-                    `tryon_${Date.now()}.jpg`,
-                    currentProjectId || undefined
-                );
-                console.log('Try-on image uploaded to Firebase Storage:', finalImageUrl);
-            } catch (error) {
-                console.error('Failed to upload try-on image to Firebase Storage, using base64:', error);
-                // Fallback to base64 if upload fails
-            }
-        }
-
-        const newHistoryItem: HistoryItem = {
-            id: `hist-${Date.now()}`,
-            parentId: currentHistoryItemId,
-            imageUrl: finalImageUrl,
-            prompt: "Applied " + visibleGarmentLayers.map(l => l.garment!.name).join(', '),
-            settings: deepCopy(generationSettings),
-            modelName: "gemini-2.5-flash-image",
-            isStarred: false,
-            type: 'try-on',
-            baseModelId: selectedStylingModel!.baseModelId,
-        };
-
-        setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
-        setCurrentHistoryItemId(newHistoryItem.id);
-        setRedoStack([]);
-        setHasPendingStackChanges(false);
+      setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
+      setCurrentHistoryItemId(newHistoryItem.id);
+      setRedoStack([]);
+      setHasPendingStackChanges(false);
 
     } catch (err) {
-        setError(getFriendlyErrorMessage(err, 'Image generation failed'));
+      setError(getFriendlyErrorMessage(err, 'Image generation failed'));
     } finally {
-        setIsLoading(false);
-        setLoadingMessage('');
+      setIsLoading(false);
+      setLoadingMessage('');
     }
   }, [isLoading, hasPendingStackChanges, modelImageUrl, outfitStack, generationSettings, currentHistoryItemId]);
 
@@ -536,12 +536,12 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     const rootItem = generatedModelHistory.find(item => !item.parentId);
     setOutfitStack([baseLayer]);
     if (rootItem) {
-        setCurrentHistoryItemId(rootItem.id);
+      setCurrentHistoryItemId(rootItem.id);
     }
     setHasPendingStackChanges(false);
     setSelectedLayerId(null);
   }, [modelImageUrl, generatedModelHistory]);
-  
+
   const handleDownloadImage = useCallback(() => {
     if (!displayImageUrl) return;
     const link = document.createElement('a');
@@ -554,65 +554,65 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
   const handleCopySettings = useCallback(() => {
     try {
-        navigator.clipboard.writeText(JSON.stringify(generationSettings, null, 2));
-        setToastMessage('Creative settings copied to clipboard!');
+      navigator.clipboard.writeText(JSON.stringify(generationSettings, null, 2));
+      setToastMessage('Creative settings copied to clipboard!');
     } catch (err) {
-        setToastMessage('Failed to copy settings.');
-        console.error('Failed to copy settings to clipboard:', err);
+      setToastMessage('Failed to copy settings.');
+      console.error('Failed to copy settings to clipboard:', err);
     }
   }, [generationSettings]);
-  
+
   const handleUseAsVideoReference = useCallback(() => {
     if (!displayImageUrl) return;
     onNavigateToVideoCreator(displayImageUrl);
   }, [displayImageUrl, onNavigateToVideoCreator]);
-  
+
   const handleLeftDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = leftPanelWidth;
     const handleMouseMove = (moveEvent: MouseEvent) => {
-        const newWidth = startWidth + (moveEvent.clientX - startX);
-        setLeftPanelWidth(Math.max(280, Math.min(newWidth, 500)));
+      const newWidth = startWidth + (moveEvent.clientX - startX);
+      setLeftPanelWidth(Math.max(280, Math.min(newWidth, 500)));
     };
     const handleMouseUp = () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
   }, [leftPanelWidth]);
 
   const handleRightDrag = useCallback((e: React.MouseEvent) => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = rightPanelWidth;
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-          const newWidth = startWidth - (moveEvent.clientX - startX);
-          setRightPanelWidth(Math.max(280, Math.min(newWidth, 450)));
-      };
-      const handleMouseUp = () => {
-          window.removeEventListener('mousemove', handleMouseMove);
-          window.removeEventListener('mouseup', handleMouseUp);
-      };
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = rightPanelWidth;
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const newWidth = startWidth - (moveEvent.clientX - startX);
+      setRightPanelWidth(Math.max(280, Math.min(newWidth, 450)));
+    };
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
   }, [rightPanelWidth]);
-  
+
   const handlePoseSelect = useCallback((poseIndex: number) => {
     setCurrentPoseIndex(poseIndex);
   }, []);
-  
+
   const restoreHistoryItem = useCallback((id: string, source: 'ui' | 'undo' | 'redo') => {
     const item = generatedModelHistory.find(h => h.id === id);
     if (!item) return;
 
     if (source === 'undo' && currentHistoryItem) {
-        setRedoStack(prev => [currentHistoryItem.id, ...prev]);
+      setRedoStack(prev => [currentHistoryItem.id, ...prev]);
     } else if (source === 'redo') {
-        setRedoStack(prev => prev.slice(1));
+      setRedoStack(prev => prev.slice(1));
     } else if (source === 'ui') {
-        setRedoStack([]);
+      setRedoStack([]);
     }
 
     setCurrentHistoryItemId(id);
@@ -622,60 +622,60 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   }, [generatedModelHistory, currentHistoryItem]);
 
   const handleUndo = () => {
-    if(canUndo && currentHistoryItem) restoreHistoryItem(currentHistoryItem.parentId!, 'undo');
+    if (canUndo && currentHistoryItem) restoreHistoryItem(currentHistoryItem.parentId!, 'undo');
   }
   const handleRedo = () => {
-    if(canRedo) restoreHistoryItem(redoStack[0], 'redo');
+    if (canRedo) restoreHistoryItem(redoStack[0], 'redo');
   }
 
   const handleToggleStar = (id: string) => {
     setGeneratedModelHistory(prev => prev.map(item => item.id === id ? { ...item, isStarred: !item.isStarred } : item));
   };
-  
+
   const handleRename = (id: string, name: string) => {
     setGeneratedModelHistory(prev => prev.map(item => item.id === id ? { ...item, name } : item));
   };
 
   const handleDeleteVersion = (id: string) => {
     setGeneratedModelHistory(prev => {
-        const itemToDelete = prev.find(i => i.id === id);
-        if (!itemToDelete) return prev;
-        const parentId = itemToDelete.parentId;
+      const itemToDelete = prev.find(i => i.id === id);
+      if (!itemToDelete) return prev;
+      const parentId = itemToDelete.parentId;
 
-        if (id === currentHistoryItemId) {
-            setCurrentHistoryItemId(parentId);
-        }
+      if (id === currentHistoryItemId) {
+        setCurrentHistoryItemId(parentId);
+      }
 
-        return prev
-            .filter(i => i.id !== id)
-            .map(i => {
-                if (i.parentId === id) {
-                    return { ...i, parentId: parentId };
-                }
-                return i;
-            });
+      return prev
+        .filter(i => i.id !== id)
+        .map(i => {
+          if (i.parentId === id) {
+            return { ...i, parentId: parentId };
+          }
+          return i;
+        });
     });
   };
-  
+
   const handleAddLight = (role: LightRole) => {
     const newLight: Light = {
-        id: `${role}-${Date.now()}`,
-        type: 'area',
-        role,
-        position: { angle: 0, distance: 0.7, elevation: 0 },
-        power: 0, size: 0.5, kelvin: 5600, tint: 0, saturation: 1
+      id: `${role}-${Date.now()}`,
+      type: 'area',
+      role,
+      position: { angle: 0, distance: 0.7, elevation: 0 },
+      power: 0, size: 0.5, kelvin: 5600, tint: 0, saturation: 1
     };
-     setGenerationSettings(prev => ({ ...prev, lightingRig: { ...prev.lightingRig, lights: [...prev.lightingRig.lights, newLight] } }));
+    setGenerationSettings(prev => ({ ...prev, lightingRig: { ...prev.lightingRig, lights: [...prev.lightingRig.lights, newLight] } }));
     setSelectedLightId(newLight.id);
   };
-  
+
   const updateLight = (id: string, updates: Partial<Light> | { position: Partial<Light['position']> }) => {
     setGenerationSettings(prev => ({ ...prev, lightingRig: { ...prev.lightingRig, lights: prev.lightingRig.lights.map(l => { if (l.id === id) { if ('position' in updates) { return { ...l, position: { ...l.position, ...updates.position } }; } return { ...l, ...updates }; } return l; }) } }));
   };
 
   const removeLight = (id: string) => {
-      setGenerationSettings(prev => ({ ...prev, lightingRig: { ...prev.lightingRig, lights: prev.lightingRig.lights.filter(l => l.id !== id) } }));
-      if (selectedLightId === id) setSelectedLightId(null);
+    setGenerationSettings(prev => ({ ...prev, lightingRig: { ...prev.lightingRig, lights: prev.lightingRig.lights.filter(l => l.id !== id) } }));
+    if (selectedLightId === id) setSelectedLightId(null);
   };
 
   // --- Wardrobe Library Handlers ---
@@ -687,16 +687,16 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     handleAddItemToStack(item);
     setSelectedProduct(null); // Close flyout on apply
   }
-  
+
   const handleSelectForReplacement = useCallback((item: WardrobeItem) => {
     if (!selectedLayerId) {
-        setToastMessage("Select a layer to replace first.");
-        return;
+      setToastMessage("Select a layer to replace first.");
+      return;
     }
     const newLayer: OutfitLayer = {
-        id: `layer-${Date.now()}`,
-        garment: item,
-        isVisible: true,
+      id: `layer-${Date.now()}`,
+      garment: item,
+      isVisible: true,
     };
     setOutfitStack(prev => prev.map(l => l.id === selectedLayerId ? newLayer : l));
     setHasPendingStackChanges(true);
@@ -707,18 +707,18 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     const catLower = category.toLowerCase();
     const isSpecialCategory = catLower === 'favorites' || catLower === 'recently used';
     setSelectedCategories(prev => {
-        const isSelected = prev.includes(catLower);
-        if (isSelected) return prev.filter(c => c !== catLower);
-        if (isSpecialCategory) return [catLower];
-        const normalCategories = prev.filter(c => c !== 'favorites' && c !== 'recently used');
-        return [...normalCategories, catLower];
+      const isSelected = prev.includes(catLower);
+      if (isSelected) return prev.filter(c => c !== catLower);
+      if (isSpecialCategory) return [catLower];
+      const normalCategories = prev.filter(c => c !== 'favorites' && c !== 'recently used');
+      return [...normalCategories, catLower];
     });
   }
 
   const handleToggleFavorite = (itemId: string) => {
     setFavorites(prev => prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]);
   };
-  
+
   const handleAddProduct = useCallback(async (productData: Omit<WardrobeItem, 'id' | 'url'> & { file: File }) => {
     const { file, ...rest } = productData;
     const productId = `item-${Date.now()}`;
@@ -729,16 +729,16 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     // Upload to Firebase Storage if user is logged in
     let productUrl = tempBlobUrl;
     if (currentUser) {
-        try {
-            productUrl = await uploadFile(file, currentUser.uid, 'wardrobe');
-            console.log('Wardrobe item uploaded to Firebase Storage:', productUrl);
+      try {
+        productUrl = await uploadFile(file, currentUser.uid, 'wardrobe');
+        console.log('Wardrobe item uploaded to Firebase Storage:', productUrl);
 
-            // Revoke the temporary blob URL to free memory
-            URL.revokeObjectURL(tempBlobUrl);
-        } catch (error) {
-            console.error('Failed to upload wardrobe item to Firebase Storage, using blob URL:', error);
-            // Keep blob URL if upload fails (tempBlobUrl is already assigned to productUrl)
-        }
+        // Revoke the temporary blob URL to free memory
+        URL.revokeObjectURL(tempBlobUrl);
+      } catch (error) {
+        console.error('Failed to upload wardrobe item to Firebase Storage, using blob URL:', error);
+        // Keep blob URL if upload fails (tempBlobUrl is already assigned to productUrl)
+      }
     }
 
     const newProduct: WardrobeItem = { id: productId, url: productUrl, ...rest };
@@ -748,51 +748,51 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
   const handleCreateCategory = useCallback((name: string) => {
     if (name && name.trim()) {
-        const trimmedName = name.trim();
-        if (!categories.find(c => c.toLowerCase() === trimmedName.toLowerCase())) {
-            setCategories(prev => [...prev, trimmedName]);
-            setToastMessage(`Category "${trimmedName}" created.`);
-        } else { setToastMessage(`Category "${trimmedName}" already exists.`); }
+      const trimmedName = name.trim();
+      if (!categories.find(c => c.toLowerCase() === trimmedName.toLowerCase())) {
+        setCategories(prev => [...prev, trimmedName]);
+        setToastMessage(`Category "${trimmedName}" created.`);
+      } else { setToastMessage(`Category "${trimmedName}" already exists.`); }
     }
   }, [categories]);
 
   const handleRenameCategory = useCallback((oldName: string, newName: string) => {
-      if (!newName || !newName.trim() || oldName.toLowerCase() === newName.toLowerCase() || oldName === 'Uncategorized') return;
-      const trimmedNewName = newName.trim();
-      if (categories.find(c => c.toLowerCase() === trimmedNewName.toLowerCase())) {
-          setToastMessage(`Category "${trimmedNewName}" already exists.`);
-          return;
-      }
-      setCategories(prev => prev.map(c => (c === oldName ? trimmedNewName : c)));
-      setWardrobe(prev => prev.map(item => (item.category === oldName ? { ...item, category: trimmedNewName } : item)));
-      setToastMessage(`Renamed "${oldName}" to "${trimmedNewName}".`);
+    if (!newName || !newName.trim() || oldName.toLowerCase() === newName.toLowerCase() || oldName === 'Uncategorized') return;
+    const trimmedNewName = newName.trim();
+    if (categories.find(c => c.toLowerCase() === trimmedNewName.toLowerCase())) {
+      setToastMessage(`Category "${trimmedNewName}" already exists.`);
+      return;
+    }
+    setCategories(prev => prev.map(c => (c === oldName ? trimmedNewName : c)));
+    setWardrobe(prev => prev.map(item => (item.category === oldName ? { ...item, category: trimmedNewName } : item)));
+    setToastMessage(`Renamed "${oldName}" to "${trimmedNewName}".`);
   }, [categories]);
 
   const handleDeleteCategoryRequest = (category: string) => {
-      if (category === 'Uncategorized') return;
-      setDeleteConfirmation({ type: 'category', item: category });
+    if (category === 'Uncategorized') return;
+    setDeleteConfirmation({ type: 'category', item: category });
   };
 
   const handleDeleteProductRequest = (product: WardrobeItem) => {
-      setDeleteConfirmation({ type: 'product', item: product });
+    setDeleteConfirmation({ type: 'product', item: product });
   };
-  
+
   const handleConfirmDelete = () => {
     if (!deleteConfirmation) return;
     if (deleteConfirmation.type === 'category') {
-        const categoryToDelete = deleteConfirmation.item as string;
-        setWardrobe(prev => prev.map(item => item.category.toLowerCase() === categoryToDelete.toLowerCase() ? { ...item, category: 'Uncategorized' } : item));
-        setCategories(prev => prev.filter(c => c.toLowerCase() !== categoryToDelete.toLowerCase()));
-        setSelectedCategories(prev => prev.filter(c => c.toLowerCase() !== categoryToDelete.toLowerCase()));
-        setToastMessage(`Category "${categoryToDelete}" deleted. Items moved to "Uncategorized".`);
+      const categoryToDelete = deleteConfirmation.item as string;
+      setWardrobe(prev => prev.map(item => item.category.toLowerCase() === categoryToDelete.toLowerCase() ? { ...item, category: 'Uncategorized' } : item));
+      setCategories(prev => prev.filter(c => c.toLowerCase() !== categoryToDelete.toLowerCase()));
+      setSelectedCategories(prev => prev.filter(c => c.toLowerCase() !== categoryToDelete.toLowerCase()));
+      setToastMessage(`Category "${categoryToDelete}" deleted. Items moved to "Uncategorized".`);
     } else {
-        const productToDelete = deleteConfirmation.item as WardrobeItem;
-        setWardrobe(prev => prev.filter(item => item.id !== productToDelete.id));
-        setToastMessage(`Product "${productToDelete.name}" deleted.`);
+      const productToDelete = deleteConfirmation.item as WardrobeItem;
+      setWardrobe(prev => prev.filter(item => item.id !== productToDelete.id));
+      setToastMessage(`Product "${productToDelete.name}" deleted.`);
     }
     setDeleteConfirmation(null);
   };
-  
+
   const handleFilterChange = (filterType: string, value: string) => {
     setActiveFilters(prev => {
       const currentValues = prev[filterType] || [];
@@ -810,86 +810,85 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     if (!displayImageUrl) return;
     setIsEnhancingPrompt(true);
     try {
-        const enhancedText = await enhanceRevisionPrompt(displayImageUrl, revisionPrompt, 'A full body shot of a fashion model');
-        setRevisionPrompt(enhancedText);
-        setToastMessage(revisionPrompt.trim() ? "Prompt enhanced!" : "Suggestion provided!");
+      const enhancedText = await enhanceRevisionPrompt(displayImageUrl, revisionPrompt, 'A full body shot of a fashion model');
+      setRevisionPrompt(enhancedText);
+      setToastMessage(revisionPrompt.trim() ? "Prompt enhanced!" : "Suggestion provided!");
     } catch (err) {
-        setError(getFriendlyErrorMessage(err, "Failed to enhance prompt"));
+      setError(getFriendlyErrorMessage(err, "Failed to enhance prompt"));
     } finally {
-        setIsEnhancingPrompt(false);
+      setIsEnhancingPrompt(false);
     }
   }, [displayImageUrl, revisionPrompt]);
 
   const handlePromptRevision = useCallback(async () => {
-      if (!displayImageUrl || !revisionPrompt.trim()) {
-          setToastMessage("Please enter a revision prompt.");
-          return;
+    if (!displayImageUrl || !revisionPrompt.trim()) {
+      setToastMessage("Please enter a revision prompt.");
+      return;
+    }
+    setIsLoading(true);
+    setLoadingMessage('Applying text revision...');
+    setError(null);
+    try {
+      const result = await reviseGeneratedImage(displayImageUrl, revisionPrompt, generationSettings);
+
+      // Upload to Firebase Storage if user is logged in and result is base64
+      let finalImageUrl = result;
+      if (currentUser && isBase64Url(result)) {
+        try {
+          finalImageUrl = await uploadBase64Image(
+            result,
+            currentUser.uid,
+            'tryons',
+            `revision_${Date.now()}.jpg`,
+            currentProjectId || undefined
+          );
+          console.log('Revision image uploaded to Firebase Storage:', finalImageUrl);
+        } catch (error) {
+          console.error('Failed to upload revision to Firebase Storage, using base64:', error);
+          // Fallback to base64 if upload fails
+        }
       }
-      setIsLoading(true);
-      setLoadingMessage('Applying text revision...');
-      setError(null);
-      try {
-          const result = await reviseGeneratedImage(displayImageUrl, revisionPrompt, generationSettings);
 
-          // Upload to Firebase Storage if user is logged in and result is base64
-          let finalImageUrl = result;
-          if (currentUser && isBase64Url(result)) {
-              try {
-                  finalImageUrl = await uploadBase64Image(
-                      result,
-                      currentUser.uid,
-                      'tryons',
-                      `revision_${Date.now()}.jpg`,
-                      currentProjectId || undefined
-                  );
-                  console.log('Revision image uploaded to Firebase Storage:', finalImageUrl);
-              } catch (error) {
-                  console.error('Failed to upload revision to Firebase Storage, using base64:', error);
-                  // Fallback to base64 if upload fails
-              }
-          }
+      const newHistoryItem: HistoryItem = {
+        id: `hist-${Date.now()}`,
+        parentId: currentHistoryItemId,
+        imageUrl: finalImageUrl,
+        prompt: revisionPrompt,
+        settings: deepCopy(generationSettings),
+        modelName: "gemini-2.5-flash-image",
+        isStarred: false,
+        type: 'try-on-revision',
+        baseModelId: selectedStylingModel!.baseModelId,
+      };
 
-          const newHistoryItem: HistoryItem = {
-              id: `hist-${Date.now()}`,
-              parentId: currentHistoryItemId,
-              imageUrl: finalImageUrl,
-              prompt: revisionPrompt,
-              settings: deepCopy(generationSettings),
-              modelName: "gemini-2.5-flash-image",
-              isStarred: false,
-              type: 'try-on-revision',
-              baseModelId: selectedStylingModel!.baseModelId,
-          };
+      setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
+      setCurrentHistoryItemId(newHistoryItem.id);
+      setRedoStack([]);
+      setRevisionPrompt('');
+      setToastMessage("Revision applied successfully!");
 
-          setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
-          setCurrentHistoryItemId(newHistoryItem.id);
-          setRedoStack([]);
-          setRevisionPrompt('');
-          setToastMessage("Revision applied successfully!");
-
-      } catch (err) {
-          setError(getFriendlyErrorMessage(err, 'Failed to apply revision'));
-      } finally {
-          setIsLoading(false);
-          setLoadingMessage('');
-      }
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Failed to apply revision'));
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
   }, [displayImageUrl, revisionPrompt, generationSettings, currentHistoryItemId]);
 
   if (!selectedStylingModel) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-white dark:bg-[#1a1a1a] text-center p-4">
-          <UserIcon className="w-16 h-16 text-gray-400 dark:text-gray-500 mb-6"/>
-          <h2 className="text-3xl font-sans font-semibold text-gray-800 dark:text-gray-200">No Model Selected</h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400 mt-2 max-w-md">
-            Select a model in Create Model and click "Proceed to Styling" to begin.
-          </p>
-          <button onClick={onNavigateToCreateModel} className="mt-8 px-8 py-3 text-base font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors">
-              Go to Create Model
-          </button>
+      <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a1a1a] text-center p-4">
+        <h2 className="text-xl font-sans font-semibold text-white mb-3">No Model Selected</h2>
+        <p className="text-sm text-gray-400 leading-relaxed max-w-md mx-auto">
+          Select a model in Create Model and click "Proceed to Styling" to begin.
+        </p>
+        <button onClick={onNavigateToCreateModel} className="mt-8 px-6 py-2 text-xs font-medium text-white bg-[#318CE7] rounded-lg hover:bg-[#2b7bc0] transition-all shadow-lg shadow-blue-500/20">
+          Go to Create Model
+        </button>
       </div>
     );
   }
-  
+
   return (
     <div className="h-full relative">
       <motion.div
@@ -898,27 +897,27 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <div className="h-16 border-b border-gray-800 bg-[#1a1a1a] flex items-center justify-between px-6 flex-shrink-0 z-20">
-            <h1 className="text-lg font-sans font-semibold text-gray-200">Image Studio</h1>
-            <div className="flex items-center gap-4">
-                <button onClick={handleStartOver} className="text-sm text-gray-400 hover:text-white">Start Over</button>
-                <button
-                    onClick={() => {
-                        if (displayImageUrl) {
-                            navigator.clipboard.writeText(window.location.href);
-                            setToastMessage('Link copied to clipboard!');
-                        }
-                    }}
-                    disabled={!displayImageUrl}
-                    className="p-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Share image"
-                >
-                    <Share2Icon className="w-5 h-5" />
-                </button>
-                <button onClick={handleUseAsVideoReference} disabled={!displayImageUrl} className="px-5 py-2 bg-gray-100 hover:bg-white text-gray-900 text-sm font-bold rounded-lg shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                    Proceed to Video Generation <ChevronRightIcon className="w-4 h-4" />
-                </button>
-            </div>
+        <div className="h-14 border-b border-white/5 bg-[#1a1a1a]/80 backdrop-blur-md flex items-center justify-between px-6 flex-shrink-0 z-20">
+          <h1 className="text-[15px] font-medium text-white/90">Image Studio</h1>
+          <div className="flex items-center gap-3">
+            <button onClick={handleStartOver} className="text-[13px] font-medium text-gray-400 hover:text-white transition-colors">Start Over</button>
+            <button
+              onClick={() => {
+                if (displayImageUrl) {
+                  navigator.clipboard.writeText(window.location.href);
+                  setToastMessage('Link copied to clipboard!');
+                }
+              }}
+              disabled={!displayImageUrl}
+              className="p-2 bg-white/5 hover:bg-white/10 border border-white/5 text-gray-200 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Share image"
+            >
+              <Share2Icon className="w-4 h-4" />
+            </button>
+            <button onClick={handleUseAsVideoReference} disabled={!displayImageUrl} className="px-4 py-1.5 bg-white hover:bg-gray-100 text-black text-[13px] font-semibold rounded-lg shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              Proceed to Video Generation <ChevronRightIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-row flex-grow min-h-0">
@@ -932,7 +931,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                   generationSettings={generationSettings}
                   onSettingsChange={setGenerationSettings}
                   openSections={openSections}
-                  onToggleSection={(section) => setOpenSections(prev => ({...prev, [section]: !prev[section]}))}
+                  onToggleSection={(section) => setOpenSections(prev => ({ ...prev, [section]: !prev[section] }))}
                   onPanelToggle={handlePanelToggle}
                   isGenerating={isLoading}
                   selectedLightId={selectedLightId}
@@ -977,27 +976,27 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           )}
 
           <div className="flex-grow h-full flex flex-col items-center justify-center relative overflow-hidden bg-[#EEEEEE] dark:bg-[#1a1a1a]">
-             <div className="w-full h-full flex flex-col">
-                <div className="flex-grow relative min-h-0">
-                    <Canvas
-                      displayImageUrl={displayImageUrl} onStartOver={handleStartOver} isLoading={isLoading}
-                      loadingMessage={loadingMessage} onSelectPose={handlePoseSelect}
-                      poseInstructions={POSE_INSTRUCTIONS} currentPoseIndex={currentPoseIndex} availablePoseKeys={[]}
-                      aspectRatio={generationSettings.aspectRatio ?? '2:3'} onUndo={handleUndo} onRedo={handleRedo}
-                      canUndo={canUndo} canRedo={canRedo} isStudioEmpty={!modelImageUrl}
-                    />
-                </div>
-                {generatedModelHistory.length > 0 && !isMobileView && (
-                    <VersionHistoryPanel 
-                        history={generatedModelHistory}
-                        currentHistoryItemId={currentHistoryItemId}
-                        onSelectVersion={(id) => restoreHistoryItem(id, 'ui')}
-                        onDeleteVersion={handleDeleteVersion}
-                        onToggleStar={handleToggleStar}
-                        onRenameVersion={handleRename}
-                    />
-                )}
-             </div>
+            <div className="w-full h-full flex flex-col">
+              <div className="flex-grow relative min-h-0">
+                <Canvas
+                  displayImageUrl={displayImageUrl} onStartOver={handleStartOver} isLoading={isLoading}
+                  loadingMessage={loadingMessage} onSelectPose={handlePoseSelect}
+                  poseInstructions={POSE_INSTRUCTIONS} currentPoseIndex={currentPoseIndex} availablePoseKeys={[]}
+                  aspectRatio={generationSettings.aspectRatio ?? '2:3'} onUndo={handleUndo} onRedo={handleRedo}
+                  canUndo={canUndo} canRedo={canRedo} isStudioEmpty={!modelImageUrl}
+                />
+              </div>
+              {generatedModelHistory.length > 0 && !isMobileView && (
+                <VersionHistoryPanel
+                  history={generatedModelHistory}
+                  currentHistoryItemId={currentHistoryItemId}
+                  onSelectVersion={(id) => restoreHistoryItem(id, 'ui')}
+                  onDeleteVersion={handleDeleteVersion}
+                  onToggleStar={handleToggleStar}
+                  onRenameVersion={handleRename}
+                />
+              )}
+            </div>
           </div>
 
           {!isMobileView && (
@@ -1026,24 +1025,24 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             </>
           )}
         </div>
-        
+
         {isMobileView && (
-            <RightPanelContent
-                isSheet isSheetCollapsed={isSheetCollapsed} onToggleSheet={() => setIsSheetCollapsed(prev => !prev)}
-                error={error} outfitStack={outfitStack} onMoveLayerUp={handleMoveLayerUp} onMoveLayerDown={handleMoveLayerDown}
-                onToggleVisibility={handleToggleVisibility} onRemoveLayer={handleRemoveLayer}
-                onSelectLayer={handleSelectLayer} selectedLayerId={selectedLayerId} onQuickReplace={handleQuickReplace}
-                modelImageUrl={modelImageUrl}
-                isLoading={isLoading} 
-                onGenerate={handleGenerate}
-                hasPendingChanges={hasPendingChanges}
-                onDownloadImage={handleDownloadImage}
-                onUseAsVideoReference={handleUseAsVideoReference}
-                onCopySettings={handleCopySettings}
-            />
+          <RightPanelContent
+            isSheet isSheetCollapsed={isSheetCollapsed} onToggleSheet={() => setIsSheetCollapsed(prev => !prev)}
+            error={error} outfitStack={outfitStack} onMoveLayerUp={handleMoveLayerUp} onMoveLayerDown={handleMoveLayerDown}
+            onToggleVisibility={handleToggleVisibility} onRemoveLayer={handleRemoveLayer}
+            onSelectLayer={handleSelectLayer} selectedLayerId={selectedLayerId} onQuickReplace={handleQuickReplace}
+            modelImageUrl={modelImageUrl}
+            isLoading={isLoading}
+            onGenerate={handleGenerate}
+            hasPendingChanges={hasPendingChanges}
+            onDownloadImage={handleDownloadImage}
+            onUseAsVideoReference={handleUseAsVideoReference}
+            onCopySettings={handleCopySettings}
+          />
         )}
       </motion.div>
-      
+
       <ProductDetailsFlyout
         item={selectedProduct} onClose={() => setSelectedProduct(null)}
         onApply={handleApplyFromFlyout} onReplace={handleSelectForReplacement}
@@ -1055,7 +1054,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       <ConfirmationModal
         isOpen={!!deleteConfirmation} onClose={() => setDeleteConfirmation(null)}
         onConfirm={handleConfirmDelete} title={`Delete ${deleteConfirmation?.type}`}
-        message={ deleteConfirmation?.type === 'category' ? `Are you sure you want to delete the "${deleteConfirmation.item}" category? All items within it will be moved to "Uncategorized".` : `Are you sure you want to delete this product? This action cannot be undone.` }
+        message={deleteConfirmation?.type === 'category' ? `Are you sure you want to delete the "${deleteConfirmation.item}" category? All items within it will be moved to "Uncategorized".` : `Are you sure you want to delete this product? This action cannot be undone.`}
       />
       <AnimatePresence>
         {toastMessage && (

@@ -21,9 +21,10 @@ const SyncStatusIndicator: React.FC = () => {
       case 'synced':
         return {
           icon: CloudIcon,
-          color: 'text-green-400',
-          bgColor: 'bg-green-500/10',
-          borderColor: 'border-green-500/30',
+          color: 'text-green-500', // Keep icon green for status
+          textColor: 'text-gray-500', // Subtle text
+          bgColor: 'bg-transparent',
+          borderColor: 'border-transparent',
           label: 'Synced',
           description: 'All changes saved to cloud',
         };
@@ -31,8 +32,9 @@ const SyncStatusIndicator: React.FC = () => {
         return {
           icon: RefreshCwIcon,
           color: 'text-blue-400',
-          bgColor: 'bg-blue-500/10',
-          borderColor: 'border-blue-500/30',
+          textColor: 'text-blue-400',
+          bgColor: 'bg-transparent',
+          borderColor: 'border-transparent',
           label: 'Syncing...',
           description: 'Uploading changes to cloud',
           animate: true,
@@ -41,8 +43,9 @@ const SyncStatusIndicator: React.FC = () => {
         return {
           icon: WifiOffIcon,
           color: 'text-gray-400',
-          bgColor: 'bg-gray-500/10',
-          borderColor: 'border-gray-500/30',
+          textColor: 'text-gray-500',
+          bgColor: 'bg-transparent',
+          borderColor: 'border-transparent',
           label: 'Offline',
           description: 'No connection, will sync when online',
         };
@@ -50,8 +53,9 @@ const SyncStatusIndicator: React.FC = () => {
         return {
           icon: XCircleIcon,
           color: 'text-red-400',
-          bgColor: 'bg-red-500/10',
-          borderColor: 'border-red-500/30',
+          textColor: 'text-red-400',
+          bgColor: 'bg-transparent',
+          borderColor: 'border-transparent',
           label: 'Error',
           description: syncError || 'Sync failed, click to retry',
         };
@@ -59,8 +63,9 @@ const SyncStatusIndicator: React.FC = () => {
         return {
           icon: AlertCircleIcon,
           color: 'text-orange-400',
-          bgColor: 'bg-orange-500/10',
-          borderColor: 'border-orange-500/30',
+          textColor: 'text-orange-400',
+          bgColor: 'bg-transparent',
+          borderColor: 'border-transparent',
           label: 'Conflict',
           description: 'Changes conflict, click to resolve',
         };
@@ -68,8 +73,9 @@ const SyncStatusIndicator: React.FC = () => {
         return {
           icon: CloudIcon,
           color: 'text-gray-400',
-          bgColor: 'bg-gray-500/10',
-          borderColor: 'border-gray-500/30',
+          textColor: 'text-gray-500',
+          bgColor: 'bg-transparent',
+          borderColor: 'border-transparent',
           label: 'Unknown',
           description: 'Sync status unknown',
         };
@@ -116,13 +122,13 @@ const SyncStatusIndicator: React.FC = () => {
         onClick={handleClick}
         onMouseEnter={() => !showDetails && setShowDetails(true)}
         onMouseLeave={() => setShowDetails(false)}
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all duration-200 ${statusInfo.bgColor} ${statusInfo.borderColor} ${statusInfo.color} hover:scale-105`}
+        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all duration-200 hover:bg-white/5 group`}
         title={statusInfo.description}
       >
         <StatusIcon
-          className={`w-4 h-4 ${statusInfo.animate ? 'animate-spin' : ''}`}
+          className={`w-3 h-3 ${statusInfo.color} ${statusInfo.animate ? 'animate-spin' : ''}`}
         />
-        <span className="text-sm font-medium">{statusInfo.label}</span>
+        <span className={`text-[11px] font-medium ${statusInfo.textColor || statusInfo.color} group-hover:text-gray-300 transition-colors`}>{statusInfo.label}</span>
       </button>
 
       {/* Details Tooltip */}
@@ -133,20 +139,20 @@ const SyncStatusIndicator: React.FC = () => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 top-full mt-2 w-64 bg-[#1a1a1a] border border-gray-700 rounded-lg shadow-xl p-3 z-50"
+            className="absolute right-0 top-full mt-2 w-72 bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-4 z-50"
             onMouseEnter={() => setShowDetails(true)}
             onMouseLeave={() => setShowDetails(false)}
           >
             {/* Header */}
-            <div className="flex items-start gap-3 mb-3">
-              <div className={`p-2 rounded-lg ${statusInfo.bgColor} ${statusInfo.borderColor} border`}>
+            <div className="flex items-start gap-3 mb-4">
+              <div className={`p-2.5 rounded-xl ${statusInfo.bgColor} ${statusInfo.borderColor} border`}>
                 <StatusIcon className={`w-5 h-5 ${statusInfo.color}`} />
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-gray-200">
+                <h4 className="text-sm font-semibold text-white">
                   {statusInfo.label}
                 </h4>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-[11px] text-gray-400 mt-0.5 leading-tight">
                   {statusInfo.description}
                 </p>
               </div>
@@ -154,7 +160,7 @@ const SyncStatusIndicator: React.FC = () => {
 
             {/* Last Sync Time */}
             {lastSyncTime && syncStatus !== 'error' && (
-              <div className="flex items-center justify-between text-xs text-gray-400 mb-2 pb-2 border-b border-gray-700">
+              <div className="flex items-center justify-between text-[11px] text-gray-400 mb-3 pb-3 border-b border-white/5">
                 <span>Last synced</span>
                 <span className="text-gray-300">{formatLastSyncTime()}</span>
               </div>
@@ -162,7 +168,7 @@ const SyncStatusIndicator: React.FC = () => {
 
             {/* Error Details */}
             {syncStatus === 'error' && syncError && (
-              <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-300">
+              <div className="mb-3 p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-[11px] text-red-300">
                 {syncError}
               </div>
             )}
@@ -175,7 +181,7 @@ const SyncStatusIndicator: React.FC = () => {
                     e.stopPropagation();
                     await retrySyncError();
                   }}
-                  className="flex-1 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs rounded transition-colors"
+                  className="flex-1 px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-medium rounded-lg transition-colors"
                 >
                   Retry
                 </button>
@@ -187,7 +193,7 @@ const SyncStatusIndicator: React.FC = () => {
                     // Note: forceSyncNow needs projectId, will be passed from parent
                     setShowDetails(false);
                   }}
-                  className="flex-1 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs rounded transition-colors flex items-center justify-center gap-1"
+                  className="flex-1 px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5"
                 >
                   <RefreshCwIcon className="w-3 h-3" />
                   Sync Now
@@ -197,12 +203,12 @@ const SyncStatusIndicator: React.FC = () => {
 
             {/* Help Text */}
             {syncStatus === 'synced' && (
-              <p className="text-xs text-gray-500 mt-2 text-center">
+              <p className="text-[10px] text-gray-500 mt-3 text-center font-medium uppercase tracking-wider">
                 Changes auto-sync to cloud
               </p>
             )}
             {syncStatus === 'offline' && (
-              <p className="text-xs text-gray-500 mt-2 text-center">
+              <p className="text-[10px] text-gray-500 mt-3 text-center font-medium uppercase tracking-wider">
                 Will sync when connection restored
               </p>
             )}
