@@ -116,7 +116,7 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-  
+
   const commitRename = () => {
     if (renamingVersionId) {
       onRenameVersion(renamingVersionId, renameValue);
@@ -124,7 +124,7 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
     setRenamingVersionId(null);
     setRenameValue('');
   };
-  
+
   const handleResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startY = e.clientY;
@@ -134,7 +134,7 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const newHeight = startHeight - (moveEvent.clientY - startY);
       const clampedHeight = Math.max(96, Math.min(newHeight, window.innerHeight * 0.6));
-      
+
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
       }
@@ -166,9 +166,9 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
     sortedHistory.forEach((item, index) => {
       let depth = 0;
       let current: HistoryItem | (HistoryItem & { children: HistoryItem[] }) | undefined = item;
-      while(current && current.parentId && itemsById.has(current.parentId)) {
-          depth++;
-          current = itemsById.get(current.parentId) as (HistoryItem & { children: HistoryItem[] }) | undefined;
+      while (current && current.parentId && itemsById.has(current.parentId)) {
+        depth++;
+        current = itemsById.get(current.parentId) as (HistoryItem & { children: HistoryItem[] }) | undefined;
       }
       nodePositions.set(item.id, { x: index, y: depth });
     });
@@ -184,7 +184,7 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
 
     const path = new Set<string>();
     let currentItemInPath: HistoryItem | undefined = currentHistoryItem;
-    while(currentItemInPath) {
+    while (currentItemInPath) {
       path.add(currentItemInPath.id);
       currentItemInPath = currentItemInPath.parentId ? lineageFilteredHistory.find(item => item.id === currentItemInPath!.parentId) : undefined;
     }
@@ -205,25 +205,28 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
 
   return (
     <div className="flex-shrink-0 flex flex-col">
-      <div onMouseDown={handleResize} className="w-full h-1.5 cursor-row-resize bg-gray-800 hover:bg-blue-600 transition-colors z-10" />
-      <div style={{ height: `${panelHeight}px` }} className="bg-[#1a1a1a] transition-all duration-200 ease-in-out flex flex-col">
-        <div className="flex items-center justify-between p-2 h-10 flex-shrink-0">
-          <div className="flex items-center gap-1">
-            <button onClick={() => setPanelHeight(p => p > 120 ? 96 : 300)} title={panelHeight > 120 ? 'Collapse' : 'Expand'} className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md">
-              <ChevronUpIcon className={`w-4 h-4 transition-transform ${panelHeight > 120 ? '' : 'rotate-180'}`} />
+      <div onMouseDown={handleResize} className="w-full h-1 cursor-row-resize bg-white/5 hover:bg-[#318CE7] transition-colors z-10" />
+      <div style={{ height: `${panelHeight}px` }} className="bg-[#1a1a1a] border-t border-white/5 transition-all duration-200 ease-in-out flex flex-col">
+        <div className="flex items-center justify-between px-4 py-2 h-10 flex-shrink-0 border-b border-white/5">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPanelHeight(p => p > 120 ? 96 : 300)} title={panelHeight > 120 ? 'Collapse' : 'Expand'} className="p-1 text-gray-500 hover:text-white hover:bg-white/5 rounded transition-colors">
+              <ChevronUpIcon className={`w-3.5 h-3.5 transition-transform ${panelHeight > 120 ? '' : 'rotate-180'}`} />
             </button>
-            <h3 className="text-sm font-semibold text-gray-300">Version History</h3>
+            <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+              <GitBranchIcon className="w-3.5 h-3.5 text-gray-600" />
+              Version History
+            </h3>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <button onClick={() => setFilter('all')} className={`px-2 py-1 rounded-md ${filter === 'all' ? 'bg-white/20 text-white' : 'text-gray-400 hover:bg-white/10'}`}>All</button>
-            <button onClick={() => setFilter('starred')} className={`px-2 py-1 rounded-md flex items-center gap-1 ${filter === 'starred' ? 'bg-white/20 text-white' : 'text-gray-400 hover:bg-white/10'}`}>
-              <StarIcon className="w-3 h-3" /> Starred
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setFilter('all')} className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${filter === 'all' ? 'bg-white/10 text-white border border-white/10' : 'text-gray-500 hover:text-white hover:bg-white/5 border border-transparent'}`}>All</button>
+            <button onClick={() => setFilter('starred')} className={`px-2 py-1 rounded text-[10px] font-medium flex items-center gap-1 transition-colors ${filter === 'starred' ? 'bg-white/10 text-white border border-white/10' : 'text-gray-500 hover:text-white hover:bg-white/5 border border-transparent'}`}>
+              <StarIcon className="w-2.5 h-2.5" /> Starred
             </button>
           </div>
         </div>
-        <div className="overflow-auto flex-grow px-4 pb-2">
+        <div className="overflow-auto flex-grow px-4 py-3">
           {panelHeight <= 120 ? (
-            <div className="flex items-center gap-3 h-full overflow-x-auto overflow-y-hidden pb-1">
+            <div className="flex items-center gap-3 h-full overflow-x-auto overflow-y-hidden pb-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
               {filteredHistory.map(item => {
                 const typeInfo = getTypeInfo(item.type);
                 const TypeIcon = typeInfo.icon;
@@ -232,12 +235,12 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
                     <button
                       onClick={() => onSelectVersion(item.id)}
                       title={`${typeInfo.label}: ${item.name || item.prompt}`}
-                      className={`relative block w-12 h-12 rounded-md overflow-hidden border-2 transition-colors ${item.id === currentHistoryItemId ? 'border-blue-500' : 'border-gray-700 hover:border-gray-500'}`}>
+                      className={`relative block w-12 h-12 rounded-lg overflow-hidden border transition-all ${item.id === currentHistoryItemId ? 'border-[#318CE7] shadow-[0_0_0_1px_#318CE7]' : 'border-white/10 hover:border-white/30'}`}>
                       <img src={item.imageUrl} alt={item.name || item.prompt} className="w-full h-full object-cover" />
-                      <div className={`absolute top-0.5 left-0.5 p-0.5 rounded ${typeInfo.color} border`}>
+                      <div className={`absolute top-0.5 left-0.5 p-0.5 rounded ${typeInfo.color} border backdrop-blur-sm`}>
                         <TypeIcon className="w-2.5 h-2.5" />
                       </div>
-                      {item.isStarred && <StarIcon className="absolute bottom-1 right-1 w-3 h-3 fill-yellow-400 stroke-yellow-500" />}
+                      {item.isStarred && <StarIcon className="absolute bottom-1 right-1 w-3 h-3 fill-yellow-400 stroke-yellow-500 drop-shadow-md" />}
                     </button>
                   </div>
                 );
@@ -252,23 +255,23 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
                   <div key={node.id} className="absolute group/history transition-all duration-300" style={{ left: `${node.position.x * 140}px`, top: `${node.position.y * 130}px`, width: '120px' }}>
                     <div className="flex flex-col items-center">
                       <div className="relative" onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, item: node }); }}>
-                        <button onClick={() => onSelectVersion(node.id)} className={`relative block w-24 h-24 rounded-lg overflow-hidden border-2 transition-all duration-200 ${node.id === currentHistoryItemId ? 'border-blue-500 scale-105 shadow-lg shadow-blue-500/20' : 'border-gray-700 hover:border-gray-500'} ${activePath.has(node.id) && node.id !== currentHistoryItemId ? 'border-blue-400/50' : ''}`}>
+                        <button onClick={() => onSelectVersion(node.id)} className={`relative block w-24 h-24 rounded-xl overflow-hidden border transition-all duration-200 ${node.id === currentHistoryItemId ? 'border-[#318CE7] shadow-[0_0_15px_-3px_rgba(49,140,231,0.3)] scale-105' : 'border-white/10 hover:border-white/30'} ${activePath.has(node.id) && node.id !== currentHistoryItemId ? 'border-[#318CE7]/50' : ''}`}>
                           <img src={node.imageUrl} alt={node.name || node.prompt} className="w-full h-full object-cover" />
-                          <div className={`absolute top-1 left-1 p-1 rounded ${typeInfo.color} border`}>
+                          <div className={`absolute top-1 left-1 p-1 rounded ${typeInfo.color} border backdrop-blur-sm`}>
                             <TypeIcon className="w-3 h-3" />
                           </div>
                         </button>
-                        <button onClick={() => onToggleStar(node.id)} className={`absolute top-1 right-1 p-1 bg-black/40 rounded-full text-white transition-opacity ${node.isStarred ? 'opacity-100' : 'opacity-0 group-hover/history:opacity-100'}`} title="Star version">
-                          <StarIcon className={`w-4 h-4 transition-colors ${node.isStarred ? 'fill-yellow-400 stroke-yellow-400' : 'fill-transparent stroke-white'}`} />
+                        <button onClick={() => onToggleStar(node.id)} className={`absolute top-1 right-1 p-1.5 bg-black/40 backdrop-blur-sm rounded-full text-white transition-opacity ${node.isStarred ? 'opacity-100' : 'opacity-0 group-hover/history:opacity-100'}`} title="Star version">
+                          <StarIcon className={`w-3.5 h-3.5 transition-colors ${node.isStarred ? 'fill-yellow-400 stroke-yellow-400' : 'fill-transparent stroke-white'}`} />
                         </button>
                       </div>
-                    {renamingVersionId === node.id ? (
-                      <input type="text" value={renameValue} onChange={e => setRenameValue(e.target.value)} onBlur={commitRename} onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenamingVersionId(null); }} autoFocus className="w-full text-xs bg-gray-900 border border-blue-500 text-white rounded px-1 py-0.5 mt-1" />
-                    ) : (
-                      <p onDoubleClick={() => { setRenamingVersionId(node.id); setRenameValue(node.name || ''); }} className="text-xs w-full text-gray-400 truncate text-center mt-1.5 px-1" title={node.name || node.prompt}>{node.name || `Version ${node.id.slice(-4)}`}</p>
-                    )}
+                      {renamingVersionId === node.id ? (
+                        <input type="text" value={renameValue} onChange={e => setRenameValue(e.target.value)} onBlur={commitRename} onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenamingVersionId(null); }} autoFocus className="w-full text-[10px] bg-black/50 border border-[#318CE7] text-white rounded px-1.5 py-0.5 mt-2 text-center outline-none" />
+                      ) : (
+                        <p onDoubleClick={() => { setRenamingVersionId(node.id); setRenameValue(node.name || ''); }} className="text-[10px] font-medium w-full text-gray-400 truncate text-center mt-2 px-1 select-none group-hover/history:text-gray-300 transition-colors" title={node.name || node.prompt}>{node.name || `Version ${node.id.slice(-4)}`}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
                 );
               })}
               <svg className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ minWidth: `${(Math.max(...historyNodes.map(n => n.position.x)) + 2) * 140}px`, minHeight: `${(Math.max(...historyNodes.map(n => n.position.y)) + 2) * 130}px` }}>
@@ -281,7 +284,7 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
                   const x2 = toNode.x * 140 + 60;
                   const y2 = toNode.y * 130;
                   const isActive = activePath.has(from) && activePath.has(to);
-                  return <path key={`${from}-${to}`} d={`M ${x1} ${y1} C ${x1} ${y1 + 40}, ${x2} ${y2 - 40}, ${x2} ${y2}`} stroke={isActive ? '#3b82f6' : '#4a5568'} strokeWidth="2" fill="none" />;
+                  return <path key={`${from}-${to}`} d={`M ${x1} ${y1} C ${x1} ${y1 + 40}, ${x2} ${y2 - 40}, ${x2} ${y2}`} stroke={isActive ? '#318CE7' : 'rgba(255,255,255,0.1)'} strokeWidth={isActive ? 2 : 1.5} fill="none" />;
                 })}
               </svg>
             </div>
@@ -289,19 +292,19 @@ const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
         </div>
       </div>
       {contextMenu && (
-        <div ref={contextMenuRef} style={{ top: contextMenu.y, left: contextMenu.x }} className="fixed z-50 bg-[#1f1f1f] border border-gray-700 rounded-lg shadow-xl py-1 w-48">
-          <button onClick={() => { onSelectVersion(contextMenu.item.id); setContextMenu(null); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-gray-300 hover:bg-white/10">
-            <GitBranchIcon className="w-4 h-4" /> Create Branch from Here
+        <div ref={contextMenuRef} style={{ top: contextMenu.y, left: contextMenu.x }} className="fixed z-50 bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl py-1 w-48 overflow-hidden">
+          <button onClick={() => { onSelectVersion(contextMenu.item.id); setContextMenu(null); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-colors">
+            <GitBranchIcon className="w-3.5 h-3.5" /> Create Branch from Here
           </button>
-          <button onClick={() => { setRenamingVersionId(contextMenu.item.id); setRenameValue(contextMenu.item.name || ''); setContextMenu(null); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-gray-300 hover:bg-white/10">
-            <PenLineIcon className="w-4 h-4" /> Rename
+          <button onClick={() => { setRenamingVersionId(contextMenu.item.id); setRenameValue(contextMenu.item.name || ''); setContextMenu(null); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-colors">
+            <PenLineIcon className="w-3.5 h-3.5" /> Rename
           </button>
-          <button onClick={() => { onToggleStar(contextMenu.item.id); setContextMenu(null); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-gray-300 hover:bg-white/10">
-            <StarIcon className={`w-4 h-4 ${contextMenu.item.isStarred ? 'fill-yellow-400 stroke-yellow-400' : 'fill-transparent'}`} /> {contextMenu.item.isStarred ? 'Unstar' : 'Star Version'}
+          <button onClick={() => { onToggleStar(contextMenu.item.id); setContextMenu(null); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-colors">
+            <StarIcon className={`w-3.5 h-3.5 ${contextMenu.item.isStarred ? 'fill-yellow-400 stroke-yellow-400' : 'fill-transparent'}`} /> {contextMenu.item.isStarred ? 'Unstar' : 'Star Version'}
           </button>
-          <div className="h-px bg-gray-700 my-1"></div>
-          <button onClick={() => onDeleteVersion(contextMenu.item.id)} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10">
-            <Trash2Icon className="w-4 h-4" /> Delete Version
+          <div className="h-px bg-white/5 my-1"></div>
+          <button onClick={() => onDeleteVersion(contextMenu.item.id)} className="w-full flex items-center gap-3 text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors">
+            <Trash2Icon className="w-3.5 h-3.5" /> Delete Version
           </button>
         </div>
       )}
