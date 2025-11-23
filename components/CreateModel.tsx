@@ -340,7 +340,6 @@ const CreateModel: React.FC<CreateModelProps> = ({
   }, [currentProjectId, modelDescription, revisionPrompt, selectedModelName, generatedModelHistory, currentHistoryItemId, generationSettings, hasSavedInstance], 500);
 
   useEffect(() => {
-    setIsLoaded(true);
     try {
       const savedStyles = localStorage.getItem('formlab-brand-styles-createmodel');
       if (savedStyles) setBrandStyles(JSON.parse(savedStyles));
@@ -382,9 +381,10 @@ const CreateModel: React.FC<CreateModelProps> = ({
   }, [selectedHistoryItemId, currentProjectId, isLoaded, generatedModelHistory, onHistoryItemLoaded]);
 
   useEffect(() => {
-    if (!currentProjectId || !isLoaded) return;
+    if (!currentProjectId) return;
 
     const loadProject = async () => {
+      setIsLoaded(false); // Prevent saving while loading
       try {
         const savedState = await loadProjectState(currentProjectId);
         if (savedState) {
@@ -439,11 +439,13 @@ const CreateModel: React.FC<CreateModelProps> = ({
         if (generatedModelHistory.length > 0) {
           resetProjectState();
         }
+      } finally {
+        setIsLoaded(true); // Enable saving after loading is complete
       }
     };
 
     loadProject();
-  }, [currentProjectId, resetProjectState, isLoaded, pendingHistoryItemId, lastExternalUpdate]);
+  }, [currentProjectId, resetProjectState, pendingHistoryItemId, lastExternalUpdate]);
 
   // Load predefined models when templates section is opened
   useEffect(() => {

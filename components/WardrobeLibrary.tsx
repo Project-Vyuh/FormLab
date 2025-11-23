@@ -10,38 +10,38 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AddProductModal from './AddProductModal';
 
 interface WardrobeLibraryProps {
-  wardrobe: WardrobeItem[];
-  onSelectItem: (item: WardrobeItem) => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  selectedCategories: string[];
-  onCategoryToggle: (category: string) => void;
-  favorites: string[];
-  onToggleFavorite: (itemId: string) => void;
-  recentlyUsed: WardrobeItem[];
-  filters: Record<string, string[]>; 
-  onFilterChange: (filterType: string, value: string) => void;
-  onClearFilters: () => void;
-  onAddProduct: (productData: Omit<WardrobeItem, 'id' | 'url'> & { file: File }) => void;
-  categories: string[];
-  onCreateCategory: (name: string) => void;
-  onRenameCategory: (oldName: string, newName: string) => void;
-  onDeleteCategory: (category: string) => void;
-  onDeleteProduct: (product: WardrobeItem) => void;
+    wardrobe: WardrobeItem[];
+    onSelectItem: (item: WardrobeItem) => void;
+    searchQuery: string;
+    onSearchChange: (query: string) => void;
+    selectedCategories: string[];
+    onCategoryToggle: (category: string) => void;
+    favorites: string[];
+    onToggleFavorite: (itemId: string) => void;
+    recentlyUsed: WardrobeItem[];
+    filters: Record<string, string[]>;
+    onFilterChange: (filterType: string, value: string) => void;
+    onClearFilters: () => void;
+    onAddProduct: (productData: Omit<WardrobeItem, 'id' | 'url'> & { file: File }) => void;
+    categories: string[];
+    onCreateCategory: (name: string) => void;
+    onRenameCategory: (oldName: string, newName: string) => void;
+    onDeleteCategory: (category: string) => void;
+    onDeleteProduct: (product: WardrobeItem) => void;
 }
 
 const ITEM_HEIGHT = 120;
 const GAP = 8; // Corresponds to gap-2 in Tailwind
 
 const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
-    const { 
-        wardrobe, onSelectItem, searchQuery, onSearchChange, 
+    const {
+        wardrobe, onSelectItem, searchQuery, onSearchChange,
         selectedCategories, onCategoryToggle,
         favorites, onToggleFavorite, onAddProduct,
         categories, onCreateCategory, onRenameCategory, onDeleteCategory, onDeleteProduct,
         filters, onFilterChange, onClearFilters
     } = props;
-    
+
     const [isFiltersOpen, setIsFiltersOpen] = useState(false);
     const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
     const gridRef = useRef<HTMLDivElement>(null);
@@ -69,12 +69,12 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
         if (gridRef.current) {
             resizeObserver.observe(gridRef.current);
         }
-        
+
         calculateColumns();
 
         return () => resizeObserver.disconnect();
     }, []);
-    
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
@@ -145,7 +145,7 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
         setRenamingCategory(null);
         setRenameValue('');
     };
-    
+
     const handleCreateNewCategory = () => {
         if (newCategoryName.trim()) {
             onCreateCategory(newCategoryName.trim());
@@ -167,11 +167,11 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
 
         // Standard filtering if no special view is active
         if (selectedCategories.length === 0) return [];
-        
-        let items = wardrobe.filter(item => 
+
+        let items = wardrobe.filter(item =>
             selectedCategories.map(c => c.toLowerCase()).includes(item.category.toLowerCase())
         );
-        
+
         // Apply advanced filters
         const activeFilterKeys = Object.keys(filters);
         if (activeFilterKeys.length > 0) {
@@ -199,7 +199,7 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                 item.season.toLowerCase().includes(query)
             );
         }
-        
+
         return items;
     }, [wardrobe, searchQuery, selectedCategories, filters, favorites, props.recentlyUsed]);
 
@@ -220,7 +220,7 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
             tags: { styling: ['new'], campaign: [] }
         });
     };
-    
+
     const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
         setScrollTop(e.currentTarget.scrollTop);
     }, []);
@@ -229,7 +229,7 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
         const containerHeight = gridRef.current?.clientHeight || 0;
         const totalRows = Math.ceil((finalItems.length + 1) / numColumns); // +1 for add button
         const totalHeight = totalRows * (ITEM_HEIGHT + GAP) - GAP;
-        
+
         const startRow = Math.max(0, Math.floor(scrollTop / (ITEM_HEIGHT + GAP)));
         const rowsToRender = Math.ceil(containerHeight / (ITEM_HEIGHT + GAP)) + 1; // +1 buffer row
 
@@ -239,16 +239,16 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
         const visibleItems = finalItems.slice(startIndex, endIndex);
 
         return (
-             <div style={{ position: 'relative', height: `${totalHeight}px` }}>
+            <div style={{ position: 'relative', height: `${totalHeight}px` }}>
                 {visibleItems.map((item, index) => {
                     const itemIndex = startIndex + index;
                     const row = Math.floor(itemIndex / numColumns);
                     const col = itemIndex % numColumns;
                     const top = row * (ITEM_HEIGHT + GAP);
-                    
+
                     return (
-                        <div 
-                            key={item.id} 
+                        <div
+                            key={item.id}
                             style={{
                                 position: 'absolute',
                                 top: `${top}px`,
@@ -257,11 +257,11 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                                 height: `${ITEM_HEIGHT}px`,
                             }}
                         >
-                            <button 
+                            <button
                                 onClick={() => onSelectItem(item)}
                                 className="group relative w-full h-full rounded-md overflow-hidden bg-gray-800 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
-                                <img src={item.url} alt={item.name} className="w-full h-full object-cover transition-transform group-hover:scale-105"/>
+                                <img src={item.url} alt={item.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent transition-opacity group-hover:opacity-50"></div>
                                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                     <span className="bg-white/90 text-black text-xs font-bold px-3 py-1 rounded-full">View</span>
@@ -270,19 +270,19 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                                     <p className="text-xs text-white font-semibold truncate">{item.name}</p>
                                     <p className="text-[10px] text-gray-400">{item.sku}</p>
                                 </div>
-                                <button 
-                                    onClick={(e) => {e.stopPropagation(); onToggleFavorite(item.id)}} 
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.id) }}
                                     className="absolute top-1 right-1 p-1 bg-black/40 rounded-full text-white opacity-50 hover:opacity-100 transition-opacity"
                                     title={favorites.includes(item.id) ? 'Remove from favorites' : 'Add to favorites'}
                                 >
-                                    <StarIcon className={`w-3.5 h-3.5 transition-colors ${favorites.includes(item.id) ? 'fill-yellow-400 stroke-yellow-400' : 'fill-transparent stroke-white'}`}/>
+                                    <StarIcon className={`w-3.5 h-3.5 transition-colors ${favorites.includes(item.id) ? 'fill-yellow-400 stroke-yellow-400' : 'fill-transparent stroke-white'}`} />
                                 </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onDeleteProduct(item); }}
                                     className="absolute bottom-1 right-1 p-1.5 bg-black/40 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-red-500/80 transition-all"
                                     title="Delete Product"
                                 >
-                                    <Trash2Icon className="w-3 h-3"/>
+                                    <Trash2Icon className="w-3 h-3" />
                                 </button>
                             </button>
                         </div>
@@ -295,10 +295,10 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                     const row = Math.floor(itemIndex / numColumns);
                     const col = itemIndex % numColumns;
                     const top = row * (ITEM_HEIGHT + GAP);
-                    
-                    if(top >= scrollTop - ITEM_HEIGHT && top <= scrollTop + containerHeight) {
+
+                    if (top >= scrollTop - ITEM_HEIGHT && top <= scrollTop + containerHeight) {
                         return (
-                             <div 
+                            <div
                                 style={{
                                     position: 'absolute',
                                     top: `${top}px`,
@@ -308,10 +308,10 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                                 }}
                             >
                                 <button onClick={() => setIsAddProductModalOpen(true)} className="w-full h-full group rounded-md border-2 border-dashed border-gray-700 flex flex-col items-center justify-center text-gray-600 hover:border-gray-500 hover:text-gray-500 cursor-pointer transition-colors">
-                                    <PlusIcon className="w-6 h-6"/>
+                                    <PlusIcon className="w-6 h-6" />
                                     <span className="text-xs font-semibold mt-1">Add Product</span>
                                 </button>
-                             </div>
+                            </div>
                         );
                     }
                     return null;
@@ -326,7 +326,7 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                 <h2 className="text-base font-sans font-semibold text-gray-200 mb-3">Wardrobe</h2>
                 <div className="relative">
                     <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input 
+                    <input
                         type="text"
                         placeholder="Search SKU, name, fabric..."
                         value={searchQuery}
@@ -335,15 +335,15 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                     />
                 </div>
                 <button onClick={() => setIsFiltersOpen(!isFiltersOpen)} className="text-xs text-gray-400 mt-2 flex items-center gap-1 hover:text-white">
-                    <FilterIcon className="w-3 h-3"/>
+                    <FilterIcon className="w-3 h-3" />
                     Advanced Filters
                     <ChevronDownIcon className={`w-4 h-4 transition-transform ${isFiltersOpen ? 'rotate-180' : ''}`} />
                 </button>
             </div>
-            
+
             <AnimatePresence>
                 {isFiltersOpen && (
-                    <motion.div 
+                    <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
@@ -375,28 +375,28 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                     <div className="space-y-1">
                         {categories.map(cat => (
                             <div key={cat} onContextMenu={(e) => handleContextMenu(e, cat)}>
-                               {renamingCategory === cat ? (
-                                <input
-                                    type="text"
-                                    value={renameValue}
-                                    onChange={e => setRenameValue(e.target.value)}
-                                    onBlur={commitRename}
-                                    onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenamingCategory(null); }}
-                                    className="w-full text-left text-sm px-2 py-1 rounded bg-gray-900 border border-blue-500 text-white"
-                                    autoFocus
-                                />
-                             ) : (
-                                <button 
-                                    onClick={() => onCategoryToggle(cat)}
-                                    className={`w-full text-left text-sm px-2 py-1 rounded ${selectedCategories.map(c => c.toLowerCase()).includes(cat.toLowerCase()) ? 'text-white bg-white/10' : 'text-gray-400 hover:bg-white/5'}`}
-                                >
-                                    {cat}
-                                </button>
-                             )}
+                                {renamingCategory === cat ? (
+                                    <input
+                                        type="text"
+                                        value={renameValue}
+                                        onChange={e => setRenameValue(e.target.value)}
+                                        onBlur={commitRename}
+                                        onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenamingCategory(null); }}
+                                        className="w-full text-left text-sm px-2 py-1 rounded bg-gray-900 border border-blue-500 text-white"
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <button
+                                        onClick={() => onCategoryToggle(cat)}
+                                        className={`w-full text-left text-sm px-2 py-1 rounded ${selectedCategories.map(c => c.toLowerCase()).includes(cat.toLowerCase()) ? 'text-white bg-white/10' : 'text-gray-400 hover:bg-white/5'}`}
+                                    >
+                                        {cat}
+                                    </button>
+                                )}
                             </div>
                         ))}
                         {isCreatingCategory && (
-                             <input
+                            <input
                                 type="text"
                                 value={newCategoryName}
                                 onChange={e => setNewCategoryName(e.target.value)}
@@ -409,13 +409,13 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                         )}
                     </div>
                     <div className="mt-2 pt-2 border-t border-gray-800 space-y-1">
-                        <button 
+                        <button
                             onClick={() => onCategoryToggle('favorites')}
                             className={`w-full text-left text-sm px-2 py-1 rounded flex items-center gap-2 ${selectedCategories.includes('favorites') ? 'text-white bg-white/10' : 'text-gray-400 hover:bg-white/5'}`}
                         >
                             <StarIcon className="w-4 h-4" /> Favorites
                         </button>
-                        <button 
+                        <button
                             onClick={() => onCategoryToggle('recently used')}
                             className={`w-full text-left text-sm px-2 py-1 rounded flex items-center gap-2 ${selectedCategories.includes('recently used') ? 'text-white bg-white/10' : 'text-gray-400 hover:bg-white/5'}`}
                         >
@@ -439,11 +439,11 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                             <p className="text-xs text-gray-500">No items match your search/filters.</p>
                         </div>
                     ) : (
-                       renderVirtualGrid()
+                        renderVirtualGrid()
                     )}
                 </div>
             </div>
-            
+
             {contextMenu && (
                 <div ref={contextMenuRef} style={{ top: contextMenu.y, left: contextMenu.x }} className="fixed z-50 bg-[#1f1f1f] border border-gray-700 rounded-md shadow-lg py-1">
                     <button onClick={() => startRename(contextMenu.category)} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10">Rename</button>
@@ -451,8 +451,8 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                 </div>
             )}
 
-            <AddProductModal 
-                isOpen={isAddProductModalOpen} 
+            <AddProductModal
+                isOpen={isAddProductModalOpen}
                 onClose={() => setIsAddProductModalOpen(false)}
                 onAdd={handleAdd}
                 categories={categories.filter(c => c !== 'Uncategorized')}

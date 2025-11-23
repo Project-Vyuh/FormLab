@@ -22,7 +22,7 @@ const PerItemControls: React.FC<PerItemControlsProps> = ({ selectedLayer }) => {
             </div>
         );
     }
-    
+
     return (
         <div className="pt-4 border-t border-gray-700/60">
             <h2 className="text-base font-sans font-semibold text-gray-200 flex items-center gap-2 mb-3">
@@ -38,7 +38,7 @@ const PerItemControls: React.FC<PerItemControlsProps> = ({ selectedLayer }) => {
                         <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </div>
                 </label>
-                 <p className="text-xs text-gray-500 text-center pt-2">More AI fit & styling controls coming soon.</p>
+                <p className="text-xs text-gray-500 text-center pt-2">More AI fit & styling controls coming soon.</p>
             </div>
         </div>
     );

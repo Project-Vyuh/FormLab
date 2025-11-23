@@ -9,8 +9,8 @@ import { ShirtIcon, ArrowUpIcon, ArrowDownIcon, EyeIcon, EyeOffIcon, ReplaceIcon
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface LayerMenuProps {
-  onRemove: () => void;
-  onClose: () => void;
+    onRemove: () => void;
+    onClose: () => void;
 }
 
 const LayerMenu: React.FC<LayerMenuProps> = ({ onRemove, onClose }) => {
@@ -66,23 +66,23 @@ const LayerCard: React.FC<{
             onClick={() => onSelect(layer.id)}
         >
             <div className="flex items-center gap-3 p-2">
-                 <div className="flex-shrink-0 w-6 h-12 flex items-center justify-center">
+                <div className="flex-shrink-0 w-6 h-12 flex items-center justify-center">
                     <span className="text-sm font-bold text-gray-500">{layerNumber}</span>
                 </div>
-                
+
                 {isBaseModel ? (
                     <div className="w-[26px] flex-shrink-0" /> // Placeholder for alignment
                 ) : (
                     <div className="flex flex-col gap-0.5">
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onMoveLayerUp(layer.id); }} 
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onMoveLayerUp(layer.id); }}
                             disabled={index <= 1}
                             className="p-1 rounded-md text-gray-500 hover:text-white disabled:opacity-30 disabled:hover:text-gray-500"
                         >
                             <ArrowUpIcon className="w-3.5 h-3.5" />
                         </button>
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onMoveLayerDown(layer.id); }} 
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onMoveLayerDown(layer.id); }}
                             disabled={index >= totalLayers - 1}
                             className="p-1 rounded-md text-gray-500 hover:text-white disabled:opacity-30 disabled:hover:text-gray-500"
                         >
@@ -90,7 +90,7 @@ const LayerCard: React.FC<{
                         </button>
                     </div>
                 )}
-                
+
                 <div className="w-12 h-12 rounded-md bg-gray-800 flex-shrink-0 overflow-hidden">
                     {isBaseModel && modelImageUrl && <img src={modelImageUrl} alt="Base Model" className="w-full h-full object-cover" />}
                     {layer.garment && <img src={layer.garment.url} alt={layer.garment.name} className="w-full h-full object-cover" />}
@@ -103,7 +103,7 @@ const LayerCard: React.FC<{
 
                 <div className="flex items-center flex-shrink-0 gap-1">
                     {!isBaseModel && (
-                         <button
+                        <button
                             onClick={(e) => { e.stopPropagation(); onQuickReplace(layer.garment!.category); }}
                             className="p-1.5 rounded-md text-gray-400 hover:bg-white/10 hover:text-white opacity-0 group-hover/item:opacity-100 transition-opacity"
                             title="Replace Item"
