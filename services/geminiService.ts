@@ -143,10 +143,11 @@ const getShadowPrompt = (lightingRig: LightingRig): string => {
     const { size, position: { distance } } = dominantLight;
     const apparentSize = size / (distance + 0.1); // Add 0.1 to avoid division by zero
     let shadowSoftness: string;
-    if (apparentSize > 5) shadowSoftness = 'very soft and diffuse edges';
-    else if (apparentSize > 2) shadowSoftness = 'soft, feathered edges';
+
+    if (apparentSize > 5) shadowSoftness = 'very soft and diffuse edges with a gradual shadow transition';
+    else if (apparentSize > 2) shadowSoftness = 'soft, feathered edges with wrap-around illumination';
     else if (apparentSize > 0.5) shadowSoftness = 'defined, semi-sharp edges';
-    else shadowSoftness = 'sharp, crisp edges';
+    else shadowSoftness = 'sharp, crisp edges with high contrast falloff';
 
 
     // 3. Shadow Darkness (from dominant light power and presence of fill/hdri)
@@ -242,7 +243,7 @@ const getSemanticLightDescription = (light: Light): string => {
     } else if (tint < -0.05) {
         colorDescription += `, with a subtle green tint`;
     }
-    
+
     return ` A ${styleDescription}, ${intentDescription}, ${colorDescription}.`;
 };
 
@@ -267,7 +268,7 @@ const getSpecularHighlightPrompt = (lightingRig: LightingRig, accessoryPrompt?: 
         if (power > 1.5) quality += ', and be bright and intense';
         else if (power < -0.5) quality += ', and be very subtle and muted';
         else quality += ', and be of a natural intensity';
-        
+
         highlightPrompt += ` The primary specular highlights should be ${quality}.`;
     }
 
@@ -292,7 +293,7 @@ const getSpecularHighlightPrompt = (lightingRig: LightingRig, accessoryPrompt?: 
 
 const getFloorPrompt = (settings: FloorSettings): string => {
     let prompt = ' **Floor Details:**';
-    
+
     const materialMap = {
         'matte': 'a neutral, non-reflective matte surface',
         'glossy': 'a glossy white plexiglass surface',
@@ -316,7 +317,7 @@ const getFloorPrompt = (settings: FloorSettings): string => {
 const getStudioEnvironmentPrompt = (environment: StudioEnvironment, sculpting: ShadowSculptingSettings, floor: FloorSettings): string => {
     let prompt = ' **Studio Environment:**';
 
-    switch(environment.type) {
+    switch (environment.type) {
         case 'high-key':
             prompt += ` The scene is a professional high-key white studio environment. The seamless background is exposed to be pure white (brightness ${environment.brightness.toFixed(2)}).`;
             if (environment.reflectionStrength > 0.1) prompt += ` Faint, soft floor reflections are visible under the model's feet (strength ${environment.reflectionStrength.toFixed(2)}).`;
@@ -390,7 +391,7 @@ const getAtmospherePrompt = (atmosphere: SceneAtmosphere): string => {
 
     if (atmosphere.separationContrast === 'soft') { prompt += ' Create soft, feathered edges between the subject and background for a blended, dreamy look.'; hasInstruction = true; }
     else if (atmosphere.separationContrast === 'sharp') { prompt += ' Create very high contrast between the subject\'s edges and the background for a sharp, \'cut-out\' look.'; hasInstruction = true; }
-    
+
     return hasInstruction ? prompt : '';
 };
 
@@ -401,12 +402,12 @@ const getAmbientBouncePrompt = (settings: AmbientBounceSettings): string => {
     if (settings.strength > 0.7) prompt += ' The scene is filled with a strong ambient bounce light';
     else if (settings.strength > 0.3) prompt += ' The scene has a noticeable ambient bounce light';
     else prompt += ' The scene has a subtle ambient bounce light';
-    
+
     let biasDesc = '';
     if (settings.bias !== 'uniform') {
         biasDesc = ` primarily coming from the ${settings.bias}`;
     }
-    
+
     prompt += ` with a color tint of ${settings.color}${biasDesc}, which should realistically influence skin tones and shadow colors.`;
     return prompt;
 };
@@ -414,7 +415,7 @@ const getAmbientBouncePrompt = (settings: AmbientBounceSettings): string => {
 const getAmbientOcclusionPrompt = (settings: AmbientOcclusionSettings): string => {
     if (settings.intensity < 0.1) return '';
     let prompt = ' **Ambient Occlusion:**';
-    
+
     if (settings.intensity > 0.7) prompt += ' Render strong, soft ambient occlusion';
     else if (settings.intensity > 0.3) prompt += ' Render noticeable, soft ambient occlusion';
     else prompt += ' Render subtle, soft ambient occlusion';
@@ -506,7 +507,7 @@ const getImageProcessingPrompt = (settings: ImageProcessingSettings): string => 
 const getLensProfilePrompt = (lensProfile?: LensProfile): string => {
     if (!lensProfile) return '';
     const descriptions: Record<LensProfile, string> = {
-        '24mm': "The image should have the distinct look of a wide-angle 24mm lens, creating a sense of dynamic space and slight perspective exaggeration at the edges.",
+        '24mm': "The image should have the distinct look of a wide-angle 24mm lens, creating a sense of dynamic space and slight perspective exaggeration/distortion on the limbs.",
         '35mm': "The image should be captured with the feel of a 35mm lens, popular for lifestyle and editorial photography, offering a natural field of view with minimal distortion.",
         '50mm': "The image should reflect the perspective of a 50mm lens, which closely mimics human vision with neutral, natural proportions and no noticeable distortion.",
         '85mm': "The image has the flattering look of a classic 85mm portrait lens. This includes significant background compression, which makes the background appear closer and more blurred, and slight facial feature compression for a pleasing effect.",
@@ -580,7 +581,7 @@ const getFocusPlanePrompt = (settings: FocusPlaneSettings): string => {
             prompt += ` The focus plane is set on the model's torso, keeping the main body sharp while the face and background have a very gentle sharpness falloff.`;
         }
     }
-    
+
     prompt += ' Adaptive sharpening should be applied only to the in-focus areas to enhance detail without creating an artificial look.';
     return prompt;
 };
@@ -604,16 +605,16 @@ const getAperturePrompt = (settings: ApertureSettings): string => {
     let hasInstruction = false;
 
     if (settings.aperture < 2.0) {
-        prompt += ` The image is shot with a very wide aperture (around f/${settings.aperture.toFixed(1)}), creating an extremely shallow depth of field and significant background blur (bokeh).`;
+        prompt += ` The image is shot with a very wide aperture (around f/${settings.aperture.toFixed(1)}). Focus strictly on the eyes, with ears and background slightly soft.`;
         hasInstruction = true;
     } else if (settings.aperture < 4.0) {
-        prompt += ` The image is shot with a wide aperture (around f/${settings.aperture.toFixed(1)}), creating a noticeable shallow depth of field.`;
+        prompt += ` The image is shot with a wide aperture (around f/${settings.aperture.toFixed(1)}), creating a noticeable shallow depth of field with good subject separation.`;
         hasInstruction = true;
     } else if (settings.aperture < 8.0) {
-        prompt += ` The image is shot with a medium aperture (around f/${settings.aperture.toFixed(1)}), keeping the subject sharp with a softly blurred background.`;
+        prompt += ` The image is shot with a medium aperture (around f/${settings.aperture.toFixed(1)}), keeping the entire subject sharp from nose to ears, with a softly blurred background.`;
         hasInstruction = true;
     } else {
-        prompt += ` The image is shot with a narrow aperture (around f/${settings.aperture.toFixed(1)}), resulting in a deep depth of field where most of the scene is in focus.`;
+        prompt += ` The image is shot with a narrow aperture (around f/${settings.aperture.toFixed(1)}), resulting in a deep depth of field where the subject and most of the scene are in sharp focus.`;
         hasInstruction = true;
     }
 
@@ -674,7 +675,7 @@ const getNoiseAndGrainPrompt = (settings: NoiseAndGrainSettings): string => {
     const typeDesc = settings.type;
     prompt += ` The image has ${amountDesc}, ${typeDesc} film grain, adding a realistic, organic texture.`;
     hasInstruction = true;
-    
+
     if (settings.chromaticAberration) {
         prompt += ` Introduce very subtle chromatic aberration (color fringing) on the edges of high-contrast areas for added realism.`;
         hasInstruction = true;
@@ -754,10 +755,10 @@ const getLightingPrompt = (lightingRig: GenerationSettings['lightingRig'], acces
             lightingPrompt += getSemanticLightDescription(light);
         });
     }
-    
+
     const shadowPrompt = getShadowPrompt(lightingRig);
     const specularPrompt = getSpecularHighlightPrompt(lightingRig, accessoryPrompt);
-    
+
     return lightingPrompt + shadowPrompt + specularPrompt;
 };
 
@@ -801,13 +802,13 @@ export const getGenerationPromptSuffix = (settings: GenerationSettings, options?
         }
         if (cameraPosition && !exclude.includes('cameraPosition' as any)) suffix += getCameraPositionPrompt(cameraPosition);
     }
-    
+
     if (panelToggles.cameraAndLens) {
         if (lensProfile && !exclude.includes('lensProfile' as any)) suffix += getLensProfilePrompt(lensProfile);
         if (apertureSettings && !exclude.includes('apertureSettings' as any)) suffix += getAperturePrompt(apertureSettings);
         if (focusPlaneSettings && !exclude.includes('focusPlaneSettings' as any)) suffix += getFocusPlanePrompt(focusPlaneSettings);
         if (shutterSettings && !exclude.includes('shutterSettings' as any)) suffix += getShutterPrompt(shutterSettings);
-        
+
         const virtualExif = getVirtualExifPrompt(settings);
         if (virtualExif) suffix += virtualExif;
     }
@@ -815,7 +816,7 @@ export const getGenerationPromptSuffix = (settings: GenerationSettings, options?
     if (panelToggles.lighting && lightingRig && !exclude.includes('lightingRig' as any)) {
         suffix += getLightingPrompt(lightingRig, accessoryPrompt);
     }
-    
+
     if (panelToggles.environment && studioEnvironment && !exclude.includes('studioEnvironment' as any)) {
         suffix += getStudioEnvironmentPrompt(studioEnvironment, shadowSculpting, floorSettings);
     }
@@ -830,7 +831,7 @@ export const getGenerationPromptSuffix = (settings: GenerationSettings, options?
         if (ambientOcclusion && !exclude.includes('ambientOcclusion' as any)) suffix += getAmbientOcclusionPrompt(ambientOcclusion);
         if (sceneAtmosphere && !exclude.includes('sceneAtmosphere' as any)) suffix += getAtmospherePrompt(sceneAtmosphere);
     }
-    
+
     // --- Process remaining untoggled settings ---
     if (negativePrompt && !exclude.includes('negativePrompt')) {
         suffix += ` CRUCIAL: Ensure the image does NOT contain the following elements: "${negativePrompt}".`;
@@ -876,26 +877,39 @@ const handleApiResponse = (response: GenerateContentResponse): string => {
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
-const FINAL_OUTFIT_RULE = " **ABSOLUTE FINAL RULE:** The model's attire MUST strictly be the neutral, form-fitting athletic wear described. Do not deviate from this base outfit under any circumstances.";
+const REALISM_TOKENS = "8k resolution, raw photo, hyper-detailed skin texture, visible pores, vellus hair, subsurface scattering, natural complexion imperfections, no airbrushing";
+const ANATOMY_TOKENS = "perfectly rendered hands, anatomically correct fingers, symmetrical facial features, natural eyes with corneal reflections";
+const QA_NEGATIVE_PROMPT = "cartoon, 3d render, illustration, plastic skin, doll-like, bad anatomy, disfigured, extra limbs, fused fingers, blurry, low quality, jpeg artifacts, watermark, text, logo";
+
+const FINAL_OUTFIT_RULE = " **ABSOLUTE FINAL RULE:** The model's attire MUST strictly be the neutral, form-fitting athletic wear described. It must be a matte cotton-spandex blend showing realistic fabric weight, seams, and slight folds. It must NOT look like body paint. Color: Solid Heather Grey or Matte Black. Do not deviate from this base outfit under any circumstances.";
+
 
 export const generateModelImage = async (userImage: File, settings: GenerationSettings): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
     const userImagePart = await fileToPart(userImage);
     const promptSuffix = getGenerationPromptSuffix(settings);
-    
-    const prompt = `You are an expert AI art director for a high-end e-commerce platform. You are tasked with creating a 'digital mannequin' or 'base model'.
 
-**Input:** You will receive a reference photo of a person. This photo is for IDENTITY REFERENCE ONLY.
+    const prompt = `[ROLE]
+You are an expert AI Photographer & Art Director.
 
-**Your Goal:** Generate a NEW, completely separate, photorealistic, FULL-BODY image of a professional fashion model whose face and identity are inspired by the reference photo.
+[TASK]
+Generate a RAW, Hyper-Realistic Full-Body Photo of a model based on the reference image.
 
-**Directives:**
-1.  **FRAMING:** The final image MUST be a full-body shot, capturing the model from head to toe.
-2.  **IDENTITY:** The new model's face, hair, and ethnicity should match the person in the reference photo.
-3.  **ATTIRE:** The model MUST be wearing simple, plain, neutral-colored, form-fitting athletic wear (e.g., a tank top and leggings or bike shorts). This is to ensure a neutral base for future styling.
-4.  **QUALITY:** The final image must be high-quality, photorealistic, and strictly professional.
+[SUBJECT SPECIFICATIONS]
+- Identity: Match the face, hair, and ethnicity of the reference photo.
+- Skin Details: ${REALISM_TOKENS}
+- Anatomy: ${ANATOMY_TOKENS}
+- Framing: Full-body shot (head to toe).
 
-**Output:** Return ONLY the generated image.` + promptSuffix + FINAL_OUTFIT_RULE;
+[STRICT WARDROBE CONSTRAINTS]
+- Item: Neutral, form-fitting athletic wear (tank top and leggings/bike shorts).
+- Material: ${FINAL_OUTFIT_RULE}
+
+[VIRTUAL CAMERA & ENVIRONMENT]
+${promptSuffix}
+
+[NEGATIVE CONSTRAINTS]
+${QA_NEGATIVE_PROMPT}`;
 
     const response = await ai.models.generateContent({
         model,
@@ -910,19 +924,28 @@ export const generateModelImage = async (userImage: File, settings: GenerationSe
 export const generateModelFromDescription = async (description: string, settings: GenerationSettings, model: string): Promise<string> => {
     const promptSuffix = getGenerationPromptSuffix(settings);
 
-    const geminiPrompt = `You are an AI asset generation bot creating 'base models' for a virtual try-on system.
+    const structuredPrompt = `[ROLE]
+You are an expert AI Photographer & Art Director.
 
-**TECHNICAL SPECIFICATIONS:**
-1.  **FRAMING:** The output **MUST** be a full-body photograph (head to toe).
-2.  **ATTIRE:** The subject must wear only simple, plain, neutral-colored form-fitting athletic wear (e.g., tank top and leggings).
-3.  **SUBJECT:** ${description}
+[TASK]
+Generate a RAW, Hyper-Realistic Full-Body Photo of a model based on the description.
 
-**COMMAND:** Generate and return ONLY the image file.` + promptSuffix + FINAL_OUTFIT_RULE;
+[SUBJECT SPECIFICATIONS]
+- Appearance: ${description}
+- Skin Details: ${REALISM_TOKENS}
+- Anatomy: ${ANATOMY_TOKENS}
+- Framing: Full-body shot (head to toe).
 
-    const imagenPrompt = `A full-body, photorealistic photograph of a professional fashion model.
-Subject Appearance: ${description}.
-Attire: The model is wearing simple, plain, neutral-colored, form-fitting athletic wear.` + promptSuffix + FINAL_OUTFIT_RULE;
-    
+[STRICT WARDROBE CONSTRAINTS]
+- Item: Neutral, form-fitting athletic wear (tank top and leggings/bike shorts).
+- Material: ${FINAL_OUTFIT_RULE}
+
+[VIRTUAL CAMERA & ENVIRONMENT]
+${promptSuffix}
+
+[NEGATIVE CONSTRAINTS]
+${QA_NEGATIVE_PROMPT}`;
+
     if (model === 'imagen-4.0-generate-001') {
         const aspectRatioMapping: Record<AspectRatio, '1:1' | '3:4' | '4:3' | '9:16' | '16:9'> = {
             '2:3': '3:4',
@@ -935,11 +958,11 @@ Attire: The model is wearing simple, plain, neutral-colored, form-fitting athlet
 
         const response = await ai.models.generateImages({
             model: 'imagen-4.0-generate-001',
-            prompt: imagenPrompt,
+            prompt: structuredPrompt,
             config: {
-              numberOfImages: 1,
-              outputMimeType: 'image/jpeg',
-              aspectRatio: validAspectRatio,
+                numberOfImages: 1,
+                outputMimeType: 'image/jpeg',
+                aspectRatio: validAspectRatio,
             },
         });
         if (response.generatedImages && response.generatedImages.length > 0) {
@@ -951,7 +974,7 @@ Attire: The model is wearing simple, plain, neutral-colored, form-fitting athlet
     } else {
         const response = await ai.models.generateContent({
             model,
-            contents: { parts: [{ text: geminiPrompt }] },
+            contents: { parts: [{ text: structuredPrompt }] },
             config: {
                 responseModalities: [Modality.IMAGE],
             },
@@ -964,7 +987,7 @@ Attire: The model is wearing simple, plain, neutral-colored, form-fitting athlet
 export const upscaleImage = async (baseImageUrl: string, resolution: UpscaleResolution): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
     const baseImagePart = await dataUrlToPart(baseImageUrl);
-    
+
     const prompt = `You are a high-end image restoration and upscaling AI.
 **Input:** A digital fashion model image.
 **Task:** Upscale and refine the image to simulate a ${resolution} resolution.
@@ -1010,7 +1033,7 @@ export const selectivelyEnhanceImage = async (baseImageUrl: string, enhancementT
 
 export const enhanceDescriptionPrompt = async (userInput: string, targetModel: 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001'): Promise<string> => {
     const model = 'gemini-2.5-flash';
-    
+
     const metaPrompt = `You are a Creative Director for a high-end fashion brand. You are creating a "Base Model" or "Digital Mannequin" description for virtual try-ons.
     
 User Input: "${userInput}"
@@ -1077,7 +1100,7 @@ Your Task: Enhance the user's request with more descriptive, artistic vocabulary
 Output: Return ONLY the enhanced prompt.`;
         textPart.text = promptText;
     }
-    
+
     const response = await ai.models.generateContent({
         model,
         contents: { parts: [baseImagePart, textPart] },
@@ -1090,7 +1113,7 @@ export const generateVirtualTryOnImage = async (modelImageUrl: string, garmentIm
     const model = 'gemini-2.5-flash-image';
     const modelImagePart = await dataUrlToPart(modelImageUrl);
     const garmentImagePart = await fileToPart(garmentImage);
-    
+
     const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any] });
 
     const backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
@@ -1131,9 +1154,9 @@ export const generateVirtualTryOnWithPoseReference = async (
     const modelImagePart = await dataUrlToPart(modelImageUrl);
     const garmentImagePart = await fileToPart(garmentImage);
     const poseReferenceImagePart = await fileToPart(poseReferenceImage);
-    
+
     const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any, 'posePrompt'] });
-    
+
     const backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
 
     const prompt = `You are a professional fashion AI.
@@ -1211,7 +1234,7 @@ export const reviseGeneratedImage = async (baseImageUrl: string, revisionPrompt:
 ${getGenerationPromptSuffix(settings)}
 
 Return ONLY the final image.` + FINAL_OUTFIT_RULE;
-    
+
     const response = await ai.models.generateContent({
         model,
         contents: { parts: [baseImagePart, { text: prompt }] },
@@ -1244,7 +1267,7 @@ export const reviseMaskedImage = async (baseImageUrl: string, maskDataUrl: strin
     6.  The output MUST remain a full-body shot. Do not crop.
 
     Return ONLY the final, edited image.` + FINAL_OUTFIT_RULE;
-    
+
     const response = await ai.models.generateContent({
         model,
         contents: { parts: [baseImagePart, maskImagePart, { text: prompt }] },
@@ -1287,7 +1310,7 @@ export const analyzeGarment = async (garmentImage: File): Promise<GarmentAnalysi
     const model = 'gemini-2.5-flash';
     const garmentImagePart = await fileToPart(garmentImage);
     const prompt = "Analyze the clothing item in this image. Return a JSON object with: palette (3 hex codes), category (e.g. 'Summer Dress'), and material (e.g. 'Cotton').";
-    
+
     const response = await ai.models.generateContent({
         model,
         contents: { parts: [garmentImagePart, { text: prompt }] },
@@ -1326,7 +1349,7 @@ export const analyzeGarment = async (garmentImage: File): Promise<GarmentAnalysi
 
 export const generateVideoFromImage = async (referenceImageUrl: string, settings: VideoGenerationSettings): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
+
     const { mimeType, data } = dataUrlToParts(referenceImageUrl);
 
     let operation = await ai.models.generateVideos({
@@ -1349,7 +1372,7 @@ export const generateVideoFromImage = async (referenceImageUrl: string, settings
     }
 
     if (operation.error) {
-      throw new Error(`Video generation failed: ${operation.error.message}`);
+        throw new Error(`Video generation failed: ${operation.error.message}`);
     }
 
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
@@ -1362,6 +1385,6 @@ export const generateVideoFromImage = async (referenceImageUrl: string, settings
         throw new Error(`Failed to download the generated video.`);
     }
     const videoBlob = await videoResponse.blob();
-    
+
     return URL.createObjectURL(videoBlob);
 };
