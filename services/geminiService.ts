@@ -790,13 +790,7 @@ export const getGenerationPromptSuffix = (settings: GenerationSettings, options?
     // --- Process toggled panel settings ---
 
     if (panelToggles.composition) {
-        if (shotFraming && !exclude.includes('shotFraming')) {
-            switch (shotFraming) {
-                case 'full': suffix += ' This is a full-body shot, showing the model from head to toe.'; break;
-                case 'medium': suffix += ' This is a medium shot, framed from the waist up.'; break;
-                case 'closeup': suffix += ' This is a close-up shot, focusing on the details of the garment.'; break;
-            }
-        }
+        // shotFraming is now handled in the main prompt structure
         if (aspectRatio && aspectRatio !== '2:3' && !exclude.includes('aspectRatio')) {
             suffix += ` The final image must have a ${aspectRatio.replace(':', ' to ')} aspect ratio.`;
         }
@@ -879,30 +873,41 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 const REALISM_TOKENS = "8k resolution, raw photo, hyper-detailed skin texture, visible pores, vellus hair, subsurface scattering, natural complexion imperfections, no airbrushing";
 const ANATOMY_TOKENS = "perfectly rendered hands, anatomically correct fingers, symmetrical facial features, natural eyes with corneal reflections";
-const QA_NEGATIVE_PROMPT = "cartoon, 3d render, illustration, plastic skin, doll-like, bad anatomy, disfigured, extra limbs, fused fingers, blurry, low quality, jpeg artifacts, watermark, text, logo";
+const QA_NEGATIVE_PROMPT = "shoes, socks, footwear, pants, leggings, cartoon, 3d render, illustration, plastic skin, doll-like, bad anatomy, disfigured, extra limbs, fused fingers, blurry, low quality, jpeg artifacts, watermark, text, logo";
 
-const FINAL_OUTFIT_RULE = " **ABSOLUTE FINAL RULE:** The model's attire MUST strictly be the neutral, form-fitting athletic wear described. It must be a matte cotton-spandex blend showing realistic fabric weight, seams, and slight folds. It must NOT look like body paint. Color: Solid Heather Grey or Matte Black. Do not deviate from this base outfit under any circumstances.";
+const FINAL_OUTFIT_RULE = " **ABSOLUTE FINAL RULE:** The model MUST be BAREFOOT. The attire MUST strictly be neutral, form-fitting boxer briefs or boy shorts. It must be a matte cotton-spandex blend showing realistic fabric weight, seams, and slight folds. It must NOT look like body paint. Color: Solid Heather Grey or Matte Black. Do not deviate from this base outfit under any circumstances.";
 
+
+const getFramingPrompt = (framing: GenerationSettings['shotFraming']): string => {
+    switch (framing) {
+        case 'medium': return "Medium shot (waist up).";
+        case 'closeup': return "Close-up shot (face/upper body focus).";
+        case 'full':
+        default: return "Full-body shot (head to toe), uncropped. Feet must be visible.";
+    }
+};
 
 export const generateModelImage = async (userImage: File, settings: GenerationSettings): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
     const userImagePart = await fileToPart(userImage);
     const promptSuffix = getGenerationPromptSuffix(settings);
 
+    const framingPrompt = getFramingPrompt(settings.shotFraming);
+
     const prompt = `[ROLE]
 You are an expert AI Photographer & Art Director.
 
 [TASK]
-Generate a RAW, Hyper-Realistic Full-Body Photo of a model based on the reference image.
+Generate a RAW, Hyper-Realistic Photo of a model based on the reference image.
 
 [SUBJECT SPECIFICATIONS]
 - Identity: Match the face, hair, and ethnicity of the reference photo.
 - Skin Details: ${REALISM_TOKENS}
 - Anatomy: ${ANATOMY_TOKENS}
-- Framing: Full-body shot (head to toe).
+- Framing: ${framingPrompt}
 
 [STRICT WARDROBE CONSTRAINTS]
-- Item: Neutral, form-fitting athletic wear (tank top and leggings/bike shorts).
+- Item: Neutral, form-fitting boxer briefs or boy shorts.
 - Material: ${FINAL_OUTFIT_RULE}
 
 [VIRTUAL CAMERA & ENVIRONMENT]
@@ -924,20 +929,22 @@ ${QA_NEGATIVE_PROMPT}`;
 export const generateModelFromDescription = async (description: string, settings: GenerationSettings, model: string): Promise<string> => {
     const promptSuffix = getGenerationPromptSuffix(settings);
 
+    const framingPrompt = getFramingPrompt(settings.shotFraming);
+
     const structuredPrompt = `[ROLE]
 You are an expert AI Photographer & Art Director.
 
 [TASK]
-Generate a RAW, Hyper-Realistic Full-Body Photo of a model based on the description.
+Generate a RAW, Hyper-Realistic Photo of a model based on the description.
 
 [SUBJECT SPECIFICATIONS]
 - Appearance: ${description}
 - Skin Details: ${REALISM_TOKENS}
 - Anatomy: ${ANATOMY_TOKENS}
-- Framing: Full-body shot (head to toe).
+- Framing: ${framingPrompt}
 
 [STRICT WARDROBE CONSTRAINTS]
-- Item: Neutral, form-fitting athletic wear (tank top and leggings/bike shorts).
+- Item: Neutral, form-fitting boxer briefs or boy shorts.
 - Material: ${FINAL_OUTFIT_RULE}
 
 [VIRTUAL CAMERA & ENVIRONMENT]
@@ -1219,21 +1226,33 @@ ${promptSuffix}`;
 export const reviseGeneratedImage = async (baseImageUrl: string, revisionPrompt: string, settings: GenerationSettings): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
     const baseImagePart = await dataUrlToPart(baseImageUrl);
-    const prompt = `You are a specialized AI fashion editor.
-**Input Image:** A digital fashion model wearing neutral athletic clothing.
-**User Request:** "${revisionPrompt}"
+    const promptSuffix = getGenerationPromptSuffix(settings);
 
-**Instructions:**
-1.  Apply the user's request to the image, incorporating the detailed stylistic settings provided below.
-2.  Maintain the model's identity and professional style.
-3.  **CRITICAL CLOTHING RULE:** Preserve the existing neutral, form-fitting athletic wear. DO NOT change the outfit unless the user's request is *explicitly* about changing the clothing itself. Lighting, mood, and accessory changes should not affect the base outfit.
-4.  **Framing:** The output MUST remain a **full-body shot**.
-5.  **Safety:** Do not generate nudity.
+    const prompt = `[ROLE]
+You are a specialized AI Fashion Editor & Retoucher.
 
-**Stylistic Settings to Apply:**
-${getGenerationPromptSuffix(settings)}
+[TASK]
+Edit the provided image based on the User Request, while maintaining Hyper-Realistic quality.
 
-Return ONLY the final image.` + FINAL_OUTFIT_RULE;
+[USER REQUEST]
+"${revisionPrompt}"
+
+[CONSTRAINTS & GUIDELINES]
+1.  **Identity:** Maintain the model's identity and professional style.
+2.  **Realism:** Ensure skin texture and details remain ${REALISM_TOKENS}.
+3.  **Anatomy:** Ensure ${ANATOMY_TOKENS}.
+4.  **Framing:** Maintain the original framing. Do NOT crop unless requested.
+
+[STRICT WARDROBE CONSTRAINTS]
+- Item: Neutral, form-fitting boxer briefs or boy shorts.
+- Material: ${FINAL_OUTFIT_RULE}
+- Rule: DO NOT change the outfit unless the user's request is *explicitly* about changing the clothing itself.
+
+[STYLE & ENVIRONMENT]
+${promptSuffix}
+
+[NEGATIVE CONSTRAINTS]
+${QA_NEGATIVE_PROMPT}`;
 
     const response = await ai.models.generateContent({
         model,
