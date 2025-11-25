@@ -9,7 +9,9 @@ if (!admin.apps.length) {
 
 // Configuration
 // In production, use functions.config() or environment variables
-const CLOUD_RUN_URL = process.env.CLOUD_RUN_URL || "https://formlab-upscaler-753589341990.us-central1.run.app/upscale";
+const CLOUD_RUN_URL = process.env.CLOUD_RUN_URL ||
+    functions.config().cloud_run?.url ||
+    "https://formlab-upscaler-753589341990.us-central1.run.app/upscale";
 
 export const onUpscaleRequestCreated = functions.firestore
     .document("upscale_requests/{requestId}")

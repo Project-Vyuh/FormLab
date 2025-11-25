@@ -1,0 +1,37 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: formlab-upscaler
+  namespace: '753589341990'
+  labels:
+    cloud.googleapis.com/location: us-central1
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '1'
+        run.googleapis.com/cpu-throttling: 'false'
+        run.googleapis.com/startup-cpu-boost: 'false'
+        run.googleapis.com/gpu-zonal-redundancy-disabled: 'true'
+    spec:
+      containerConcurrency: 1
+      containers:
+      - image: gcr.io/formlab-42fae/formlab-upscaler
+        ports:
+        - containerPort: 8080
+          name: http1
+        resources:
+          limits:
+            cpu: '4'
+            memory: 16Gi
+            nvidia.com/gpu: '1'
+        env:
+        - name: GOOGLE_CLOUD_PROJECT
+          value: formlab-42fae
+        - name: STORAGE_BUCKET
+          value: formlab-42fae.firebasestorage.app
+      nodeSelector:
+        run.googleapis.com/accelerator: nvidia-l4
+      timeoutSeconds: 600

@@ -20,17 +20,21 @@ db = firestore.Client()
 # We use the x4plus model for general images
 model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
 netscale = 4
+
+# Determine if GPU is available
+use_gpu = torch.cuda.is_available()
+
 # Pre-download weights or include them in the Docker image
 # For this example, we assume weights are at 'weights/RealESRGAN_x4plus.pth'
 upsampler = RealESRGANer(
     scale=netscale,
     model_path='weights/RealESRGAN_x4plus.pth',
     model=model,
-    tile=0,  # tile_size 0 for no tiling (faster if GPU memory allows)
+    tile=512 if not use_gpu else 0,  # Use tiling on CPU for 6-10x speedup
     tile_pad=10,
     pre_pad=0,
-    half=True, # Use FP16 for speed
-    gpu_id=0 if torch.cuda.is_available() else None
+    half=use_gpu,  # Only use FP16 when GPU is available
+    gpu_id=0 if use_gpu else None
 )
 
 @app.route('/upscale', methods=['POST'])
@@ -59,22 +63,34 @@ def upscale():
 
         # 2. Read image with cv2
         img = cv2.imread(input_path, cv2.IMREAD_UNCHANGED)
-        
+
+        # 2.5. Validate and resize image if too large (prevents memory exhaustion)
+        h, w = img.shape[:2]
+        max_size = 4000
+        if max(h, w) > max_size:
+            scale_factor = max_size / max(h, w)
+            new_w = int(w * scale_factor)
+            new_h = int(h * scale_factor)
+            img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            print(f"Resized input from {w}x{h} to {new_w}x{new_h} for request {request_id}")
+
         # 3. Upscale
         print(f"Upscaling image for request {request_id}...")
         output, _ = upsampler.enhance(img, outscale=4)
         
-        # 4. Save output
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_output:
-            cv2.imwrite(tmp_output.name, output)
+        # 4. Save output as JPEG (faster encoding/uploading than PNG)
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_output:
+            cv2.imwrite(tmp_output.name, output, [cv2.IMWRITE_JPEG_QUALITY, 95])
             output_path = tmp_output.name
 
         # 5. Upload to Firebase Storage
         print(f"Uploading result for request {request_id}...")
-        bucket_name = f"{os.environ.get('GOOGLE_CLOUD_PROJECT')}.appspot.com"
+        project_id = os.environ.get('GOOGLE_CLOUD_PROJECT')
+        bucket_name = os.environ.get('STORAGE_BUCKET', f"{project_id}.firebasestorage.app")
         bucket = storage_client.bucket(bucket_name)
-        blob_name = f"users/{user_id}/upscaled/{request_id}.png"
+        blob_name = f"users/{user_id}/upscaled/{request_id}.jpg"
         blob = bucket.blob(blob_name)
+        blob.content_type = 'image/jpeg'
         blob.upload_from_filename(output_path)
         blob.make_public() # Optional: depending on your security rules
         output_url = blob.public_url

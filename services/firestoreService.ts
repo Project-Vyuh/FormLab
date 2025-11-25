@@ -356,8 +356,6 @@ export async function createUpscaleRequest(userId: string, imageUrl: string, res
 
 export function listenToUpscaleRequest(requestId: string, onUpdate: (request: UpscaleRequest) => void): () => void {
   const docRef = doc(db, UPSCALE_REQUESTS_COLLECTION, requestId);
-  // We need to import onSnapshot from firebase/firestore
-  const { onSnapshot } = require('firebase/firestore');
 
   const unsubscribe = onSnapshot(docRef, (doc: any) => {
     if (doc.exists()) {

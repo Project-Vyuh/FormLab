@@ -1,11 +1,23 @@
+# Core dependencies first
+numpy>=1.21.0,<1.27.0
+torch>=2.0.0
+
+# Flask and server
 flask
 gunicorn
+
+# Google Cloud
 google-cloud-storage
 google-cloud-firestore
+
+# Utilities
 requests
+
+# Computer Vision
 opencv-python-headless
+
+# Real-ESRGAN and dependencies (these need numpy and torch)
 basicsr
 facexlib
 gfpgan
 realesrgan
-numpy
