@@ -1,0 +1,11 @@
+flask
+gunicorn
+google-cloud-storage
+google-cloud-firestore
+requests
+opencv-python-headless
+basicsr
+facexlib
+gfpgan
+realesrgan
+numpy

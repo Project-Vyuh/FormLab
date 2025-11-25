@@ -5,12 +5,14 @@
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UploadCloudIcon, PenLineIcon, CubeIcon, UndoIcon, RedoIcon, BookmarkIcon, DownloadIcon, CameraIcon, ZapIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon, Share2Icon, UserIcon, SparklesIcon, SettingsIcon, LayersIcon } from './icons';
+import { UploadCloudIcon, CubeIcon, BookmarkIcon, CameraIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon, Share2Icon, UserIcon, SparklesIcon, SettingsIcon, LayersIcon, DownloadIcon } from './icons';
 
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
 import Spinner from './Spinner';
-import { getFriendlyErrorMessage } from '../lib/utils';
+import { getFriendlyErrorMessage, cn } from "../lib/utils";
+import { Loader2Icon, UndoIcon, RedoIcon, PenLineIcon, ZapIcon } from "lucide-react";
 import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, BrandStyle, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem, HistoryItemType, User, SelectedStylingModel, Model } from '../types';
+import { createUpscaleRequest, listenToUpscaleRequest, UpscaleRequest } from '../services/firestoreService';
 import ConfirmationModal from './ConfirmationModal';
 import ResizeHandle from './ResizeHandle';
 import { useDebouncedEffect } from '../hooks/useDebouncedEffect';
@@ -239,6 +241,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
   const upscaleMenuRef = useRef<HTMLDivElement>(null);
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+
+
   const [isSwitchModelModalOpen, setIsSwitchModelModalOpen] = useState(false);
   const [isSwitchProjectModalOpen, setIsSwitchProjectModalOpen] = useState(false);
   const [pendingModelSwitch, setPendingModelSwitch] = useState<string | null>(null);
@@ -487,8 +491,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) setIsDownloadMenuOpen(false);
       if (upscaleMenuRef.current && !upscaleMenuRef.current.contains(event.target as Node)) setIsUpscaleMenuOpen(false);
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) setIsDownloadMenuOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -680,17 +684,52 @@ const CreateModel: React.FC<CreateModelProps> = ({
   };
 
   const handleUpscale = async (resolution: UpscaleResolution) => {
-    if (!generatedModelUrl) return;
+    if (!generatedModelUrl || !currentUser) return;
     setIsGenerating(true);
-    setLoadingMessage(`Upscaling to ${resolution}...`);
+    setLoadingMessage(`Initiating ${resolution} upscale...`);
     setIsUpscaleMenuOpen(false);
+
     try {
-      const result = await upscaleImage(generatedModelUrl, resolution);
-      await addHistoryItem({ prompt: `Upscaled to ${resolution}`, settings: generationSettings, modelName: selectedModelName }, result);
-      setToastMessage(`Image upscaled to ${resolution}!`);
+      // 1. Upload current image to Storage (if it's a blob/data URL)
+      let imageUrl = generatedModelUrl;
+      if (generatedModelUrl.startsWith('data:') || generatedModelUrl.startsWith('blob:')) {
+        setLoadingMessage('Uploading source image...');
+        // If it's a blob URL, we need to fetch it first to get the blob/base64
+        const response = await fetch(generatedModelUrl);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        const base64Data = await base64Promise;
+        imageUrl = await uploadBase64Image(base64Data, currentUser.uid, 'models', `source-for-upscale-${Date.now()}.png`, currentProjectId || undefined);
+      }
+
+      // 2. Create Upscale Request
+      setLoadingMessage('Queueing upscale job...');
+      const requestId = await createUpscaleRequest(currentUser.uid, imageUrl, resolution);
+
+      // 3. Listen for completion
+      setLoadingMessage(`Upscaling to ${resolution} (this may take a moment)...`);
+      const unsubscribe = listenToUpscaleRequest(requestId, async (request: UpscaleRequest) => {
+        if (request.status === 'completed' && request.outputUrl) {
+          unsubscribe();
+          await addHistoryItem({ prompt: `Upscaled to ${resolution}`, settings: generationSettings, modelName: selectedModelName }, request.outputUrl);
+          setToastMessage(`Image upscaled to ${resolution}!`);
+          setIsGenerating(false);
+          setLoadingMessage('');
+        } else if (request.status === 'failed') {
+          unsubscribe();
+          setToastMessage(request.error || 'Upscale failed');
+          setIsGenerating(false);
+          setLoadingMessage('');
+        }
+      });
+
     } catch (err) {
+      console.error('Upscale error:', err);
       setToastMessage(getFriendlyErrorMessage(err, 'Upscale failed'));
-    } finally {
       setIsGenerating(false);
       setLoadingMessage('');
     }
@@ -729,6 +768,78 @@ const CreateModel: React.FC<CreateModelProps> = ({
       setHasSavedInstance(true);
     }
   };
+
+  const handleDownload = useCallback(async (format: 'jpg' | 'png' | 'webp') => {
+    if (!generatedModelUrl) return;
+
+    setIsDownloadMenuOpen(false);
+
+    try {
+      console.log('Starting download for format:', format);
+      console.log('Image URL:', generatedModelUrl);
+
+      // Fetch the image as a blob to avoid CORS issues
+      const response = await fetch(generatedModelUrl);
+      if (!response.ok) throw new Error('Failed to fetch image');
+
+      const blob = await response.blob();
+      console.log('Image fetched, blob type:', blob.type, 'size:', blob.size);
+
+      // Create canvas for format conversion
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas context not available');
+
+      const img = new Image();
+      const imageUrl = URL.createObjectURL(blob);
+
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => {
+          console.log('Image loaded, dimensions:', img.naturalWidth, 'x', img.naturalHeight);
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(imageUrl);
+          resolve();
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(imageUrl);
+          reject(new Error('Failed to load image'));
+        };
+        img.src = imageUrl;
+      });
+
+      // Convert to desired format with maximum quality
+      const mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
+      const quality = format === 'png' ? undefined : 1.0;
+
+      canvas.toBlob((convertedBlob) => {
+        if (!convertedBlob) {
+          setToastMessage('Failed to create download file');
+          return;
+        }
+
+        console.log('Blob created, type:', convertedBlob.type, 'size:', convertedBlob.size);
+
+        // Create download link
+        const url = URL.createObjectURL(convertedBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `formlab-model-${Date.now()}.${format}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        console.log('Download triggered successfully');
+        setToastMessage(`Model downloaded as ${format.toUpperCase()}!`);
+      }, mimeType, quality);
+
+    } catch (err) {
+      console.error('Download error:', err);
+      setToastMessage('Failed to download image. Please check console for details.');
+    }
+  }, [generatedModelUrl]);
 
   // Handler: Save template from modal to user's models
   const handleSaveTemplateFromModal = useCallback(async (template: Model) => {
@@ -933,17 +1044,6 @@ const CreateModel: React.FC<CreateModelProps> = ({
     }
   }, [deleteConfirmModal.model, currentProjectId, generatedModelHistory, currentHistoryItemId, onModelDeleted]);
 
-  const handleDownload = (format: 'png' | 'jpeg' | 'webp') => {
-    if (!generatedModelUrl) return;
-    const link = document.createElement('a');
-    link.href = generatedModelUrl;
-    link.download = `formlab-model-${Date.now()}.${format}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setIsDownloadMenuOpen(false);
-  };
-
   const handleModelSelect = useCallback((newModelName: string) => {
     if (generatedModelUrl && !hasSavedInstance) {
       setPendingModelSwitch(newModelName);
@@ -1002,6 +1102,14 @@ const CreateModel: React.FC<CreateModelProps> = ({
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Don't interfere with dropdown menu clicks
+    if (
+      (downloadMenuRef.current && downloadMenuRef.current.contains(e.target as Node)) ||
+      (upscaleMenuRef.current && upscaleMenuRef.current.contains(e.target as Node))
+    ) {
+      return; // Let dropdown handle its own events
+    }
+
     if (!imageWrapperRef.current || isMaskingMode) return;
     e.preventDefault();
     setIsPanning(true);
@@ -1017,6 +1125,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
   const handleMouseUpOrLeave = () => { setIsPanning(false); };
 
   const getCursor = () => {
+    if (isDownloadMenuOpen || isUpscaleMenuOpen) return 'default';
     if (isMaskingMode) return 'crosshair';
     if (!generatedModelUrl) return 'default';
     return isPanning ? 'grabbing' : 'grab';
@@ -1460,7 +1569,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
         <ResizeHandle onMouseDown={handleLeftDrag} />
 
         <div className="flex-grow relative bg-[#0f0f0f] flex flex-col min-h-0">
-          <div className="flex-shrink-0 flex items-center justify-between gap-2 p-2 bg-[#1a1a1a]/80 backdrop-blur-md border-b border-white/5">
+          <div className="flex-shrink-0 flex items-center justify-between gap-2 p-2 bg-[#1a1a1a]/80 backdrop-blur-md border-b border-white/5 z-30">
             <div className="flex items-center gap-1">
               <div className="flex items-center gap-1">
                 <button onClick={handleUndo} disabled={!canUndo || isGenerating} className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30 transition-colors text-gray-400 hover:text-white" title="Undo"><UndoIcon className="w-4 h-4" /></button>
@@ -1485,38 +1594,48 @@ const CreateModel: React.FC<CreateModelProps> = ({
               <div ref={upscaleMenuRef} className="relative">
                 <button onClick={() => setIsUpscaleMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-sm text-gray-400 hover:text-white disabled:opacity-30 transition-colors focus:outline-none" title="Enhance & Upscale"><ZapIcon className="w-4 h-4 text-[#318CE7] group-hover:text-[#318CE7]/80 transition-colors" /></button>
                 {isUpscaleMenuOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden py-1">
-                    <button onClick={() => handleUpscale('2k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2">
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden py-1" style={{ cursor: 'default' }} onMouseMove={(e) => e.stopPropagation()} onMouseEnter={(e) => e.stopPropagation()}>
+                    <button onClick={() => handleUpscale('2k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span> Upscale to 2K
                     </button>
-                    <button onClick={() => handleUpscale('4k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2">
+                    <button onClick={() => handleUpscale('4k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
                       <span className="w-1.5 h-1.5 rounded-full bg-purple-500/50"></span> Upscale to 4K
                     </button>
                     <div className="h-px bg-white/5 my-1 mx-2"></div>
                     <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Enhance Details</div>
-                    <button onClick={() => handleSelectiveEnhance('face')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6">Face & Skin</button>
-                    <button onClick={() => handleSelectiveEnhance('fabric')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6">Fabric & Texture</button>
-                    <button onClick={() => handleSelectiveEnhance('accessories')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6">Accessories</button>
+                    <button onClick={() => handleSelectiveEnhance('face')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Face & Skin</button>
+                    <button onClick={() => handleSelectiveEnhance('fabric')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Fabric & Texture</button>
+                    <button onClick={() => handleSelectiveEnhance('accessories')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Accessories</button>
+                  </div>
+                )}
+              </div>
+              <div ref={downloadMenuRef} className="relative">
+                <button onClick={() => setIsDownloadMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-sm text-gray-400 hover:text-white disabled:opacity-30 transition-colors focus:outline-none" title="Download Image">
+                  <DownloadIcon className="w-4 h-4" />
+                </button>
+                {isDownloadMenuOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-44 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden py-1" style={{ cursor: 'default' }} onMouseMove={(e) => e.stopPropagation()} onMouseEnter={(e) => e.stopPropagation()}>
+                    <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Download Format</div>
+                    <button onClick={(e) => { console.log('PNG button clicked'); e.stopPropagation(); handleDownload('png'); }} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors" style={{ cursor: 'pointer' }}>
+                      PNG (.png) - Lossless
+                    </button>
+                    <button onClick={(e) => { console.log('JPG button clicked'); e.stopPropagation(); handleDownload('jpg'); }} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors" style={{ cursor: 'pointer' }}>
+                      JPEG (.jpg) - Max Quality
+                    </button>
+                    <button onClick={(e) => { console.log('WebP button clicked'); e.stopPropagation(); handleDownload('webp'); }} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors" style={{ cursor: 'pointer' }}>
+                      WebP (.webp) - Lossless
+                    </button>
                   </div>
                 )}
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs font-mono text-gray-500">
               {isResultView && <div className="flex items-center gap-1 bg-white/5 border border-white/5 rounded-lg px-2 py-1 text-gray-400">{Math.round(zoom * 100)}%</div>}
-              <div ref={downloadMenuRef} className="relative">
-                <button onClick={() => setIsDownloadMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md bg-white/5 border border-white/5 hover:bg-white/10 text-gray-300 disabled:opacity-30 transition-colors focus:outline-none" title="Download"><DownloadIcon className="w-4 h-4" /></button>
-                {isDownloadMenuOpen && (
-                  <div className="absolute top-full right-0 mt-2 w-32 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden py-1">
-                    <button onClick={() => handleDownload('png')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors">PNG Image</button>
-                    <button onClick={() => handleDownload('jpeg')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors">JPEG Image</button>
-                    <button onClick={() => handleDownload('webp')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors">WEBP Image</button>
-                  </div>
-                )}
-              </div>
+
             </div>
           </div>
           <div className="flex-grow flex flex-col min-h-0">
-            <div className="flex-grow w-full relative overflow-hidden flex justify-center items-center p-4 min-h-0" ref={imageContainerRef} onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave} style={{ cursor: getCursor() }}>
+            <div className="flex-grow w-full relative overflow-hidden flex justify-center items-center p-4 min-h-0" ref={imageContainerRef} onWheel={handleWheel} onMouseDown={isDownloadMenuOpen || isUpscaleMenuOpen ? undefined : handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave} style={{ cursor: getCursor() }}>
               {isGenerating && <div className="absolute inset-0 z-30 bg-black/50 backdrop-blur-sm flex flex-col items-center justify-center"><Spinner /><p className="mt-4 text-gray-300 font-medium">{loadingMessage}</p></div>}
               {!isResultView ? (
                 <div className="flex flex-col items-center justify-center text-center p-8 max-w-lg mx-auto">

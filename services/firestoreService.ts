@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { collection, getDocs, doc, setDoc, getDoc, query, where, DocumentData } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc, query, where, DocumentData, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 
 // Collection names
@@ -313,4 +313,57 @@ export async function loadAllPredefinedContent() {
     wardrobe,
     templates,
   };
+}
+/**
+ * Upscale Requests
+ */
+
+export const UPSCALE_REQUESTS_COLLECTION = 'upscale_requests';
+
+export interface UpscaleRequest {
+  id: string;
+  userId: string;
+  imageUrl: string;
+  resolution: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  outputUrl?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function createUpscaleRequest(userId: string, imageUrl: string, resolution: string): Promise<string> {
+  try {
+    const requestId = `upscale-${Date.now()}`;
+    const requestData: UpscaleRequest = {
+      id: requestId,
+      userId,
+      imageUrl,
+      resolution,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await setDoc(doc(db, UPSCALE_REQUESTS_COLLECTION, requestId), requestData);
+    console.log('Upscale request created:', requestId);
+    return requestId;
+  } catch (error) {
+    console.error('Error creating upscale request:', error);
+    throw error;
+  }
+}
+
+export function listenToUpscaleRequest(requestId: string, onUpdate: (request: UpscaleRequest) => void): () => void {
+  const docRef = doc(db, UPSCALE_REQUESTS_COLLECTION, requestId);
+  // We need to import onSnapshot from firebase/firestore
+  const { onSnapshot } = require('firebase/firestore');
+
+  const unsubscribe = onSnapshot(docRef, (doc: any) => {
+    if (doc.exists()) {
+      onUpdate(doc.data() as UpscaleRequest);
+    }
+  });
+
+  return unsubscribe;
 }

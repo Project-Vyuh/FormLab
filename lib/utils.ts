@@ -4,9 +4,9 @@
 */
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
- 
+
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+    return twMerge(clsx(inputs));
 }
 
 export function getFriendlyErrorMessage(error: unknown, context: string): string {
@@ -42,6 +42,6 @@ export function getFriendlyErrorMessage(error: unknown, context: string): string
         // Generic fallback for any "Unsupported MIME type" error
         return `Unsupported file format. Please upload an image format like PNG, JPEG, or WEBP.`;
     }
-    
+
     return `${context}. ${rawMessage}`;
 }

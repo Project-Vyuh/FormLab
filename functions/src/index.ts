@@ -30,7 +30,7 @@ async function checkRateLimit(userId: string): Promise<void> {
   const userDoc = db.collection("usage").doc(userId);
 
   const doc = await userDoc.get();
-  const data = doc.data() || {requests: []};
+  const data = doc.data() || { requests: [] };
 
   // Clean old requests
   const requests: number[] = data.requests.filter((ts: number) => ts > dayAgo);
@@ -57,7 +57,7 @@ async function checkRateLimit(userId: string): Promise<void> {
   requests.push(now);
 
   // Update Firestore
-  await userDoc.set({requests}, {merge: true});
+  await userDoc.set({ requests }, { merge: true });
 }
 
 /**
@@ -83,51 +83,54 @@ export const generateModelImage = functions.https.onCall(async (data, context) =
 
   // Return success - actual generation happens on frontend
   // This is just for auth and rate limiting
-  return {success: true, message: "Rate limit check passed"};
+  return { success: true, message: "Rate limit check passed" };
 });
 
 export const generateModelFromDescription = functions.https.onCall(async (data, context) => {
   const userId = requireAuth(context);
   await checkRateLimit(userId);
-  return {success: true, message: "Rate limit check passed"};
+  return { success: true, message: "Rate limit check passed" };
 });
 
 export const generateVirtualTryOn = functions.https.onCall(async (data, context) => {
   const userId = requireAuth(context);
   await checkRateLimit(userId);
-  return {success: true, message: "Rate limit check passed"};
+  return { success: true, message: "Rate limit check passed" };
 });
 
 export const reviseGeneratedImage = functions.https.onCall(async (data, context) => {
   const userId = requireAuth(context);
   await checkRateLimit(userId);
-  return {success: true, message: "Rate limit check passed"};
+  return { success: true, message: "Rate limit check passed" };
 });
 
 export const upscaleImage = functions.https.onCall(async (data, context) => {
   const userId = requireAuth(context);
   await checkRateLimit(userId);
-  return {success: true, message: "Rate limit check passed"};
+  return { success: true, message: "Rate limit check passed" };
 });
 
 export const selectivelyEnhanceImage = functions.https.onCall(async (data, context) => {
   const userId = requireAuth(context);
   await checkRateLimit(userId);
-  return {success: true, message: "Rate limit check passed"};
+  return { success: true, message: "Rate limit check passed" };
 });
 
 export const enhancePrompt = functions.https.onCall(async (data, context) => {
   requireAuth(context);
-  return {success: true, message: "Rate limit check passed"};
+  return { success: true, message: "Rate limit check passed" };
 });
 
 export const analyzeGarment = functions.https.onCall(async (data, context) => {
   requireAuth(context);
-  return {success: true, message: "Rate limit check passed"};
+  return { success: true, message: "Rate limit check passed" };
 });
 
 export const generateVideo = functions.https.onCall(async (data, context) => {
   const userId = requireAuth(context);
   await checkRateLimit(userId);
-  return {success: true, message: "Rate limit check passed"};
+  return { success: true, message: "Rate limit check passed" };
 });
+
+export * from "./upscaleTrigger";
+
