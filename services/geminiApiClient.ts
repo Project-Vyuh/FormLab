@@ -6,8 +6,8 @@
  * Replaces direct Gemini API calls with secure Firebase Cloud Functions
  */
 
-import {getFunctions, httpsCallable} from "firebase/functions";
-import {GenerationSettings, VideoGenerationSettings, UpscaleResolution, GarmentAnalysis} from "../types";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { GenerationSettings, VideoGenerationSettings, UpscaleResolution, GarmentAnalysis } from "../types";
 
 // Get Firebase Functions instance
 const functions = getFunctions();
@@ -50,7 +50,7 @@ async function urlToBase64(url: string): Promise<string> {
   // Fetch blob URL and convert to base64
   const response = await fetch(url);
   const blob = await response.blob();
-  const file = new File([blob], "image.jpg", {type: blob.type});
+  const file = new File([blob], "image.jpg", { type: blob.type });
   return await fileToBase64(file);
 }
 
@@ -71,7 +71,7 @@ export async function generateModelImage(
     settings,
   });
 
-  return (result.data as {imageUrl: string}).imageUrl;
+  return (result.data as { imageUrl: string }).imageUrl;
 }
 
 /**
@@ -90,7 +90,7 @@ export async function generateModelFromDescription(
     model,
   });
 
-  return (result.data as {imageUrl: string}).imageUrl;
+  return (result.data as { imageUrl: string }).imageUrl;
 }
 
 /**
@@ -112,7 +112,7 @@ export async function generateVirtualTryOnImage(
     settings,
   });
 
-  return (result.data as {imageUrl: string}).imageUrl;
+  return (result.data as { imageUrl: string }).imageUrl;
 }
 
 /**
@@ -133,7 +133,7 @@ export async function reviseGeneratedImage(
     settings,
   });
 
-  return (result.data as {imageUrl: string}).imageUrl;
+  return (result.data as { imageUrl: string }).imageUrl;
 }
 
 /**
@@ -158,7 +158,7 @@ export async function reviseMaskedImage(
     settings,
   });
 
-  return (result.data as {imageUrl: string}).imageUrl;
+  return (result.data as { imageUrl: string }).imageUrl;
 }
 
 /**
@@ -177,7 +177,7 @@ export async function upscaleImage(
     resolution,
   });
 
-  return (result.data as {imageUrl: string}).imageUrl;
+  return (result.data as { imageUrl: string }).imageUrl;
 }
 
 /**
@@ -196,7 +196,7 @@ export async function selectivelyEnhanceImage(
     target,
   });
 
-  return (result.data as {imageUrl: string}).imageUrl;
+  return (result.data as { imageUrl: string }).imageUrl;
 }
 
 /**
@@ -204,7 +204,7 @@ export async function selectivelyEnhanceImage(
  */
 export async function enhanceDescriptionPrompt(
   userInput: string,
-  targetModel: "gemini-2.5-flash-image" | "imagen-4.0-generate-001"
+  targetModel: "gemini-2.5-flash-image"
 ): Promise<string> {
   const enhanceFn = httpsCallable(functions, "enhancePrompt");
 
@@ -213,7 +213,7 @@ export async function enhanceDescriptionPrompt(
     targetModel,
   });
 
-  return (result.data as {enhancedPrompt: string}).enhancedPrompt;
+  return (result.data as { enhancedPrompt: string }).enhancedPrompt;
 }
 
 /**
@@ -233,7 +233,7 @@ export async function enhanceRevisionPrompt(
     originalDescription,
   });
 
-  return (result.data as {enhancedPrompt: string}).enhancedPrompt;
+  return (result.data as { enhancedPrompt: string }).enhancedPrompt;
 }
 
 /**
@@ -273,7 +273,7 @@ export async function analyzeGarment(garmentImage: File): Promise<GarmentAnalysi
     garmentImageData,
   });
 
-  const analysisText = (result.data as {analysis: string}).analysis;
+  const analysisText = (result.data as { analysis: string }).analysis;
 
   try {
     return JSON.parse(analysisText);
@@ -305,7 +305,7 @@ export async function generateVideoFromImage(
     settings,
   });
 
-  const {videoData, mimeType} = result.data as {videoData: string; mimeType: string};
+  const { videoData, mimeType } = result.data as { videoData: string; mimeType: string };
 
   // Convert base64 video data to blob URL
   const binaryString = atob(videoData);
@@ -313,7 +313,7 @@ export async function generateVideoFromImage(
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
-  const blob = new Blob([bytes], {type: mimeType});
+  const blob = new Blob([bytes], { type: mimeType });
   return URL.createObjectURL(blob);
 }
 

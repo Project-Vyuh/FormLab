@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import { GoogleGenAI, GenerateContentResponse, Modality, Type } from "@google/genai";
-import { GenerationSettings, VideoGenerationSettings, AspectRatio, GarmentAnalysis, UpscaleResolution, Light, LightingRig, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, DigitalDarkroomSettings } from "../types";
+import { GoogleGenAI, GenerateContentResponse, Modality, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { GenerationSettings, VideoGenerationSettings, AspectRatio, GarmentAnalysis, UpscaleResolution, Light, LightingRig, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, DigitalDarkroomSettings, ShotFraming } from "../types";
 import { storage } from "./firebase";
 import { ref, getBlob } from "firebase/storage";
 
@@ -790,11 +790,7 @@ export const getGenerationPromptSuffix = (settings: GenerationSettings, options?
     // --- Process toggled panel settings ---
 
     if (panelToggles.composition) {
-        // shotFraming is now handled in the main prompt structure
-        if (aspectRatio && aspectRatio !== '2:3' && !exclude.includes('aspectRatio')) {
-            suffix += ` The final image must have a ${aspectRatio.replace(':', ' to ')} aspect ratio.`;
-        }
-        if (cameraPosition && !exclude.includes('cameraPosition' as any)) suffix += getCameraPositionPrompt(cameraPosition);
+        // shotFraming, aspectRatio, and cameraPosition are now handled in the main prompt structure
     }
 
     if (panelToggles.cameraAndLens) {
@@ -871,54 +867,197 @@ const handleApiResponse = (response: GenerateContentResponse): string => {
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
-const REALISM_TOKENS = "8k resolution, raw photo, hyper-detailed skin texture, visible pores, vellus hair, subsurface scattering, natural complexion imperfections, no airbrushing";
-const ANATOMY_TOKENS = "perfectly rendered hands, anatomically correct fingers, symmetrical facial features, natural eyes with corneal reflections";
-const QA_NEGATIVE_PROMPT = "shoes, socks, footwear, pants, leggings, cartoon, 3d render, illustration, plastic skin, doll-like, bad anatomy, disfigured, extra limbs, fused fingers, blurry, low quality, jpeg artifacts, watermark, text, logo";
+const REALISM_TOKENS = "8k resolution, raw photo, cinematic lighting, sharp focus, Fujifilm GFX 100, Kodak Portra 400, hyper-detailed skin texture, visible pores, vellus hair, subsurface scattering, natural complexion imperfections, slight skin unevenness, realistic eyes, moist lips, no airbrushing, highly detailed, micro-details, peach fuzz, natural skin oils, imperfect skin texture, Phase One XF IQ4, Profoto studio lighting";
+const ANATOMY_TOKENS = "perfectly rendered hands, anatomically correct fingers, symmetrical facial features, natural eyes with corneal reflections, realistic muscle definition, natural posture, micro-expressions";
+const QA_NEGATIVE_PROMPT = "mannequin, plastic skin, waxy skin, doll-like, artificial, CGI, 3d render, illustration, cartoon, anime, drawing, painting, bad anatomy, disfigured, extra limbs, fused fingers, blurry, low quality, jpeg artifacts, watermark, text, logo, oversmoothed, airbrushed, makeup heavy, distorted face, bad hands, bad feet, shoes, socks, footwear, pants, leggings (unless specified), dead eyes, blank stare, stiff pose";
 
-const FINAL_OUTFIT_RULE = " **ABSOLUTE FINAL RULE:** The model MUST be BAREFOOT. The attire MUST strictly be neutral, form-fitting boxer briefs or boy shorts. It must be a matte cotton-spandex blend showing realistic fabric weight, seams, and slight folds. It must NOT look like body paint. Color: Solid Heather Grey or Matte Black. Do not deviate from this base outfit under any circumstances.";
+const SAFETY_SETTINGS = [
+    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+];
 
+const getOutfitPrompt = (genderInput: string): string => {
+    const lowerInput = genderInput.toLowerCase();
+    const isFemale = lowerInput === 'female' || lowerInput.includes('woman') || lowerInput.includes('girl') || lowerInput.includes('lady') || lowerInput.includes('she');
+    const isMale = lowerInput === 'male' || lowerInput.includes('man') || lowerInput.includes('boy') || lowerInput.includes('guy') || lowerInput.includes('he');
 
-const getFramingPrompt = (framing: GenerationSettings['shotFraming']): string => {
-    switch (framing) {
-        case 'medium': return "Medium shot (waist up).";
-        case 'closeup': return "Close-up shot (face/upper body focus).";
-        case 'full':
-        default: return "Full-body shot (head to toe), uncropped. Feet must be visible.";
+    let outfitDescription = "";
+    if (isFemale) {
+        outfitDescription = "a minimal, skin-tight, solid heather grey athletic crop top and matching tight boy shorts (underwear style)";
+    } else if (isMale) {
+        outfitDescription = "a minimal, skin-tight, solid heather grey athletic tank top and matching tight boxer briefs (underwear style)";
+    } else {
+        // Ambiguous/Unknown: Provide both options
+        outfitDescription = "EITHER a minimal, skin-tight, solid heather grey athletic crop top and matching tight boy shorts (if female) OR a minimal, skin-tight, solid heather grey athletic tank top and matching tight boxer briefs (if male)";
     }
+
+    return `The model MUST be wearing a specific base outfit: ${outfitDescription}. The outfit must be simple, unbranded, and form-fitting to clearly show the model's physique for virtual try-on. The model must be barefoot. NO other clothing, shoes, or accessories are allowed unless explicitly specified in the user prompt.`;
 };
 
-export const generateModelImage = async (userImage: File, settings: GenerationSettings): Promise<string> => {
-    const model = 'gemini-2.5-flash-image';
+const getFramingPrompt = (framing: ShotFraming | undefined): string => {
+    if (!framing || framing === 'full') {
+        return "FULL BODY SHOT (Head to Toe). The entire model from the top of the head to the soles of the feet MUST be visible. Do not crop the head or feet. The model should be centered in the frame with a small amount of headroom and footroom.";
+    }
+
+    const framingMap: Record<ShotFraming, string> = {
+        'full': "FULL BODY SHOT (Head to Toe). The entire model from the top of the head to the soles of the feet MUST be visible. Do not crop the head or feet.",
+        'medium': "MEDIUM SHOT (Waist Up). The frame should capture the model from the waist up to the top of the head.",
+        'closeup': "CLOSE-UP SHOT (Face and Shoulders). The frame should focus tightly on the model's face and shoulders."
+    };
+
+    return framingMap[framing];
+};
+
+const getPoseAndExpressionPrompt = (settings: GenerationSettings): string => {
+    if (settings.posePrompt && settings.posePrompt.trim().length > 0) {
+        return `**Pose & Expression:** ${settings.posePrompt}. Ensure the expression is natural and engaging.`;
+    }
+
+    const dynamicPoses = [
+        "walking confidently towards the camera",
+        "standing with weight on one leg, slight hip tilt",
+        "leaning casually against an invisible wall",
+        "mid-stride, capturing motion",
+        "three-quarter turn, looking over the shoulder",
+        "hands in pockets (if applicable), relaxed stance",
+        "dynamic fashion pose, angular limbs"
+    ];
+
+    const expressions = [
+        "confident and fierce",
+        "soft smile, approachable",
+        "neutral but intense fashion gaze",
+        "slight smirk, knowing look",
+        "calm and serene"
+    ];
+
+    const randomPose = dynamicPoses[Math.floor(Math.random() * dynamicPoses.length)];
+    const randomExpression = expressions[Math.floor(Math.random() * expressions.length)];
+
+    return `**Dynamic Pose:** ${randomPose}. **Expression:** ${randomExpression}. The model should look alive, with engaging eyes and natural micro-expressions. Avoid stiff, robotic, or mannequin-like poses.`;
+};
+
+export const generateModelImage = async (userImage: File, settings: GenerationSettings, model: string): Promise<string> => {
     const userImagePart = await fileToPart(userImage);
-    const promptSuffix = getGenerationPromptSuffix(settings);
+
+    // Prioritize Global Controls
+    const lightingPrompt = getLightingPrompt(settings.lightingRig, settings.accessoryPrompt);
+    const environmentPrompt = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
+    const cameraPrompt = getGenerationPromptSuffix(settings, { exclude: ['lightingRig', 'studioEnvironment', 'floorSettings', 'shadowSculpting'] });
 
     const framingPrompt = getFramingPrompt(settings.shotFraming);
+    const outfitRule = getOutfitPrompt("female"); // Default to female if no description provided for image upload
+    const posePrompt = getPoseAndExpressionPrompt(settings);
 
     const prompt = `[ROLE]
-You are an expert AI Photographer & Art Director.
+You are a world-class professional fashion photographer and digital artist, renowned for creating ultra-realistic, high-end studio portraits. You are using a Phase One XF IQ4 150MP camera system.
 
 [TASK]
-Generate a RAW, Hyper-Realistic Photo of a model based on the reference image.
+Generate a RAW, Hyper-Realistic Photo of a model based on the reference image and the following strict technical specifications.
+
+[STRICT OUTFIT RULE]
+${outfitRule}
+
+[STRICT FRAMING RULE]
+${framingPrompt}
+
+[DYNAMIC POSE & EXPRESSION]
+${posePrompt}
+
+[STUDIO SETUP & GLOBAL CONTROLS]
+${lightingPrompt}
+${environmentPrompt}
+${cameraPrompt}
+
+[TECHNICAL SPECIFICATIONS]
+- Aspect Ratio: ${settings.aspectRatio}
+- Constraint: Ensure the subject fits completely within the ${settings.aspectRatio} frame.
 
 [SUBJECT SPECIFICATIONS]
 - Identity: Match the face, hair, and ethnicity of the reference photo.
 - Skin Details: ${REALISM_TOKENS}
 - Anatomy: ${ANATOMY_TOKENS}
-- Framing: ${framingPrompt}
-
-[STRICT WARDROBE CONSTRAINTS]
-- Item: Neutral, form-fitting boxer briefs or boy shorts.
-- Material: ${FINAL_OUTFIT_RULE}
-
-[VIRTUAL CAMERA & ENVIRONMENT]
-${promptSuffix}
 
 [NEGATIVE CONSTRAINTS]
-${QA_NEGATIVE_PROMPT}`;
+${QA_NEGATIVE_PROMPT}
+Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distorted face, bad hands, bad feet, cartoonish style, illustration style, low resolution, blurry, artifacts, watermark, text, signature, shoes (unless specified), socks (unless specified).`;
+
+    const response = await ai.models.generateContent({
+        model: model || 'gemini-2.5-flash-image',
+        contents: { parts: [userImagePart, { text: prompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+            safetySettings: SAFETY_SETTINGS,
+        },
+    });
+    return handleApiResponse(response);
+};
+
+export const generateModelFromDescription = async (description: string, settings: GenerationSettings, model: string): Promise<string> => {
+    // Prioritize Global Controls
+    const lightingPrompt = getLightingPrompt(settings.lightingRig, settings.accessoryPrompt);
+    const environmentPrompt = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
+    const cameraPrompt = getGenerationPromptSuffix(settings, { exclude: ['lightingRig', 'studioEnvironment', 'floorSettings', 'shadowSculpting'] });
+
+    const framingPrompt = getFramingPrompt(settings.shotFraming);
+    const outfitRule = getOutfitPrompt(description);
+    const posePrompt = getPoseAndExpressionPrompt(settings);
+
+    const structuredPrompt = `[ROLE]
+You are a world-class professional fashion photographer and digital artist, renowned for creating ultra-realistic, high-end studio portraits. You are using a Phase One XF IQ4 150MP camera system.
+
+[TASK]
+Generate a RAW, Hyper-Realistic Photo of a model based on the description and the following strict technical specifications.
+
+[STRICT OUTFIT RULE]
+${outfitRule}
+
+[STRICT FRAMING RULE]
+${framingPrompt}
+
+[DYNAMIC POSE & EXPRESSION]
+${posePrompt}
+
+[STUDIO SETUP & GLOBAL CONTROLS]
+${lightingPrompt}
+${environmentPrompt}
+${cameraPrompt}
+
+[TECHNICAL SPECIFICATIONS]
+- Aspect Ratio: ${settings.aspectRatio}
+- Constraint: Ensure the subject fits completely within the ${settings.aspectRatio} frame.
+
+[SUBJECT SPECIFICATIONS]
+- Appearance: ${description}
+- Skin Details: ${REALISM_TOKENS}
+- Anatomy: ${ANATOMY_TOKENS}
+
+[NEGATIVE CONSTRAINTS]
+${QA_NEGATIVE_PROMPT}
+Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distorted face, bad hands, bad feet, cartoonish style, illustration style, low resolution, blurry, artifacts, watermark, text, signature, shoes (unless specified), socks (unless specified).`;
 
     const response = await ai.models.generateContent({
         model,
-        contents: { parts: [userImagePart, { text: prompt }] },
+        contents: { parts: [{ text: structuredPrompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+            safetySettings: SAFETY_SETTINGS,
+        },
+    });
+
+    return handleApiResponse(response);
+};
+
+export const generateModelWithGarment = async (modelImage: File, garmentImage: File, poseReferenceImage: File | null, prompt: string, settings: GenerationSettings, model: string): Promise<string> => {
+    const modelImagePart = await fileToPart(modelImage);
+    const garmentImagePart = await fileToPart(garmentImage);
+    const poseReferenceImagePart = poseReferenceImage ? await fileToPart(poseReferenceImage) : undefined;
+
+    const response = await ai.models.generateContent({
+        model,
+        contents: { parts: [modelImagePart, garmentImagePart, poseReferenceImagePart, { text: prompt }] },
         config: {
             responseModalities: [Modality.IMAGE],
         },
@@ -926,70 +1065,6 @@ ${QA_NEGATIVE_PROMPT}`;
     return handleApiResponse(response);
 };
 
-export const generateModelFromDescription = async (description: string, settings: GenerationSettings, model: string): Promise<string> => {
-    const promptSuffix = getGenerationPromptSuffix(settings);
-
-    const framingPrompt = getFramingPrompt(settings.shotFraming);
-
-    const structuredPrompt = `[ROLE]
-You are an expert AI Photographer & Art Director.
-
-[TASK]
-Generate a RAW, Hyper-Realistic Photo of a model based on the description.
-
-[SUBJECT SPECIFICATIONS]
-- Appearance: ${description}
-- Skin Details: ${REALISM_TOKENS}
-- Anatomy: ${ANATOMY_TOKENS}
-- Framing: ${framingPrompt}
-
-[STRICT WARDROBE CONSTRAINTS]
-- Item: Neutral, form-fitting boxer briefs or boy shorts.
-- Material: ${FINAL_OUTFIT_RULE}
-
-[VIRTUAL CAMERA & ENVIRONMENT]
-${promptSuffix}
-
-[NEGATIVE CONSTRAINTS]
-${QA_NEGATIVE_PROMPT}`;
-
-    if (model === 'imagen-4.0-generate-001') {
-        const aspectRatioMapping: Record<AspectRatio, '1:1' | '3:4' | '4:3' | '9:16' | '16:9'> = {
-            '2:3': '3:4',
-            '1:1': '1:1',
-            '4:5': '3:4',
-            '9:16': '9:16',
-            '16:9': '16:9',
-        };
-        const validAspectRatio = aspectRatioMapping[settings.aspectRatio ?? '2:3'] || '3:4';
-
-        const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
-            prompt: structuredPrompt,
-            config: {
-                numberOfImages: 1,
-                outputMimeType: 'image/jpeg',
-                aspectRatio: validAspectRatio,
-            },
-        });
-        if (response.generatedImages && response.generatedImages.length > 0) {
-            const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-            return `data:image/jpeg;base64,${base64ImageBytes}`;
-        } else {
-            throw new Error("Imagen 4 did not return an image.");
-        }
-    } else {
-        const response = await ai.models.generateContent({
-            model,
-            contents: { parts: [{ text: structuredPrompt }] },
-            config: {
-                responseModalities: [Modality.IMAGE],
-            },
-        });
-
-        return handleApiResponse(response);
-    }
-};
 
 export const upscaleImage = async (baseImageUrl: string, resolution: UpscaleResolution): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
@@ -1004,7 +1079,7 @@ export const upscaleImage = async (baseImageUrl: string, resolution: UpscaleReso
 2.  **Refinement:** Sharpen details, enhance texture realism (skin, fabric), and remove any artifacts or noise.
 3.  **Resolution:** The output must be incredibly crisp and high-definition, suitable for large format display (${resolution}).
 
-Return ONLY the upscaled image.` + FINAL_OUTFIT_RULE;
+Return ONLY the upscaled image.` + getOutfitPrompt("female");
 
     const response = await ai.models.generateContent({
         model,
@@ -1028,7 +1103,7 @@ export const selectivelyEnhanceImage = async (baseImageUrl: string, enhancementT
     1.  **Fidelity:** Strictly preserve the model's identity, pose, background, and base outfit (neutral athletic wear).
     2.  **Targeted Refinement:** Focus all enhancement efforts on the ${enhancementTarget}, improving texture, clarity, and realism. Do NOT alter other parts of the image.
     
-    Return ONLY the enhanced image.` + FINAL_OUTFIT_RULE;
+    Return ONLY the enhanced image.` + getOutfitPrompt("female");
 
     const response = await ai.models.generateContent({
         model,
@@ -1038,7 +1113,7 @@ export const selectivelyEnhanceImage = async (baseImageUrl: string, enhancementT
     return handleApiResponse(response);
 };
 
-export const enhanceDescriptionPrompt = async (userInput: string, targetModel: 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001'): Promise<string> => {
+export const enhanceDescriptionPrompt = async (userInput: string, targetModel: 'gemini-2.5-flash-image'): Promise<string> => {
     const model = 'gemini-2.5-flash';
 
     const metaPrompt = `You are a Creative Director for a high-end fashion brand. You are creating a "Base Model" or "Digital Mannequin" description for virtual try-ons.
@@ -1223,10 +1298,12 @@ ${promptSuffix}`;
     return handleApiResponse(response);
 };
 
-export const reviseGeneratedImage = async (baseImageUrl: string, revisionPrompt: string, settings: GenerationSettings): Promise<string> => {
-    const model = 'gemini-2.5-flash-image';
+export const reviseGeneratedImage = async (baseImageUrl: string, revisionPrompt: string, settings: GenerationSettings, model: string): Promise<string> => {
     const baseImagePart = await dataUrlToPart(baseImageUrl);
     const promptSuffix = getGenerationPromptSuffix(settings);
+
+    const outfitRule = getOutfitPrompt(revisionPrompt);
+    const framingPrompt = getFramingPrompt(settings.shotFraming);
 
     const prompt = `[ROLE]
 You are a specialized AI Fashion Editor & Retoucher.
@@ -1237,15 +1314,18 @@ Edit the provided image based on the User Request, while maintaining Hyper-Reali
 [USER REQUEST]
 "${revisionPrompt}"
 
-[CONSTRAINTS & GUIDELINES]
-1.  **Identity:** Maintain the model's identity and professional style.
-2.  **Realism:** Ensure skin texture and details remain ${REALISM_TOKENS}.
-3.  **Anatomy:** Ensure ${ANATOMY_TOKENS}.
-4.  **Framing:** Maintain the original framing. Do NOT crop unless requested.
+[TECHNICAL SPECIFICATIONS]
+- Framing: ${framingPrompt}
+- Camera Position: ${getCameraPositionPrompt(settings.cameraPosition)}
+
+[SUBJECT SPECIFICATIONS]
+- Identity: Maintain the model's identity and professional style.
+- Skin Details: ${REALISM_TOKENS}
+- Anatomy: ${ANATOMY_TOKENS}
 
 [STRICT WARDROBE CONSTRAINTS]
 - Item: Neutral, form-fitting boxer briefs or boy shorts.
-- Material: ${FINAL_OUTFIT_RULE}
+- Material: ${outfitRule}
 - Rule: DO NOT change the outfit unless the user's request is *explicitly* about changing the clothing itself.
 
 [STYLE & ENVIRONMENT]
@@ -1255,7 +1335,7 @@ ${promptSuffix}
 ${QA_NEGATIVE_PROMPT}`;
 
     const response = await ai.models.generateContent({
-        model,
+        model: model || 'gemini-2.5-flash-image',
         contents: { parts: [baseImagePart, { text: prompt }] },
         config: {
             responseModalities: [Modality.IMAGE],
@@ -1285,7 +1365,7 @@ export const reviseMaskedImage = async (baseImageUrl: string, maskDataUrl: strin
     5.  Maintain the model's overall identity and the professional style of the photograph.
     6.  The output MUST remain a full-body shot. Do not crop.
 
-    Return ONLY the final, edited image.` + FINAL_OUTFIT_RULE;
+    Return ONLY the final, edited image.` + getOutfitPrompt(revisionPrompt);
 
     const response = await ai.models.generateContent({
         model,
@@ -1313,7 +1393,7 @@ export const regenerateFrame = async (baseImageUrl: string, settings: Generation
 3.  **Fill:** If expanding the frame, generate a seamless background extension that matches the original scene.
 4.  **Style:** ${promptSuffix}
 
-Return ONLY the final image.` + FINAL_OUTFIT_RULE;
+Return ONLY the final image.` + getOutfitPrompt("female");
 
     const response = await ai.models.generateContent({
         model,

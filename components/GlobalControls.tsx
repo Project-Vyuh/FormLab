@@ -102,12 +102,14 @@ interface GlobalControlsProps {
     onUpdateLight: (id: string, updates: Partial<Light> | { position: Partial<Light['position']> }) => void;
     onRemoveLight: (id: string) => void;
     onPanelToggle: (panel: keyof PanelToggles) => void;
+    isRevisionMode?: boolean;
+    selectedModelName?: string;
 }
 
 const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
     const {
         generationSettings, onSettingsChange, isGenerating, openSections, onToggleSection,
-        selectedLightId, onSelectLightId, onAddLight, onUpdateLight, onRemoveLight, onPanelToggle
+        selectedLightId, onSelectLightId, onAddLight, onUpdateLight, onRemoveLight, onPanelToggle, isRevisionMode, selectedModelName
     } = props;
 
     const activePresetLabel = useMemo(() => {
@@ -211,8 +213,10 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                     <div>
                         <label className="text-[11px] font-medium text-gray-400">Aspect Ratio</label>
                         <div className="grid grid-cols-5 gap-1.5 mt-0.5">
-                            {aspectRatioOptions.map(option => <OptionButton key={option.id} onClick={() => onSettingsChange(gs => ({ ...gs, aspectRatio: option.id }))} isActive={generationSettings.aspectRatio === option.id} disabled={isGenerating}>{option.label}</OptionButton>)}
+                            {aspectRatioOptions.map(option => <OptionButton key={option.id} onClick={() => onSettingsChange(gs => ({ ...gs, aspectRatio: option.id }))} isActive={generationSettings.aspectRatio === option.id} disabled={isGenerating || isRevisionMode || selectedModelName === 'Nano Banana'}>{option.label}</OptionButton>)}
                         </div>
+                        {isRevisionMode && <p className="text-[10px] text-gray-500 mt-1">Aspect ratio cannot be changed during revision.</p>}
+                        {!isRevisionMode && selectedModelName === 'Nano Banana' && <p className="text-[10px] text-gray-500 mt-1">Aspect ratio selection is not supported by Nano Banana.</p>}
                     </div>
                     <div>
                         <label className="text-[11px] font-medium text-gray-400">Camera Position</label>

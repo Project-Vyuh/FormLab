@@ -50,12 +50,10 @@ interface CreateModelProps {
   onDeleteProject: (projectId: string) => void;
 }
 
-type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
+type GenerationModel = 'gemini-2.5-flash-image';
 
 const generationModels: { name: string, id: GenerationModel | null, disabled?: boolean, title?: string }[] = [
-  { name: 'Nano Banana', id: 'gemini-2.5-flash-image' },
-  { name: 'Imagen 4', id: 'imagen-4.0-generate-001' },
-  { name: 'Imagen 4 Ultra', id: null, disabled: true, title: 'Imagen 4 Ultra is not yet available in this application.' },
+  { name: 'Nano Banana', id: 'gemini-2.5-flash-image', title: 'Fastest generation, good for quick iterations.' },
 ];
 
 // Robust deep merge function to handle loading state from older versions
@@ -94,10 +92,10 @@ const initialPanelToggles: PanelToggles = {
 
 const initialImageProcessing: ImageProcessingSettings = {
   exposureBias: 0,
-  contrast: 'neutral',
-  colorGrade: 'none',
-  highlightRollOff: 'medium',
-  shadowCrush: 'none',
+  contrast: 'punchy',
+  colorGrade: 'commercial',
+  highlightRollOff: 'soft',
+  shadowCrush: 'low',
   lift: { r: 0, g: 0, b: 0 },
   gamma: { r: 0, g: 0, b: 0 },
   gain: { r: 0, g: 0, b: 0 },
@@ -106,15 +104,17 @@ const initialImageProcessing: ImageProcessingSettings = {
 
 const initialSceneAtmosphere: SceneAtmosphere = {
   backgroundExposure: 0,
-  backgroundBlur: 'none',
-  vignetting: { strength: 0, shape: 'round', bias: 'center' },
-  lightWrap: 'none',
+  backgroundBlur: 'medium',
+  vignetting: { strength: 0.3, shape: 'round', bias: 'center' },
+  lightWrap: 'subtle',
   separationContrast: 'neutral',
 };
 
 const initialLightingRig: LightingRig = {
   lights: [
-    { id: 'key-1', type: 'area', role: 'key', position: { angle: 315, distance: 0.7, elevation: 45 }, power: 1.0, size: 0.8, kelvin: 5600, tint: 0, saturation: 1 },
+    { id: 'key-1', type: 'area', role: 'key', position: { angle: 315, distance: 0.8, elevation: 45 }, power: 1.2, size: 0.9, kelvin: 5400, tint: 0, saturation: 1 },
+    { id: 'fill-1', type: 'area', role: 'fill', position: { angle: 45, distance: 1.0, elevation: 0 }, power: -1.5, size: 1.2, kelvin: 5600, tint: 0, saturation: 1 },
+    { id: 'rim-1', type: 'spot', role: 'rim', position: { angle: 180, distance: 1.2, elevation: 60 }, power: 0.8, size: 0.3, kelvin: 6000, tint: 0, saturation: 1 },
   ],
   hdri: { map: 'neutral', rotation: 0 },
 };
@@ -131,7 +131,7 @@ const initialNoiseAndGrain: NoiseAndGrainSettings = {
   chromaticAberration: false,
 };
 
-const initialStudioEnvironment: StudioEnvironment = { type: 'mid-gray', cycloramaCurve: 0.5 };
+const initialStudioEnvironment: StudioEnvironment = { type: 'gradient', gradientType: 'radial', color1: '#e0e0e0', color2: '#ffffff', cycloramaCurve: 0.5 };
 const initialFloorSettings: FloorSettings = { material: 'matte', glossiness: 0.1, reflectionLength: 0.2 };
 const initialShadowSculpting: ShadowSculptingSettings = { flags: { left: false, right: false } };
 const initialAmbientBounce: AmbientBounceSettings = { color: '#FFFFFF', strength: 0, bias: 'uniform' };
@@ -144,32 +144,32 @@ export const initialGenerationSettings: GenerationSettings = {
   shadowSculpting: initialShadowSculpting,
   ambientBounce: initialAmbientBounce,
   ambientOcclusion: initialAmbientOcclusion,
-  photoStyle: 'none',
+  photoStyle: 'modern',
   accessoryPrompt: '',
   shotFraming: 'full',
   posePrompt: '',
   negativePrompt: '',
   aspectRatio: '2:3',
-  apertureSettings: { aperture: 5.6, bokehShape: 'round' },
-  lensProfile: '50mm',
+  apertureSettings: { aperture: 2.8, bokehShape: 'round' },
+  lensProfile: '85mm',
   shutterSettings: initialShutterSettings,
   lightingRig: initialLightingRig,
   sceneAtmosphere: initialSceneAtmosphere,
   imageProcessing: initialImageProcessing,
-  sensorSize: 'full-frame',
+  sensorSize: 'medium-format',
   cameraPosition: { height: 1.5, tilt: 0 },
   focusPlaneSettings: { focusDistance: 0.5, faceAutofocus: true },
-  cameraProfile: 'none',
+  cameraProfile: 'phase-one',
   noiseAndGrain: initialNoiseAndGrain,
   digitalDarkroom: {
-    frequencySeparation: false,
-    shineControl: 0,
-    skinToneHarmonization: false,
-    lensCorrection: false,
-    bodyWarpCorrection: false,
-    cleanup: false,
-    studioSharpening: false,
-    dynamicRangeTuning: false,
+    frequencySeparation: true,
+    shineControl: 0.3,
+    skinToneHarmonization: true,
+    lensCorrection: true,
+    bodyWarpCorrection: true,
+    cleanup: true,
+    studioSharpening: true,
+    dynamicRangeTuning: true,
   },
   panelToggles: initialPanelToggles,
 };
@@ -600,7 +600,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
       if (!modelInfo || !modelInfo.id) throw new Error("Invalid model selected.");
 
       const result = file
-        ? await generateModelImage(file, generationSettings)
+        ? await generateModelImage(file, generationSettings, modelInfo.id)
         : await generateModelFromDescription(modelDescription, generationSettings, modelInfo.id);
       await addHistoryItem({ prompt, settings: generationSettings, modelName: selectedModelName }, result);
     } catch (err) {
@@ -640,9 +640,12 @@ const CreateModel: React.FC<CreateModelProps> = ({
         revisionInstruction = "Re-render the image with updated artistic and technical settings. Do not change the subject's core identity or the base outfit.";
       }
 
+      const modelInfo = generationModels.find(m => m.name === selectedModelName);
+      if (!modelInfo || !modelInfo.id) throw new Error("Invalid model selected.");
+
       const result = isMasked
         ? await reviseMaskedImage(generatedModelUrl, maskDataUrl!, revisionInstruction, currentSettings)
-        : await reviseGeneratedImage(generatedModelUrl, revisionInstruction, currentSettings);
+        : await reviseGeneratedImage(generatedModelUrl, revisionInstruction, currentSettings, modelInfo.id);
 
       await addHistoryItem({ prompt: promptForHistory, settings: currentSettings, modelName: selectedModelName }, result);
       setRevisionPrompt('');
@@ -706,7 +709,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
       const enhancedText = isResultView
         ? await enhanceRevisionPrompt(generatedModelUrl!, revisionPrompt, modelDescription)
-        : await enhanceDescriptionPrompt(modelDescription, modelInfo.id as 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001');
+        : await enhanceDescriptionPrompt(modelDescription, modelInfo.id as 'gemini-2.5-flash-image');
 
       if (isResultView) setRevisionPrompt(enhancedText);
       else setModelDescription(enhancedText);
@@ -1198,7 +1201,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
   const renderLeftPanelContent = () => {
     const activePreset = STYLE_PRESETS.find(p => JSON.stringify(p.settings) === JSON.stringify(Object.keys(p.settings).reduce((acc, key) => ({ ...acc, [key]: generationSettings[key as keyof GenerationSettings] }), {})));
-    const isUploadDisabled = selectedModelName === 'Imagen 4';
+    const isUploadDisabled = false;
 
     return (
       <div className="flex-grow p-4 space-y-3 overflow-y-auto">
@@ -1356,6 +1359,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
               onUpdateLight={updateLight}
               onRemoveLight={removeLight}
               onPanelToggle={handlePanelToggle}
+              isRevisionMode={!!currentHistoryItemId}
+              selectedModelName={selectedModelName}
             />
           </div>
         </div>

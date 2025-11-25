@@ -157,11 +157,10 @@ interface ImageStudioProps {
   onSaveStylingHistory: (baseModelId: string, history: HistoryItem[]) => void;
 }
 
-type GenerationModel = 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001';
+type GenerationModel = 'gemini-2.5-flash-image';
 
 const generationModels: { name: string, id: GenerationModel | null, disabled?: boolean, title?: string }[] = [
-  { name: 'Nano Banana', id: 'gemini-2.5-flash-image' },
-  { name: 'Imagen 4', id: 'imagen-4.0-generate-001', disabled: true, title: 'Imagen 4 is for text-to-image generation and not supported in the Image Studio workflow.' },
+  { name: 'Nano Banana', id: 'gemini-2.5-flash-image', title: 'Fastest generation, good for quick iterations.' },
   { name: 'Imagen 4 Ultra', id: null, disabled: true, title: 'Imagen 4 Ultra is not yet available.' },
 ];
 
@@ -829,7 +828,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     setLoadingMessage('Applying text revision...');
     setError(null);
     try {
-      const result = await reviseGeneratedImage(displayImageUrl, revisionPrompt, generationSettings);
+      const result = await reviseGeneratedImage(displayImageUrl, revisionPrompt, generationSettings, 'gemini-2.5-flash-image');
 
       // Upload to Firebase Storage if user is logged in and result is base64
       let finalImageUrl = result;
