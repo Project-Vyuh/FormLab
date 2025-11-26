@@ -7,7 +7,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import OutfitStack from './OutfitStack';
-import PerItemControls from './PerItemControls';
 import { OutfitLayer } from '../types';
 import { ChevronDownIcon, ChevronUpIcon, WandIcon, Share2Icon, DownloadIcon, VideoIcon, ClipboardIcon } from './icons';
 
@@ -43,8 +42,6 @@ interface RightPanelContentProps {
 
 
 const PanelMainContent: React.FC<Omit<RightPanelContentProps, 'isSheet' | 'isSheetCollapsed' | 'onToggleSheet'>> = (props) => {
-  const selectedLayer = props.outfitStack.find(layer => layer.id === props.selectedLayerId);
-
   return (
     <>
       {props.error && (
@@ -64,7 +61,6 @@ const PanelMainContent: React.FC<Omit<RightPanelContentProps, 'isSheet' | 'isShe
         onQuickReplace={props.onQuickReplace}
         modelImageUrl={props.modelImageUrl}
       />
-      <PerItemControls selectedLayer={selectedLayer} />
     </>
   );
 }
@@ -94,20 +90,20 @@ const RightPanelContent: React.FC<RightPanelContentProps> = (props) => {
   }, []);
 
   const CallToAction = (
-    <div className="p-4 md:p-6 border-t border-gray-800 flex-shrink-0 relative bg-[#1a1a1a]">
+    <div className="p-4 border-t border-white/5 flex-shrink-0 relative bg-[#1a1a1a]">
       <button
         onClick={onGenerate}
         disabled={isLoading || !hasPendingChanges}
-        className={`w-full flex items-center justify-center text-center font-semibold py-3.5 px-4 rounded-lg transition-all duration-200 ease-in-out text-base shadow-lg
+        className={`w-full flex items-center justify-center text-center font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 ease-in-out text-xs shadow-lg
                 ${hasPendingChanges && !isLoading
-            ? 'bg-gray-100 text-gray-900 hover:bg-white/90 shadow-xl transform hover:-translate-y-0.5'
-            : 'bg-gray-800 text-gray-600 cursor-not-allowed'}
+            ? 'bg-white text-black hover:bg-gray-200 shadow-[0_0_15px_rgba(255,255,255,0.1)]'
+            : 'bg-white/5 text-gray-600 cursor-not-allowed border border-white/10'}
             `}
       >
         {isLoading ? (
           <span className="flex items-center gap-2">Generating...</span>
         ) : (
-          <span className="flex items-center gap-2"><WandIcon className="w-5 h-5" /> Generate Image</span>
+          <span className="flex items-center gap-2"><WandIcon className="w-4 h-4" /> Generate Image</span>
         )}
       </button>
       <div className="relative mt-2">
@@ -118,16 +114,16 @@ const RightPanelContent: React.FC<RightPanelContentProps> = (props) => {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-0 right-0 mb-2 w-full bg-[#2a2a2a] border border-gray-700 rounded-lg shadow-xl z-10 py-1"
+              className="absolute bottom-full left-0 right-0 mb-2 w-full bg-[#2a2a2a] border border-white/10 rounded-lg shadow-xl z-10 py-1"
             >
-              <button onClick={() => { props.onDownloadImage(); setIsExportMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-300 hover:bg-white/10">
-                <DownloadIcon className="w-4 h-4" /> Download Image (.jpg)
+              <button onClick={() => { props.onDownloadImage(); setIsExportMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-gray-300 hover:bg-white/10">
+                <DownloadIcon className="w-3.5 h-3.5" /> Download Image (.jpg)
               </button>
-              <button onClick={() => { props.onUseAsVideoReference(); setIsExportMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-300 hover:bg-white/10">
-                <VideoIcon className="w-4 h-4" /> Use as Video Reference
+              <button onClick={() => { props.onUseAsVideoReference(); setIsExportMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-gray-300 hover:bg-white/10">
+                <VideoIcon className="w-3.5 h-3.5" /> Use as Video Reference
               </button>
-              <button onClick={() => { props.onCopySettings(); setIsExportMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-300 hover:bg-white/10">
-                <ClipboardIcon className="w-4 h-4" /> Copy Creative Settings
+              <button onClick={() => { props.onCopySettings(); setIsExportMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-gray-300 hover:bg-white/10">
+                <ClipboardIcon className="w-3.5 h-3.5" /> Copy Creative Settings
               </button>
             </motion.div>
           )}
@@ -136,9 +132,9 @@ const RightPanelContent: React.FC<RightPanelContentProps> = (props) => {
         <button
           onClick={() => setIsExportMenuOpen(prev => !prev)}
           disabled={isLoading}
-          className="w-full flex items-center justify-center text-center font-semibold py-3.5 px-4 rounded-lg transition-all duration-200 ease-in-out text-base border border-gray-700 text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+          className="w-full flex items-center justify-center text-center font-medium py-2 px-4 rounded-lg transition-all duration-200 ease-in-out text-xs border border-white/10 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 disabled:opacity-50"
         >
-          <Share2Icon className="w-5 h-5 mr-2" /> Export
+          <Share2Icon className="w-4 h-4 mr-2" /> Export
         </button>
       </div>
     </div>
@@ -147,7 +143,7 @@ const RightPanelContent: React.FC<RightPanelContentProps> = (props) => {
   if (isSheet) {
     return (
       <aside
-        className={`absolute bottom-0 right-0 h-auto w-full bg-[#1a1a1a]/95 backdrop-blur-md flex flex-col border-t border-gray-800 transition-transform duration-500 ease-in-out z-40 ${isSheetCollapsed ? 'translate-y-[calc(100%-5rem)]' : 'translate-y-0'}`}
+        className={`absolute bottom-0 right-0 h-auto w-full bg-[#1a1a1a]/95 backdrop-blur-md flex flex-col border-t border-white/5 transition-transform duration-500 ease-in-out z-40 ${isSheetCollapsed ? 'translate-y-[calc(100%-5rem)]' : 'translate-y-0'}`}
         style={{ maxHeight: '90vh', transitionProperty: 'transform' }}
       >
         <button
@@ -168,7 +164,7 @@ const RightPanelContent: React.FC<RightPanelContentProps> = (props) => {
   // Desktop view
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 md:p-6 overflow-y-auto flex-grow flex flex-col gap-6">
+      <div className="p-4 overflow-y-auto flex-grow flex flex-col gap-4">
         <PanelMainContent {...props} />
       </div>
       {CallToAction}

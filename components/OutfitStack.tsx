@@ -62,12 +62,12 @@ const LayerCard: React.FC<{
 
     return (
         <div
-            className={`group/item relative rounded-lg border transition-all ${isSelected ? 'bg-blue-500/10 border-blue-500/50' : 'bg-white/5 border-gray-700/80 hover:bg-white/10'}`}
+            className={`group/item relative rounded-lg border transition-all ${isSelected ? 'bg-white/10 border-white/20' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
             onClick={() => onSelect(layer.id)}
         >
-            <div className="flex items-center gap-3 p-2">
-                <div className="flex-shrink-0 w-6 h-12 flex items-center justify-center">
-                    <span className="text-sm font-bold text-gray-500">{layerNumber}</span>
+            <div className="flex items-center gap-2 p-2">
+                <div className="flex-shrink-0 w-5 h-12 flex items-center justify-center">
+                    <span className="text-[10px] font-semibold text-gray-500">{layerNumber}</span>
                 </div>
 
                 {isBaseModel ? (
@@ -97,8 +97,8 @@ const LayerCard: React.FC<{
                 </div>
 
                 <div className="flex-grow min-w-0">
-                    <p className="text-sm font-semibold text-gray-200 truncate">{layer.garment ? layer.garment.name : 'Base Model'}</p>
-                    <p className="text-xs text-gray-500">{layer.garment ? layer.garment.sku : '---'}</p>
+                    <p className="text-xs font-medium text-gray-200 truncate">{layer.garment ? layer.garment.name : 'Base Model'}</p>
+                    <p className="text-[10px] text-gray-500">{layer.garment ? layer.garment.sku : '---'}</p>
                 </div>
 
                 <div className="flex items-center flex-shrink-0 gap-1">
@@ -155,9 +155,9 @@ const OutfitStack: React.FC<OutfitStackProps> = (props) => {
     const reversedLayers = useMemo(() => [...layers].reverse(), [layers]);
 
     return (
-        <div className="flex flex-col">
-            <h2 className="text-base font-sans font-semibold text-gray-800 dark:text-gray-200 pb-2 mb-2 flex items-center gap-2">
-                <ShirtIcon className="w-5 h-5" />
+        <div className="space-y-4">
+            <h2 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                <ShirtIcon className="w-3.5 h-3.5" />
                 Outfit Stack
             </h2>
             <div className="space-y-2">
@@ -184,7 +184,7 @@ const OutfitStack: React.FC<OutfitStackProps> = (props) => {
                 })}
             </div>
             {layers.length <= 1 && (
-                <p className="text-center text-xs text-gray-500 dark:text-gray-400 pt-3">Your stacked items will appear here. Select an item from the library to start.</p>
+                <p className="text-center text-[10px] text-gray-500 pt-2">Your stacked items will appear here. Select an item from the library to start.</p>
             )}
         </div>
     );

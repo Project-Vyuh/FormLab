@@ -12,7 +12,6 @@ import { AspectRatio } from '../types';
 
 interface CanvasProps {
   displayImageUrl: string | null;
-  onStartOver: () => void;
   isLoading: boolean;
   loadingMessage: string;
   onSelectPose: (index: number) => void;
@@ -20,19 +19,16 @@ interface CanvasProps {
   currentPoseIndex: number;
   availablePoseKeys: string[];
   aspectRatio: AspectRatio;
-  onUndo: () => void;
-  onRedo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
   isStudioEmpty?: boolean;
+  zoom: number;
+  setZoom: (zoom: number) => void;
 }
 
-const Canvas: React.FC<CanvasProps> = ({ 
-    displayImageUrl, onStartOver, isLoading, loadingMessage, 
+const Canvas: React.FC<CanvasProps> = ({
+    displayImageUrl, isLoading, loadingMessage,
     onSelectPose, poseInstructions, currentPoseIndex, availablePoseKeys,
-    aspectRatio, onUndo, onRedo, canUndo, canRedo, isStudioEmpty
+    aspectRatio, isStudioEmpty, zoom, setZoom
 }) => {
-  const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const startPanPoint = useRef({ x: 0, y: 0 });
@@ -43,7 +39,7 @@ const Canvas: React.FC<CanvasProps> = ({
     // Reset zoom and pan when image changes
     setZoom(1);
     setPan({ x: 0, y: 0 });
-  }, [displayImageUrl]);
+  }, [displayImageUrl, setZoom]);
 
   const handleWheel = (e: React.WheelEvent) => {
     if (!displayImageUrl) return;
@@ -111,107 +107,9 @@ const Canvas: React.FC<CanvasProps> = ({
     }
     return 'zoom-in';
   };
-  
-  const handleStartOverWithReset = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-    onStartOver();
-  };
-  
-  const handlePreviousPose = () => {
-    if (isLoading || availablePoseKeys.length <= 1) return;
 
-    const currentPoseInstruction = poseInstructions[currentPoseIndex];
-    const currentIndexInAvailable = availablePoseKeys.indexOf(currentPoseInstruction);
-    
-    if (currentIndexInAvailable === -1) {
-        onSelectPose((currentPoseIndex - 1 + poseInstructions.length) % poseInstructions.length);
-        return;
-    }
-
-    const prevIndexInAvailable = (currentIndexInAvailable - 1 + availablePoseKeys.length) % availablePoseKeys.length;
-    const prevPoseInstruction = availablePoseKeys[prevIndexInAvailable];
-    const newGlobalPoseIndex = poseInstructions.indexOf(prevPoseInstruction);
-    
-    if (newGlobalPoseIndex !== -1) {
-        onSelectPose(newGlobalPoseIndex);
-    }
-  };
-
-  const handleNextPose = () => {
-    if (isLoading) return;
-
-    const currentPoseInstruction = poseInstructions[currentPoseIndex];
-    const currentIndexInAvailable = availablePoseKeys.indexOf(currentPoseInstruction);
-
-    if (currentIndexInAvailable === -1 || availablePoseKeys.length === 0) {
-        onSelectPose((currentPoseIndex + 1) % poseInstructions.length);
-        return;
-    }
-    
-    const nextIndexInAvailable = currentIndexInAvailable + 1;
-    if (nextIndexInAvailable < availablePoseKeys.length) {
-        const nextPoseInstruction = availablePoseKeys[nextIndexInAvailable];
-        const newGlobalPoseIndex = poseInstructions.indexOf(nextPoseInstruction);
-        if (newGlobalPoseIndex !== -1) {
-            onSelectPose(newGlobalPoseIndex);
-        }
-    } else {
-        const newGlobalPoseIndex = (currentPoseIndex + 1) % poseInstructions.length;
-        onSelectPose(newGlobalPoseIndex);
-    }
-  };
-  
   return (
     <div className="w-full h-full flex flex-col bg-gray-50 dark:bg-[#0f0f0f] relative overflow-hidden">
-        {/* Professional Toolbar */}
-        <div className="h-12 flex items-center justify-between px-4 border-b border-gray-200/80 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] flex-shrink-0 z-20 shadow-sm">
-             <div className="flex items-center gap-3">
-                 <div className="flex items-center bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-gray-700/50 rounded-lg p-0.5">
-                    <button onClick={onUndo} disabled={!canUndo || isLoading} className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-white/10 disabled:opacity-30 transition-colors" title="Undo">
-                        <UndoIcon className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-                    </button>
-                    <div className="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-0.5"></div>
-                    <button onClick={onRedo} disabled={!canRedo || isLoading} className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-white/10 disabled:opacity-30 transition-colors" title="Redo">
-                        <RedoIcon className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-                    </button>
-                 </div>
-                 {displayImageUrl && (
-                    <button 
-                        onClick={handleStartOverWithReset} 
-                        className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded-lg transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-900/30"
-                    >
-                        <RotateCcwIcon className="w-3.5 h-3.5" /> 
-                        <span className="hidden sm:inline">Start Over</span>
-                    </button>
-                 )}
-            </div>
-
-            {/* Pose Navigation */}
-             <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
-                 {displayImageUrl && (
-                     <div className="flex items-center bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-gray-700/50 rounded-lg p-1 shadow-sm">
-                        <button onClick={handlePreviousPose} disabled={isLoading} className="p-1 rounded-md hover:bg-gray-200 dark:hover:bg-white/10 disabled:opacity-30 transition-colors">
-                            <ChevronLeftIcon className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-                        </button>
-                        <span className="text-xs font-medium text-gray-700 dark:text-gray-200 w-36 text-center truncate px-2 select-none">
-                            {poseInstructions[currentPoseIndex]}
-                        </span>
-                        <button onClick={handleNextPose} disabled={isLoading} className="p-1 rounded-md hover:bg-gray-200 dark:hover:bg-white/10 disabled:opacity-30 transition-colors">
-                            <ChevronRightIcon className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-                        </button>
-                     </div>
-                 )}
-             </div>
-
-             {/* Zoom Controls / Info */}
-             <div className="flex items-center gap-2 text-xs font-mono text-gray-400 dark:text-gray-500">
-                <div className="flex items-center gap-1 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-gray-700/50 rounded-lg px-2 py-1">
-                    {Math.round(zoom * 100)}%
-                </div>
-             </div>
-        </div>
-
         {/* Main Viewport */}
         <div className="flex-grow relative w-full h-full overflow-hidden flex items-center justify-center p-4">
             <div 
