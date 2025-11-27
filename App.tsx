@@ -244,12 +244,16 @@ const App: React.FC = () => {
                 state.generatedModelHistory
                   .filter(historyItem => historyItem.parentId === null)
                   .forEach(historyItem => {
+                    // Extract timestamp from history item ID (format: rev-{timestamp})
+                    const timestamp = parseInt(historyItem.id.split('-').pop() || '0');
                     galleryModels.push({
                       id: `${project.id}-${historyItem.id}`,
                       url: historyItem.imageUrl,
                       source: 'user',
                       projectId: project.id, // Associate model with project
                       historyItemId: historyItem.id, // Store history item ID for loading
+                      createdAt: timestamp || Date.now(),
+                      updatedAt: timestamp || Date.now(),
                     });
                   });
               }
@@ -370,6 +374,30 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const handleModelUpdated = useCallback((modelId: string) => {
+    // Update the model's updatedAt timestamp
+    setModelGallery(prevGallery => {
+      return prevGallery.map(m => {
+        if (m.id === modelId) {
+          return { ...m, updatedAt: Date.now() };
+        }
+        return m;
+      });
+    });
+  }, []);
+
+  const handleRenameModel = useCallback((modelId: string, newName: string) => {
+    // Update the model's name in the gallery
+    setModelGallery(prevGallery => {
+      return prevGallery.map(m => {
+        if (m.id === modelId) {
+          return { ...m, name: newName };
+        }
+        return m;
+      });
+    });
+  }, []);
+
   const handleSelectModelFromGallery = useCallback((model: Model) => {
     // If the model is from a different project, switch to that project
     if (model.projectId && model.projectId !== currentProjectId) {
@@ -409,12 +437,15 @@ const App: React.FC = () => {
       }
 
       // Only add base model to gallery (not revisions)
+      const timestamp = Date.now();
       const newModel: Model = {
         id: `${currentProjectId}-${stylingModelData.baseModelId}`,
         url: stylingModelData.url,
         source: 'user',
         projectId: currentProjectId || undefined,
         historyItemId: stylingModelData.baseModelId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
       };
       return [newModel, ...prevGallery];
     });
@@ -559,12 +590,15 @@ const App: React.FC = () => {
       await saveProjectState(currentProjectId, updatedState);
 
       // 5. Update Gallery (App state)
+      const timestamp = Date.now();
       const newModel: Model = {
         id: `${currentProjectId}-${newHistoryItemId}`,
         url: template.url,
         source: 'user',
         projectId: currentProjectId,
         historyItemId: newHistoryItemId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
       };
 
       setModelGallery(prev => [newModel, ...prev]);
@@ -652,7 +686,9 @@ const App: React.FC = () => {
                   modelGallery={currentProjectModels}
                   onSelectModel={handleSelectModelFromGallery}
                   onModelAdded={handleModelAdded}
+                  onModelUpdated={handleModelUpdated}
                   onModelDeleted={handleDeleteModel}
+                  onRenameModel={handleRenameModel}
                   selectedHistoryItemId={selectedHistoryItemId}
                   onHistoryItemLoaded={() => setSelectedHistoryItemId(null)}
                   onOpenCollectionsModal={() => setIsCollectionsModalOpen(true)}

@@ -13,6 +13,8 @@ export interface Model {
   name?: string; // Display name
   projectId?: string; // Associated project ID for user-created models
   historyItemId?: string; // History item ID for loading version history
+  createdAt?: number; // Timestamp of creation
+  updatedAt?: number; // Timestamp of last modification
 }
 
 export type WardrobeCategory = string;

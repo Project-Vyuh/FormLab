@@ -30,6 +30,7 @@ import ProjectSelectorPanel from './ProjectSelectorPanel';
 import SwitchProjectModal from './SwitchProjectModal';
 import PromptPanel from './PromptPanel';
 import ContextMenu from './ContextMenu';
+import UserModelsModal from './UserModelsModal';
 import { loadPredefinedModels } from '../services/firestoreService';
 
 
@@ -38,14 +39,15 @@ interface CreateModelProps {
   onSaveModelInstance: (modelUrl: string) => void;
   projectList: Project[];
   currentProjectId: string | null;
-  onProjectChange: (id: string) => void;
   onOpenProjectModal: (mode: 'create' | 'edit') => void;
   currentUser: User | null;
   modelGallery: Model[];
   onSelectModel: (model: Model) => void;
   onModelAdded?: (model: Model) => void; // Callback when a new base model is created
-  onModelDeleted?: (model: Model) => void; // Callback when a model is deleted
-  selectedHistoryItemId?: string | null; // History item to load from gallery selection
+  onModelDeleted: (model: Model) => void; // Callback when a model is deleted
+  onModelUpdated?: (modelId: string) => void; // Callback when a model is updated (e.g., revision made)
+  onRenameModel?: (modelId: string, newName: string) => void; // Callback when a model is renamed
+  selectedHistoryItemId: string | null; // History item ID to load from gallery selection
   onHistoryItemLoaded?: () => void; // Callback when history item has been loaded
   onOpenCollectionsModal: () => void; // Callback to open collections modal
   lastExternalUpdate?: number; // Trigger to reload project state
@@ -196,6 +198,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
   onSelectModel,
   onModelAdded,
   onModelDeleted,
+  onModelUpdated,
+  onRenameModel,
   selectedHistoryItemId,
   onHistoryItemLoaded,
   onOpenCollectionsModal,
@@ -261,6 +265,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
   const [isTemplatesSectionOpen, setIsTemplatesSectionOpen] = useState(false);
   const [selectedTemplateForPreview, setSelectedTemplateForPreview] = useState<Model | null>(null);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [isUserModelsModalOpen, setIsUserModelsModalOpen] = useState(false);
 
   // Context Menu & Delete State
   const [contextMenuModel, setContextMenuModel] = useState<Model | null>(null);
@@ -549,16 +554,23 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
     // If this is a base model (no parent) and we have a callback, notify App.tsx to update the gallery
     if (currentHistoryItemId === null && onModelAdded && currentProjectId) {
+      const timestamp = Date.now();
       const newModel: Model = {
         id: `${currentProjectId}-${newId}`,
         url: finalImageUrl,
         source: 'user',
         projectId: currentProjectId,
         historyItemId: newId, // Store the history item ID
+        createdAt: timestamp,
+        updatedAt: timestamp,
       };
       onModelAdded(newModel);
+    } else if (currentHistoryItemId !== null && onModelUpdated && currentProjectId && baseModelId) {
+      // This is a revision, update the base model's timestamp
+      const baseModelFullId = `${currentProjectId}-${baseModelId}`;
+      onModelUpdated(baseModelFullId);
     }
-  }, [currentHistoryItemId, currentUser, currentProjectId, onModelAdded]);
+  }, [currentHistoryItemId, currentUser, currentProjectId, onModelAdded, onModelUpdated]);
 
   const restoreHistoryItem = useCallback((id: string, source: 'ui' | 'undo' | 'redo') => {
     const item = generatedModelHistory.find(h => h.id === id);
@@ -928,12 +940,15 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
       // Add to model gallery
       if (onModelAdded) {
+        const timestamp = Date.now();
         const newModel: Model = {
           id: `${currentProjectId}-${newHistoryItemId}`,
           url: finalImageUrl,
           source: 'user',
           projectId: currentProjectId,
           historyItemId: newHistoryItemId,
+          createdAt: timestamp,
+          updatedAt: timestamp,
         };
         onModelAdded(newModel);
       }
@@ -1332,9 +1347,15 @@ const CreateModel: React.FC<CreateModelProps> = ({
               <PlusIcon className="w-6 h-6 text-gray-500 group-hover:text-gray-300 transition-colors" />
             </button>
 
-            {/* Existing Models */}
+            {/* Existing Models - Sorted by modification date, limited to 10 */}
             {modelGallery
               .filter(model => model.source !== 'predefined')
+              .sort((a, b) => {
+                const dateA = a.updatedAt || a.createdAt || 0;
+                const dateB = b.updatedAt || b.createdAt || 0;
+                return dateB - dateA;
+              })
+              .slice(0, 10)
               .map(model => {
                 const isSelected = model.url === generatedModelUrl;
                 return (
@@ -1355,6 +1376,12 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 );
               })}
           </div>
+          <button
+            onClick={() => setIsUserModelsModalOpen(true)}
+            className="w-full mt-3 py-2 text-[11px] font-medium text-gray-400 hover:text-white transition-colors flex items-center justify-center gap-1.5 border border-white/10 bg-white/5 hover:bg-white/10 rounded-lg group"
+          >
+            All User-Created Models <ChevronRightIcon className="w-3 h-3 text-gray-500 group-hover:text-gray-300 transition-colors" />
+          </button>
           {modelGallery.length === 0 && (
             <div className="text-xs text-gray-400 py-2 text-center">
               Create a model through prompt or upload photo
@@ -1448,7 +1475,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
                     const resetSettings: Partial<GenerationSettings> = {};
                     Object.keys(p.settings).forEach(key => {
                       const settingsKey = key as keyof GenerationSettings;
-                      resetSettings[settingsKey] = initialGenerationSettings[settingsKey] as any;
+                      (resetSettings as any)[settingsKey] = initialGenerationSettings[settingsKey];
                     });
                     setGenerationSettings(gs => ({ ...gs, ...resetSettings }));
                   } else {
@@ -1841,7 +1868,6 @@ const CreateModel: React.FC<CreateModelProps> = ({
         message="Do you want to permanently delete this model? This action cannot be undone."
         confirmText="Delete Model"
       />
-      {/* Switch Project Modal */}
       <SwitchProjectModal
         isOpen={isSwitchProjectModalOpen}
         onClose={() => setIsSwitchProjectModalOpen(false)}
@@ -1849,6 +1875,23 @@ const CreateModel: React.FC<CreateModelProps> = ({
         currentProjectId={currentProjectId}
         onSwitchProject={onProjectChange}
         onDeleteProject={onDeleteProject}
+      />
+
+      <UserModelsModal
+        isOpen={isUserModelsModalOpen}
+        onClose={() => setIsUserModelsModalOpen(false)}
+        models={modelGallery.filter(model => model.source !== 'predefined')}
+        onSelectModel={onSelectModel}
+        currentModelUrl={generatedModelUrl}
+        onRenameModel={(modelId, newName) => {
+          if (onRenameModel) {
+            onRenameModel(modelId, newName);
+          }
+        }}
+        onDeleteModel={(model) => {
+          onModelDeleted(model);
+          setIsUserModelsModalOpen(false);
+        }}
       />
 
     </div >

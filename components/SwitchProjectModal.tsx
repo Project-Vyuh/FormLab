@@ -64,49 +64,59 @@ const SwitchProjectModal: React.FC<SwitchProjectModalProps> = ({
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="bg-[#1a1a1a]/80 backdrop-blur-xl w-full max-w-4xl h-[60vh] rounded-xl border border-white/10 shadow-2xl flex flex-col overflow-hidden"
+                            className="bg-[#1a1a1a]/80 backdrop-blur-xl w-full max-w-5xl h-[70vh] rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden"
+                            style={{
+                                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                            }}
                         >
                             {/* Header */}
                             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5">
                                 <div>
-                                    <h2 className="text-lg font-semibold text-white">Projects</h2>
+                                    <h2 className="text-lg font-semibold text-white tracking-tight">Projects</h2>
                                     <p className="text-xs text-gray-400 mt-0.5">All your created projects appear here.</p>
                                 </div>
                                 <button
                                     onClick={onClose}
-                                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                                    className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
                                 >
-                                    <XIcon className="w-5 h-5 text-gray-400" />
+                                    <XIcon className="w-5 h-5" />
                                 </button>
                             </div>
 
                             {/* Content */}
                             <div className="flex flex-1 overflow-hidden">
                                 {/* Sidebar - Project List */}
-                                <div className="w-72 border-r border-white/5 overflow-y-auto bg-white/5">
-                                    <div className="p-3 space-y-1">
-                                        {projects.map(project => (
-                                            <button
-                                                key={project.id}
-                                                onClick={() => setSelectedProjectId(project.id)}
-                                                className={`w-full text-left px-3 py-3 rounded-lg transition-all duration-200 group flex items-center gap-3 ${selectedProjectId === project.id
-                                                    ? 'bg-blue-500/10 border border-blue-500/30'
-                                                    : 'hover:bg-white/5 border border-transparent'
-                                                    }`}
-                                            >
-                                                <div className={`p-2 rounded-md ${selectedProjectId === project.id ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-400 group-hover:text-gray-300'}`}>
-                                                    <FolderIcon className="w-4 h-4" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <h3 className={`text-sm font-medium truncate ${selectedProjectId === project.id ? 'text-blue-400' : 'text-gray-300 group-hover:text-white'}`}>
-                                                        {project.title}
-                                                    </h3>
-                                                    <p className="text-[10px] text-gray-500 truncate mt-0.5">
-                                                        {new Date(project.createdAt).toLocaleDateString()}
-                                                    </p>
-                                                </div>
-                                            </button>
-                                        ))}
+                                <div className="w-72 min-w-[18rem] bg-white/5 border-r border-white/5 flex flex-col flex-shrink-0">
+                                    <div className="flex-grow py-4 overflow-y-auto">
+                                        <div className="mb-2">
+                                            <div className="px-6 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                                Your Projects
+                                            </div>
+                                            <div className="space-y-0.5">
+                                                {projects.map(project => (
+                                                    <button
+                                                        key={project.id}
+                                                        onClick={() => setSelectedProjectId(project.id)}
+                                                        className={`w-full text-left px-6 py-3 transition-all duration-200 group flex items-center gap-3 ${selectedProjectId === project.id
+                                                            ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
+                                                            : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                            }`}
+                                                    >
+                                                        <div className={`p-1.5 rounded-md ${selectedProjectId === project.id ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500 group-hover:text-gray-400'}`}>
+                                                            <FolderIcon className="w-4 h-4" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h3 className={`text-sm font-medium truncate ${selectedProjectId === project.id ? 'text-blue-400' : 'text-gray-300 group-hover:text-white'}`}>
+                                                                {project.title}
+                                                            </h3>
+                                                            <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                                                                {new Date(project.createdAt).toLocaleDateString()}
+                                                            </p>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                         {projects.length === 0 && (
                                             <div className="text-center py-8 text-gray-500 text-xs">
                                                 No projects found
@@ -145,7 +155,7 @@ const SwitchProjectModal: React.FC<SwitchProjectModalProps> = ({
                                                     <div className="p-4 rounded-lg border border-red-500/20 bg-red-500/5 flex items-center justify-between">
                                                         <div>
                                                             <h4 className="text-sm font-medium text-gray-200 mb-0.5">Delete this project</h4>
-                                                            <p className="text-xs text-gray-500">Once you delete a repository, there is no going back. Please be certain.</p>
+                                                            <p className="text-xs text-gray-500">Once you delete a project, there is no going back. Please be certain.</p>
                                                         </div>
                                                         <button
                                                             onClick={handleDeleteClick}
@@ -160,7 +170,7 @@ const SwitchProjectModal: React.FC<SwitchProjectModalProps> = ({
                                                     <button
                                                         onClick={handleSwitch}
                                                         disabled={selectedProjectId === currentProjectId}
-                                                        className="px-6 py-2 bg-[#318CE7] hover:bg-[#2b7bc0] text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20"
+                                                        className="px-6 py-2.5 bg-[#318CE7] hover:bg-[#2b7bc0] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20"
                                                     >
                                                         {selectedProjectId === currentProjectId ? 'Current Project' : 'Switch Project'}
                                                     </button>
