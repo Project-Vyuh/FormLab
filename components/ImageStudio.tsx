@@ -239,9 +239,43 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   // Canvas Zoom State
   const [zoom, setZoom] = useState(1);
 
+  // Track initial settings to detect changes
+  const [initialSettings, setInitialSettings] = useState<GenerationSettings>(initialGenerationSettings);
+
   // Calculate current history item and display URL (must be before handlers that use it)
   const currentHistoryItem = useMemo(() => generatedModelHistory.find(item => item.id === currentHistoryItemId), [generatedModelHistory, currentHistoryItemId]);
   const displayImageUrl = useMemo(() => currentHistoryItem?.imageUrl || modelImageUrl, [currentHistoryItem, modelImageUrl]);
+
+  // Detect settings changes by deep comparison
+  const hasSettingsChanged = useMemo(() => {
+    return JSON.stringify(generationSettings) !== JSON.stringify(initialSettings);
+  }, [generationSettings, initialSettings]);
+
+  // Detect outfit changes (more than just base model)
+  const hasOutfitChanged = useMemo(() => {
+    return outfitStack.length > 1 || hasPendingStackChanges;
+  }, [outfitStack, hasPendingStackChanges]);
+
+  // Dynamic button label logic
+  const applyButtonLabel = useMemo(() => {
+    const hasRevision = revisionPrompt.trim().length > 0;
+    const hasSettings = hasSettingsChanged;
+    const hasOutfit = hasOutfitChanged;
+
+    if (hasRevision && hasSettings && hasOutfit) return 'Apply Revision + Settings + Outfit';
+    if (hasRevision && hasSettings) return 'Apply Revision + Settings';
+    if (hasRevision && hasOutfit) return 'Apply Revision + Outfit';
+    if (hasRevision) return 'Apply Revision';
+    if (hasSettings && hasOutfit) return 'Apply Settings + Outfit';
+    if (hasSettings) return 'Apply Settings';
+    if (hasOutfit) return 'Apply Outfit';
+    return 'Apply Settings';
+  }, [revisionPrompt, hasSettingsChanged, hasOutfitChanged]);
+
+  // Button should be enabled if any changes exist
+  const canApply = useMemo(() => {
+    return revisionPrompt.trim().length > 0 || hasSettingsChanged || hasOutfitChanged;
+  }, [revisionPrompt, hasSettingsChanged, hasOutfitChanged]);
 
   // Close menus on click outside
   useEffect(() => {
@@ -363,6 +397,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             // Use the selected revision
             setCurrentHistoryItemId(selectedItem.id);
             setGenerationSettings(selectedItem.settings);
+            setInitialSettings(selectedItem.settings);
           } else {
             // Fallback: Find the last try-on item, or the last item overall
             const lastTryonItem = [...unifiedHistory]
@@ -372,11 +407,13 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             if (lastTryonItem) {
               setCurrentHistoryItemId(lastTryonItem.id);
               setGenerationSettings(lastTryonItem.settings);
+              setInitialSettings(lastTryonItem.settings);
             } else {
               // No try-on history yet, use the last item (likely a model-generation or model-revision)
               const lastItem = unifiedHistory[unifiedHistory.length - 1];
               setCurrentHistoryItemId(lastItem.id);
               setGenerationSettings(lastItem.settings);
+              setInitialSettings(lastItem.settings);
             }
           }
         } else {
@@ -963,6 +1000,118 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     }
   }, [displayImageUrl, revisionPrompt, generationSettings, currentHistoryItemId]);
 
+  // Unified handler that intelligently applies changes based on what the user has modified
+  const handleApplyChanges = useCallback(async () => {
+    if (!displayImageUrl || isLoading) return;
+
+    const hasRevision = revisionPrompt.trim().length > 0;
+    const hasSettings = hasSettingsChanged;
+    const hasOutfit = hasOutfitChanged;
+
+    // Must have at least one type of change
+    if (!hasRevision && !hasSettings && !hasOutfit) {
+      setToastMessage("No changes to apply.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      let currentImageUrl = displayImageUrl;
+      let promptForHistory = '';
+
+      // Step 1: Apply outfit changes first if they exist
+      if (hasOutfit) {
+        setLoadingMessage('Applying outfit changes...');
+        const resolvedBaseImage = await resolveImageUrl(modelImageUrl || displayImageUrl);
+        const visibleGarmentLayers = outfitStack.filter(l => l.isVisible && l.garment);
+
+        if (visibleGarmentLayers.length > 0) {
+          for (let i = 0; i < visibleGarmentLayers.length; i++) {
+            const layer = visibleGarmentLayers[i];
+            setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}...`);
+            const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
+            currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings);
+          }
+          promptForHistory += `Applied ${visibleGarmentLayers.map(l => l.garment!.name).join(', ')}`;
+        }
+      }
+
+      // Step 2: Apply revision and/or settings changes
+      if (hasRevision || hasSettings) {
+        let revisionInstruction: string;
+
+        if (hasRevision) {
+          setLoadingMessage('Applying revision...');
+          revisionInstruction = revisionPrompt;
+          promptForHistory = hasOutfit ? `${promptForHistory} + ${revisionPrompt}` : revisionPrompt;
+        } else {
+          // Settings-only change - be very explicit about what to update
+          setLoadingMessage('Applying creative settings...');
+          revisionInstruction = "RE-RENDER this image with the updated technical and creative specifications provided in the prompt. Apply ALL lighting changes (key light, fill light, rim light, HDRI), ALL camera settings (lens, aperture, sensor, position), ALL environment settings (background, floor, atmosphere), and ALL post-processing settings (color grading, contrast, film grain, retouching). Maintain the subject's exact identity, facial features, body proportions, pose, and outfit - ONLY update the lighting, camera perspective, depth of field, background, and post-processing/grading. Do NOT change what the model looks like or what they're wearing - ONLY change how the scene is photographed and processed.";
+          promptForHistory = hasOutfit ? `${promptForHistory} + Applied creative settings` : 'Applied creative settings';
+        }
+
+        // Apply revision/settings to current image (which may already have outfit applied)
+        currentImageUrl = await reviseGeneratedImage(
+          currentImageUrl,
+          revisionInstruction,
+          generationSettings,
+          'gemini-2.5-flash-image'
+        );
+      }
+
+      // Upload to Firebase Storage if user is logged in and result is base64
+      let finalImageUrl = currentImageUrl;
+      if (currentUser && isBase64Url(currentImageUrl)) {
+        try {
+          setLoadingMessage('Saving image...');
+          finalImageUrl = await uploadBase64Image(
+            currentImageUrl,
+            currentUser.uid,
+            'tryons',
+            `combined_${Date.now()}.jpg`,
+            currentProjectId || undefined
+          );
+          console.log('Combined changes image uploaded to Firebase Storage:', finalImageUrl);
+        } catch (error) {
+          console.error('Failed to upload to Firebase Storage, using base64:', error);
+        }
+      }
+
+      // Create history item
+      const newHistoryItem: HistoryItem = {
+        id: `hist-${Date.now()}`,
+        parentId: currentHistoryItemId,
+        imageUrl: finalImageUrl,
+        prompt: promptForHistory,
+        settings: deepCopy(generationSettings),
+        modelName: "gemini-2.5-flash-image",
+        isStarred: false,
+        type: 'try-on-revision',
+        baseModelId: selectedStylingModel!.baseModelId,
+      };
+
+      setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
+      setCurrentHistoryItemId(newHistoryItem.id);
+      setRedoStack([]);
+
+      // Reset change tracking
+      setRevisionPrompt('');
+      setInitialSettings(generationSettings);
+      setHasPendingStackChanges(false);
+
+      setToastMessage("Changes applied successfully!");
+
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Failed to apply changes'));
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
+  }, [displayImageUrl, isLoading, revisionPrompt, hasSettingsChanged, hasOutfitChanged, outfitStack, modelImageUrl, generationSettings, currentUser, currentProjectId, currentHistoryItemId, selectedStylingModel]);
+
   if (!selectedStylingModel) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a1a1a] text-center p-4">
@@ -988,7 +1137,6 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         <div className="h-14 border-b border-white/5 bg-[#1a1a1a]/80 backdrop-blur-md flex items-center justify-between px-6 flex-shrink-0 z-20">
           <h1 className="text-[15px] font-medium text-white/90">Image Studio</h1>
           <div className="flex items-center gap-3">
-            <button onClick={handleStartOver} className="text-[13px] font-medium text-gray-400 hover:text-white transition-colors">Start Over</button>
             <button
               onClick={() => {
                 if (displayImageUrl) {
@@ -1052,8 +1200,12 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                   revisionPrompt={revisionPrompt}
                   onRevisionPromptChange={setRevisionPrompt}
                   onEnhanceRevisionPrompt={handleEnhancePosePrompt}
-                  onApplyRevision={handlePromptRevision}
+                  onApplyRevision={handleApplyChanges}
                   isEnhancingPrompt={isEnhancingPrompt}
+                  hasSettingsChanged={hasSettingsChanged}
+                  hasOutfitChanged={hasOutfitChanged}
+                  applyButtonLabel={applyButtonLabel}
+                  canApply={canApply}
                 />
               </div>
               <ResizeHandle onMouseDown={handleLeftDrag} />

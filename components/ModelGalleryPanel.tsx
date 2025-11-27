@@ -56,6 +56,11 @@ interface ModelGalleryPanelProps {
   onEnhanceRevisionPrompt: () => void;
   onApplyRevision: () => void;
   isEnhancingPrompt: boolean;
+  // Dynamic button props
+  hasSettingsChanged: boolean;
+  hasOutfitChanged: boolean;
+  applyButtonLabel: string;
+  canApply: boolean;
 }
 
 const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
@@ -66,7 +71,8 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
     categories, onCreateCategory, onRenameCategory, onDeleteCategory, onDeleteProduct,
     generationModels, selectedGenerationModel, onSelectGenerationModel,
     projectList, currentProjectId, onProjectChange, onOpenProjectModal,
-    revisionPrompt, onRevisionPromptChange, onEnhanceRevisionPrompt, onApplyRevision, isEnhancingPrompt
+    revisionPrompt, onRevisionPromptChange, onEnhanceRevisionPrompt, onApplyRevision, isEnhancingPrompt,
+    hasSettingsChanged, hasOutfitChanged, applyButtonLabel, canApply
   } = props;
 
   return (
@@ -153,16 +159,9 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
             showEnhanceButton={true}
             onEnhance={onEnhanceRevisionPrompt}
             isEnhancing={isEnhancingPrompt}
-            enhanceButtonText={revisionPrompt.trim() ? 'Enhance' : 'Suggest'}
+            enhanceButtonText={revisionPrompt.trim() ? 'Enhance' : 'Suggest Revision Description'}
             showUploadButton={false}
           />
-          <button
-            onClick={onApplyRevision}
-            disabled={isLoading || !revisionPrompt.trim()}
-            className="w-full py-2 text-xs font-semibold text-black bg-white hover:bg-gray-200 rounded-lg shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-all disabled:opacity-50 disabled:shadow-none"
-          >
-            Apply Revision
-          </button>
         </div>
 
         {/* Wardrobe Library */}
@@ -229,6 +228,13 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
             </button>
           ))}
         </div>
+        <button
+          onClick={onApplyRevision}
+          disabled={isLoading || !canApply}
+          className="w-full py-2 text-xs font-semibold text-black bg-white hover:bg-gray-200 rounded-lg shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-all disabled:opacity-50 disabled:shadow-none mt-3"
+        >
+          {applyButtonLabel}
+        </button>
       </div>
     </aside>
   );

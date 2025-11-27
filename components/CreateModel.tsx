@@ -10,8 +10,8 @@ import { UploadCloudIcon, CubeIcon, BookmarkIcon, CameraIcon, WandIcon, ChevronR
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
 import Spinner from './Spinner';
 import { getFriendlyErrorMessage, cn } from "../lib/utils";
-import { Loader2Icon, UndoIcon, RedoIcon, PenLineIcon, ZapIcon } from "lucide-react";
-import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, BrandStyle, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem, HistoryItemType, User, SelectedStylingModel, Model } from '../types';
+import { Loader2Icon, UndoIcon, RedoIcon, PenLineIcon, ZapIcon, RotateCcwIcon } from "lucide-react";
+import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem, HistoryItemType, User, SelectedStylingModel, Model } from '../types';
 import { createUpscaleRequest, listenToUpscaleRequest, UpscaleRequest } from '../services/firestoreService';
 import ConfirmationModal from './ConfirmationModal';
 import ResizeHandle from './ResizeHandle';
@@ -221,7 +221,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(initialGenerationSettings);
   const [openSections, setOpenSections] = useState({ project: true, prompt: true, presets: true, composition: false, camera: false, lighting: false, environment: false, finishing: false, advanced: false });
-  const [brandStyles, setBrandStyles] = useState<BrandStyle[]>([]);
+
 
   // Lighting state
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
@@ -343,12 +343,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
     saveState().catch(e => console.error("Failed to save project state:", e));
   }, [currentProjectId, modelDescription, revisionPrompt, selectedModelName, generatedModelHistory, currentHistoryItemId, generationSettings, hasSavedInstance], 500);
 
-  useEffect(() => {
-    try {
-      const savedStyles = localStorage.getItem('formlab-brand-styles-createmodel');
-      if (savedStyles) setBrandStyles(JSON.parse(savedStyles));
-    } catch (err) { console.error("Failed to load brand styles", err); }
-  }, []);
+
 
   // Watch for gallery selection from props (works for both same-project and cross-project)
   useEffect(() => {
@@ -584,6 +579,20 @@ const CreateModel: React.FC<CreateModelProps> = ({
     setIsMaskingMode(false);
     setMaskDataUrl(null);
   }, [generatedModelHistory, currentHistoryItem]);
+
+  const handleStartOver = useCallback(() => {
+    // Reset to initial state
+    setGeneratedModelHistory([]);
+    setCurrentHistoryItemId(null);
+    setRedoStack([]);
+    setRevisionPrompt('');
+    setModelDescription('');
+    setGenerationSettings(initialGenerationSettings);
+    setSelectedModelName('gemini-2.5-flash-image');
+    setIsMaskingMode(false);
+    setMaskDataUrl(null);
+    setToastMessage('Started over - all changes cleared');
+  }, []);
 
   const handleGenerate = async (file?: File) => {
     if (!file && !modelDescription.trim()) {
@@ -1079,15 +1088,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
     window.addEventListener('mouseup', handleMouseUp);
   }, [leftPanelWidth]);
 
-  const handleSaveBrandStyle = (name: string) => {
-    const newStyle: BrandStyle = { id: `style-create-${Date.now()}`, name, settings: generationSettings };
-    setBrandStyles(prev => {
-      const updated = [...prev, newStyle];
-      localStorage.setItem('formlab-brand-styles-createmodel', JSON.stringify(updated));
-      return updated;
-    });
-    setToastMessage(`Brand style '${name}' saved.`);
-  };
+
 
   const handleWheel = (e: React.WheelEvent) => {
     if (!generatedModelUrl || isMaskingMode) return;
@@ -1437,16 +1438,30 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
         <CollapsibleSection title="Style Presets" icon={<BookmarkIcon className="w-3.5 h-3.5" />} isOpen={openSections.presets} onToggle={() => setOpenSections(p => ({ ...p, presets: !p.presets }))}>
           <div className="grid grid-cols-2 gap-1.5">
-            {STYLE_PRESETS.map(p => <OptionButton key={p.label} onClick={() => setGenerationSettings(gs => ({ ...gs, ...p.settings }))} isActive={activePreset?.label === p.label} disabled={isGenerating}>{p.label}</OptionButton>)}
-          </div>
-          <div className="mt-3">
-            <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-              Brand Kit
-            </label>
-            <div className="flex gap-1.5">
-              <select onChange={(e) => { const s = brandStyles.find(bs => bs.id === e.target.value); if (s) setGenerationSettings(s.settings); }} disabled={isGenerating || brandStyles.length === 0} className="w-full text-[11px] p-1.5 bg-black/20 border border-white/10 text-gray-300 rounded-md focus:border-white/20 outline-none"><option>Load style...</option>{brandStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
-              <button onClick={() => { const name = prompt("Style Name:"); if (name) handleSaveBrandStyle(name); }} disabled={isGenerating} className="px-2.5 text-[11px] font-medium rounded-md border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors">Save</button>
-            </div>
+            {STYLE_PRESETS.map(p => (
+              <OptionButton
+                key={p.label}
+                onClick={() => {
+                  // Toggle logic: if preset is active, reset its settings to defaults
+                  if (activePreset?.label === p.label) {
+                    // Reset settings that were in this preset to their initial values
+                    const resetSettings: Partial<GenerationSettings> = {};
+                    Object.keys(p.settings).forEach(key => {
+                      const settingsKey = key as keyof GenerationSettings;
+                      resetSettings[settingsKey] = initialGenerationSettings[settingsKey] as any;
+                    });
+                    setGenerationSettings(gs => ({ ...gs, ...resetSettings }));
+                  } else {
+                    // Apply the preset settings
+                    setGenerationSettings(gs => ({ ...gs, ...p.settings }));
+                  }
+                }}
+                isActive={activePreset?.label === p.label}
+                disabled={isGenerating}
+              >
+                {p.label}
+              </OptionButton>
+            ))}
           </div>
         </CollapsibleSection>
 
@@ -1482,7 +1497,6 @@ const CreateModel: React.FC<CreateModelProps> = ({
       <div className="h-14 border-b border-white/5 bg-[#1a1a1a]/80 backdrop-blur-md flex items-center justify-between px-6 flex-shrink-0 z-20">
         <h1 className="text-[15px] font-medium text-white/90">Create Model</h1>
         <div className="flex items-center gap-3">
-          {isResultView && <button onClick={() => { if (window.confirm("Start a new project? This will clear your current model creation.")) { reset(); } }} className="text-[13px] font-medium text-gray-400 hover:text-white transition-colors">Start Over</button>}
           <button
             onClick={() => {
               if (generatedModelUrl) {
@@ -1559,7 +1573,11 @@ const CreateModel: React.FC<CreateModelProps> = ({
             >
               {isGenerating ? loadingMessage :
                 isResultView ?
-                  (revisionPrompt.trim() ? (isMaskingMode ? "Apply Masked Revision" : "Apply Revision") : (hasSettingsChanged ? "Apply Settings" : "Apply Revision"))
+                  (revisionPrompt.trim() && hasSettingsChanged ?
+                    (isMaskingMode ? "Apply Masked Revision + Settings" : "Apply Revision + Settings") :
+                    revisionPrompt.trim() ?
+                      (isMaskingMode ? "Apply Masked Revision" : "Apply Revision") :
+                      (hasSettingsChanged ? "Apply Settings" : "Apply Revision"))
                   : 'Generate Model'
               }
             </button>
@@ -1575,6 +1593,17 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 <button onClick={handleUndo} disabled={!canUndo || isGenerating} className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30 transition-colors text-gray-400 hover:text-white" title="Undo"><UndoIcon className="w-4 h-4" /></button>
                 <button onClick={handleRedo} disabled={!canRedo || isGenerating} className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30 transition-colors text-gray-400 hover:text-white" title="Redo"><RedoIcon className="w-4 h-4" /></button>
               </div>
+              {isResultView && (
+                <button
+                  onClick={() => { setZoom(1); handleStartOver(); }}
+                  disabled={isGenerating}
+                  className="flex items-center gap-1.5 px-2 py-1.5 ml-2 text-xs font-medium text-red-400 hover:bg-red-900/20 rounded-lg transition-colors border border-transparent hover:border-red-900/30 disabled:opacity-30"
+                  title="Start Over"
+                >
+                  <RotateCcwIcon className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Start Over</span>
+                </button>
+              )}
               <div className="w-px h-6 bg-white/10 mx-2"></div>
               <button onClick={() => setIsMaskingMode(p => !p)} disabled={!isResultView} className={`p-2 rounded-md border transition-all flex items-center gap-2 text-sm ${isMaskingMode ? 'bg-white/5 border-white/5 text-gray-300' : 'bg-transparent border-transparent hover:bg-white/5 text-gray-400 hover:text-white'} disabled:opacity-30 focus:outline-none`} title="Masking Brush"><PenLineIcon className="w-4 h-4" /></button>
               {isMaskingMode && (
