@@ -55,8 +55,9 @@ const LayerCard: React.FC<{
     onRemove: (layerId: string) => void;
     onQuickReplace: (category: string) => void;
     isSelected: boolean;
+    baseModelName?: string;
 }> = (props) => {
-    const { layer, index, layerNumber, totalLayers, modelImageUrl, onMoveLayerUp, onMoveLayerDown, onToggleVisibility, onSelect, onRemove, onQuickReplace, isSelected } = props;
+    const { layer, index, layerNumber, totalLayers, modelImageUrl, baseModelName = 'Base Model', onMoveLayerUp, onMoveLayerDown, onToggleVisibility, onSelect, onRemove, onQuickReplace, isSelected } = props;
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const isBaseModel = !layer.garment;
 
@@ -92,12 +93,12 @@ const LayerCard: React.FC<{
                 )}
 
                 <div className="w-12 h-12 rounded-md bg-gray-800 flex-shrink-0 overflow-hidden">
-                    {isBaseModel && modelImageUrl && <img src={modelImageUrl} alt="Base Model" className="w-full h-full object-cover" />}
+                    {isBaseModel && modelImageUrl && <img src={modelImageUrl} alt={baseModelName} className="w-full h-full object-cover" />}
                     {layer.garment && <img src={layer.garment.url} alt={layer.garment.name} className="w-full h-full object-cover" />}
                 </div>
 
                 <div className="flex-grow min-w-0">
-                    <p className="text-xs font-medium text-gray-200 truncate">{layer.garment ? layer.garment.name : 'Base Model'}</p>
+                    <p className="text-xs font-medium text-gray-200 truncate">{layer.garment ? layer.garment.name : baseModelName}</p>
                     <p className="text-[10px] text-gray-500">{layer.garment ? layer.garment.sku : '---'}</p>
                 </div>
 
@@ -141,6 +142,7 @@ const LayerCard: React.FC<{
 interface OutfitStackProps {
     layers: OutfitLayer[];
     modelImageUrl: string | null;
+    baseModelName?: string;
     onMoveLayerUp: (layerId: string) => void;
     onMoveLayerDown: (layerId: string) => void;
     onToggleVisibility: (layerId: string) => void;
@@ -151,7 +153,7 @@ interface OutfitStackProps {
 }
 
 const OutfitStack: React.FC<OutfitStackProps> = (props) => {
-    const { layers, selectedLayerId, onSelect, modelImageUrl } = props;
+    const { layers, selectedLayerId, onSelect, modelImageUrl, baseModelName = 'Base Model' } = props;
     const reversedLayers = useMemo(() => [...layers].reverse(), [layers]);
 
     return (
@@ -174,6 +176,7 @@ const OutfitStack: React.FC<OutfitStackProps> = (props) => {
                             isSelected={selectedLayerId === layer.id}
                             onSelect={onSelect}
                             modelImageUrl={modelImageUrl}
+                            baseModelName={baseModelName}
                             onMoveLayerUp={props.onMoveLayerUp}
                             onMoveLayerDown={props.onMoveLayerDown}
                             onToggleVisibility={props.onToggleVisibility}

@@ -252,6 +252,25 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     return JSON.stringify(generationSettings) !== JSON.stringify(initialSettings);
   }, [generationSettings, initialSettings]);
 
+  // Derive the model to display in "Your Selected Model" and use for Outfit Stack base
+  const displayModel: SelectedStylingModel | null = useMemo(() => {
+    if (!selectedStylingModel) return null;
+    if (currentHistoryItem) {
+      // Use history item name, or generate a fallback like "Version X" if missing
+      // We avoid falling back to selectedStylingModel.name to prevent confusion
+      const versionNumber = currentHistoryItem.id.split('-')[1] || 'Unknown';
+      const fallbackName = `Version ${versionNumber.slice(-4)}`;
+
+      return {
+        url: currentHistoryItem.imageUrl,
+        name: currentHistoryItem.name || fallbackName,
+        historyItemId: currentHistoryItem.id,
+        baseModelId: selectedStylingModel.baseModelId
+      };
+    }
+    return selectedStylingModel;
+  }, [selectedStylingModel, currentHistoryItem]);
+
   // Detect outfit changes (more than just base model)
   const hasOutfitChanged = useMemo(() => {
     return outfitStack.length > 1 || hasPendingStackChanges;
@@ -385,6 +404,10 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       if (selectedStylingModel && currentProjectId) {
         setModelImageUrl(selectedStylingModel.url);
 
+        // Always initialize outfit stack with base layer
+        const baseLayer: OutfitLayer = { id: 'base-model', garment: null, isVisible: true };
+        setOutfitStack([baseLayer]);
+
         // Load unified history (Create Model + Image Studio history merged)
         const unifiedHistory = await loadUnifiedHistory(currentProjectId, selectedStylingModel.baseModelId);
 
@@ -420,7 +443,6 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         } else {
           // No history exists yet - Create new root history item for this model
           // This happens when first entering Image Studio from a newly created model
-          const baseLayer: OutfitLayer = { id: 'base-model', garment: null, isVisible: true };
           const rootHistoryItem: HistoryItem = {
             id: `hist-${Date.now()}`,
             parentId: null,
@@ -433,7 +455,6 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             type: 'try-on',
             baseModelId: selectedStylingModel.baseModelId,
           };
-          setOutfitStack([baseLayer]);
           setGeneratedModelHistory([rootHistoryItem]);
           setCurrentHistoryItemId(rootHistoryItem.id);
         }
@@ -775,8 +796,13 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
     setCurrentHistoryItemId(id);
     setGenerationSettings(item.settings);
+
+    // Reset outfit stack to base model when switching versions
+    const baseLayer: OutfitLayer = { id: 'base-model', garment: null, isVisible: true };
+    setOutfitStack([baseLayer]);
+
     // In Image Studio, we don't restore the outfit stack from history to allow applying new outfits to old images
-    setHasPendingStackChanges(true); // Selecting a new base image means changes are pending
+    setHasPendingStackChanges(false);
   }, [generatedModelHistory, currentHistoryItem]);
 
   const handleUndo = () => {
@@ -992,7 +1018,16 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     setLoadingMessage('Applying text revision...');
     setError(null);
     try {
-      const result = await reviseGeneratedImage(displayImageUrl, revisionPrompt, generationSettings, 'gemini-2.5-flash-image');
+      // Construct dynamic outfit instruction based on stack
+      let outfitInstruction: string | undefined;
+      const visibleGarments = outfitStack.filter(l => l.isVisible && l.garment);
+
+      if (visibleGarments.length > 0) {
+        const garmentNames = visibleGarments.map(l => l.garment!.name).join(', ');
+        outfitInstruction = `PRESERVE the current outfit (${garmentNames}) exactly as it appears in the image. Do NOT revert to base underwear. The model is ALREADY wearing the correct clothing.`;
+      }
+
+      const result = await reviseGeneratedImage(displayImageUrl, revisionPrompt, generationSettings, 'gemini-2.5-flash-image', outfitInstruction);
 
       // Upload to Firebase Storage if user is logged in and result is base64
       let finalImageUrl = result;
@@ -1077,7 +1112,10 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       }
 
       // Step 2: Apply revision and/or settings changes
-      if (hasRevision || hasSettings) {
+      // OPTIMIZATION: If we just applied an outfit, the settings were ALREADY applied in Step 1 (generateVirtualTryOnImage takes settings).
+      // We only need to run Step 2 if there is an explicit text revision, or if we didn't apply an outfit (settings-only change).
+
+      if (hasRevision || (hasSettings && !hasOutfit)) {
         let revisionInstruction: string;
 
         if (hasRevision) {
@@ -1085,18 +1123,29 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           revisionInstruction = revisionPrompt;
           promptForHistory = hasOutfit ? `${promptForHistory} + ${revisionPrompt}` : revisionPrompt;
         } else {
-          // Settings-only change - be very explicit about what to update
+          // Settings-only change (no outfit change happened in Step 1)
           setLoadingMessage('Applying creative settings...');
           revisionInstruction = "RE-RENDER this image with the updated technical and creative specifications provided in the prompt. Apply ALL lighting changes (key light, fill light, rim light, HDRI), ALL camera settings (lens, aperture, sensor, position), ALL environment settings (background, floor, atmosphere), and ALL post-processing settings (color grading, contrast, film grain, retouching). Maintain the subject's exact identity, facial features, body proportions, pose, and outfit - ONLY update the lighting, camera perspective, depth of field, background, and post-processing/grading. Do NOT change what the model looks like or what they're wearing - ONLY change how the scene is photographed and processed.";
-          promptForHistory = hasOutfit ? `${promptForHistory} + Applied creative settings` : 'Applied creative settings';
+          promptForHistory = 'Applied creative settings';
         }
 
         // Apply revision/settings to current image (which may already have outfit applied)
+
+        // Construct dynamic outfit instruction based on stack
+        let outfitInstruction: string | undefined;
+        const visibleGarments = outfitStack.filter(l => l.isVisible && l.garment);
+
+        if (visibleGarments.length > 0) {
+          const garmentNames = visibleGarments.map(l => l.garment!.name).join(', ');
+          outfitInstruction = `PRESERVE the current outfit (${garmentNames}) exactly as it appears in the image. Do NOT revert to base underwear. The model is ALREADY wearing the correct clothing.`;
+        }
+
         currentImageUrl = await reviseGeneratedImage(
           currentImageUrl,
           revisionInstruction,
           generationSettings,
-          'gemini-2.5-flash-image'
+          'gemini-2.5-flash-image',
+          outfitInstruction
         );
       }
 
@@ -1138,6 +1187,12 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       // Reset change tracking
       setRevisionPrompt('');
       setInitialSettings(generationSettings);
+
+      // CRITICAL: Reset the outfit stack to just the base model.
+      // The generated image now HAS the outfit baked in. The stack should reflect that we are starting fresh on this new image.
+      // This ensures the "Apply" button resets and prevents accidental double-application.
+      const baseLayer: OutfitLayer = { id: 'base-model', garment: null, isVisible: true };
+      setOutfitStack([baseLayer]);
       setHasPendingStackChanges(false);
 
       setToastMessage("Changes applied successfully!");
@@ -1199,7 +1254,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             <>
               <div style={{ width: `${leftPanelWidth}px` }} className="flex-shrink-0 h-full relative">
                 <ModelGalleryPanel
-                  selectedStylingModel={selectedStylingModel}
+                  selectedStylingModel={displayModel}
                   onNavigateToCreateModel={onNavigateToCreateModel}
                   isLoading={isLoading}
                   generationSettings={generationSettings}
@@ -1357,7 +1412,8 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                   onSelectLayer={handleSelectLayer}
                   selectedLayerId={selectedLayerId}
                   onQuickReplace={handleQuickReplace}
-                  modelImageUrl={modelImageUrl}
+                  modelImageUrl={displayImageUrl}
+                  baseModelName={displayModel?.name}
                   isLoading={isLoading}
                   onGenerate={handleGenerate}
                   hasPendingChanges={hasPendingChanges}
@@ -1376,7 +1432,8 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             error={error} outfitStack={outfitStack} onMoveLayerUp={handleMoveLayerUp} onMoveLayerDown={handleMoveLayerDown}
             onToggleVisibility={handleToggleVisibility} onRemoveLayer={handleRemoveLayer}
             onSelectLayer={handleSelectLayer} selectedLayerId={selectedLayerId} onQuickReplace={handleQuickReplace}
-            modelImageUrl={modelImageUrl}
+            modelImageUrl={displayImageUrl}
+            baseModelName={displayModel?.name}
             isLoading={isLoading}
             onGenerate={handleGenerate}
             hasPendingChanges={hasPendingChanges}

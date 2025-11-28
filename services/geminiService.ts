@@ -1298,11 +1298,11 @@ ${promptSuffix}`;
     return handleApiResponse(response);
 };
 
-export const reviseGeneratedImage = async (baseImageUrl: string, revisionPrompt: string, settings: GenerationSettings, model: string): Promise<string> => {
+export const reviseGeneratedImage = async (baseImageUrl: string, revisionPrompt: string, settings: GenerationSettings, model: string, outfitInstruction?: string): Promise<string> => {
     const baseImagePart = await dataUrlToPart(baseImageUrl);
     const promptSuffix = getGenerationPromptSuffix(settings);
 
-    const outfitRule = getOutfitPrompt(revisionPrompt);
+    const outfitRule = outfitInstruction || getOutfitPrompt(revisionPrompt);
     const framingPrompt = getFramingPrompt(settings.shotFraming);
 
     const prompt = `[ROLE]
@@ -1324,9 +1324,9 @@ Edit the provided image based on the User Request, while maintaining Hyper-Reali
 - Anatomy: ${ANATOMY_TOKENS}
 
 [STRICT WARDROBE CONSTRAINTS]
-- Item: Neutral, form-fitting boxer briefs or boy shorts.
+${outfitInstruction ? `- Rule: ${outfitInstruction}` : `- Item: Neutral, form-fitting boxer briefs or boy shorts.
 - Material: ${outfitRule}
-- Rule: DO NOT change the outfit unless the user's request is *explicitly* about changing the clothing itself.
+- Rule: DO NOT change the outfit unless the user's request is *explicitly* about changing the clothing itself.`}
 
 [STYLE & ENVIRONMENT]
 ${promptSuffix}

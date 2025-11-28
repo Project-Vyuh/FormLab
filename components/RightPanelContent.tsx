@@ -24,6 +24,7 @@ interface RightPanelContentProps {
   selectedLayerId: string | null;
   onQuickReplace: (category: string) => void;
   modelImageUrl: string | null;
+  baseModelName?: string;
 
   isLoading: boolean;
 
@@ -60,6 +61,7 @@ const PanelMainContent: React.FC<Omit<RightPanelContentProps, 'isSheet' | 'isShe
         selectedLayerId={props.selectedLayerId}
         onQuickReplace={props.onQuickReplace}
         modelImageUrl={props.modelImageUrl}
+        baseModelName={props.baseModelName}
       />
     </>
   );
