@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { collection, getDocs, doc, setDoc, getDoc, query, where, DocumentData, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc, query, where, DocumentData, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
 // Collection names
@@ -364,4 +364,185 @@ export function listenToUpscaleRequest(requestId: string, onUpdate: (request: Up
   });
 
   return unsubscribe;
+}
+
+/**
+ * Global Assets (Enterprise Data Sync)
+ */
+
+export interface GlobalModel {
+  id: string;
+  userId: string;
+  url: string;
+  name: string;
+  thumbnail?: string;
+  createdAt: string;
+  updatedAt: string;
+  source: 'user-global';
+  projectId?: string; // Origin project
+  historyItemId?: string; // Origin history item
+}
+
+export interface GlobalWardrobeItem {
+  id: string;
+  userId: string;
+  url: string;
+  name: string;
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+  source: 'user-global';
+  projectId?: string; // Origin project
+}
+
+// --- Global Models Functions ---
+
+export async function saveGlobalModel(userId: string, model: Omit<GlobalModel, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'source'>): Promise<string> {
+  try {
+    const modelId = `model-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const modelData: GlobalModel = {
+      ...model,
+      id: modelId,
+      userId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      source: 'user-global',
+    };
+
+    await setDoc(doc(db, 'users', userId, 'models', modelId), modelData);
+    console.log('Global model saved:', modelId);
+    return modelId;
+  } catch (error) {
+    console.error('Error saving global model:', error);
+    throw error;
+  }
+}
+
+export async function getGlobalModels(userId: string, projectId?: string): Promise<GlobalModel[]> {
+  try {
+    let q = query(collection(db, 'users', userId, 'models'));
+    if (projectId) {
+      q = query(q, where('projectId', '==', projectId));
+    }
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => doc.data() as GlobalModel);
+  } catch (error) {
+    console.error('Error loading global models:', error);
+    return [];
+  }
+}
+
+export async function deleteGlobalModel(userId: string, modelId: string): Promise<void> {
+  try {
+    console.log('[deleteGlobalModel] Attempting to delete model:', { userId, modelId });
+
+    // Validate inputs
+    if (!userId || !modelId) {
+      throw new Error(`Invalid parameters: userId=${userId}, modelId=${modelId}`);
+    }
+
+    // Check if modelId contains invalid characters for Firestore
+    if (modelId.includes('/')) {
+      console.warn('[deleteGlobalModel] Model ID contains invalid characters:', modelId);
+      throw new Error(`Invalid model ID format: ${modelId}`);
+    }
+
+    // Try direct deletion first (for new models with Firestore IDs)
+    try {
+      const directRef = doc(db, 'users', userId, 'models', modelId);
+      const directDoc = await getDoc(directRef);
+
+      if (directDoc.exists()) {
+        await deleteDoc(directRef);
+        console.log('[deleteGlobalModel] Model deleted (direct):', modelId);
+        return;
+      }
+      console.log('[deleteGlobalModel] Model not found with direct ID, trying historyItemId lookup');
+    } catch (directError) {
+      console.error('[deleteGlobalModel] Direct deletion failed:', directError);
+      // Continue to fallback method
+    }
+
+    // If direct lookup fails, try to find by historyItemId (for old models)
+    // Extract historyItemId from old format: project-xxx-rev-yyy -> rev-yyy
+    const historyItemId = modelId.includes('-rev-')
+      ? modelId.substring(modelId.lastIndexOf('-rev-') + 1)
+      : null;
+
+    console.log('[deleteGlobalModel] Extracted historyItemId:', historyItemId);
+
+    if (historyItemId) {
+      const q = query(
+        collection(db, 'users', userId, 'models'),
+        where('historyItemId', '==', historyItemId)
+      );
+      const querySnapshot = await getDocs(q);
+
+      console.log('[deleteGlobalModel] Query results:', querySnapshot.size, 'documents found');
+
+      if (!querySnapshot.empty) {
+        // Delete the first matching document
+        await deleteDoc(querySnapshot.docs[0].ref);
+        console.log('[deleteGlobalModel] Model deleted (by historyItemId):', historyItemId);
+        return;
+      }
+    }
+
+    console.warn('[deleteGlobalModel] Model not found in Firestore:', modelId);
+    throw new Error(`Model not found: ${modelId}`);
+  } catch (error) {
+    console.error('[deleteGlobalModel] Error deleting global model:', error);
+    throw error;
+  }
+}
+
+export async function renameGlobalModel(userId: string, modelId: string, newName: string): Promise<void> {
+  try {
+    const modelRef = doc(db, 'users', userId, 'models', modelId);
+    await updateDoc(modelRef, {
+      name: newName,
+      updatedAt: new Date().toISOString()
+    });
+    console.log('Global model renamed:', modelId);
+  } catch (error) {
+    console.error('Error renaming global model:', error);
+    throw error;
+  }
+}
+
+// --- Global Wardrobe Functions ---
+
+export async function saveGlobalWardrobeItem(userId: string, item: Omit<GlobalWardrobeItem, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'source'>): Promise<string> {
+  try {
+    const itemId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const itemData: GlobalWardrobeItem = {
+      ...item,
+      id: itemId,
+      userId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      source: 'user-global',
+    };
+
+    await setDoc(doc(db, 'users', userId, 'wardrobe', itemId), itemData);
+    console.log('Global wardrobe item saved:', itemId);
+    return itemId;
+  } catch (error) {
+    console.error('Error saving global wardrobe item:', error);
+    throw error;
+  }
+}
+
+export async function getGlobalWardrobeItems(userId: string, projectId?: string): Promise<GlobalWardrobeItem[]> {
+  try {
+    let q = query(collection(db, 'users', userId, 'wardrobe'));
+    if (projectId) {
+      q = query(q, where('projectId', '==', projectId));
+    }
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => doc.data() as GlobalWardrobeItem);
+  } catch (error) {
+    console.error('Error loading global wardrobe items:', error);
+    return [];
+  }
 }

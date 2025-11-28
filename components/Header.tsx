@@ -8,7 +8,8 @@ import { View } from '../App';
 import { Notification, User } from '../types';
 import NotificationDropdown from './NotificationDropdown';
 import SyncStatusIndicator from './SyncStatusIndicator';
-import { ChevronDownIcon, UserIcon } from './icons';
+import { ChevronDownIcon, UserIcon, ZapIcon } from './icons';
+import { migrateAssetsToGlobalLibrary } from '../services/migrationService';
 
 interface HeaderProps {
     activeView: View;
@@ -72,6 +73,23 @@ const UserMenu: React.FC<{ user: User; onLogout: () => void; onNavigateToProject
                                 className="w-full text-left px-3 py-2 text-[13px] font-medium text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
                             >
                                 Projects
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    if (confirm('Migrate all project assets to Global Library? This may take a moment.')) {
+                                        try {
+                                            const result = await migrateAssetsToGlobalLibrary(user.uid);
+                                            alert(`Migration Complete!\nModels: ${result.modelsMigrated}\nWardrobe: ${result.wardrobeItemsMigrated}`);
+                                        } catch (e) {
+                                            alert('Migration Failed. Check console for details.');
+                                        }
+                                    }
+                                    setIsOpen(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-[13px] font-medium text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors flex items-center gap-2"
+                            >
+                                <ZapIcon className="w-3.5 h-3.5" />
+                                Migrate Assets
                             </button>
                             <button
                                 onClick={onLogout}

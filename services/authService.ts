@@ -153,3 +153,6 @@ export const signInWithGoogle = async (): Promise<FirebaseUser> => {
         throw error;
     }
 };
+export const getCurrentUserId = () => {
+    return auth.currentUser?.uid || null;
+};

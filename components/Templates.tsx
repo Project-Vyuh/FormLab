@@ -12,6 +12,7 @@ import AddTemplateItemModal from './AddTemplateItemModal';
 import { loadPredefinedTemplates, loadUserTemplates, PredefinedTemplate, UserTemplate, loadPredefinedModels, PredefinedModel } from '../services/firestoreService';
 import { createTemplate } from '../services/templateService';
 import { User } from '../types';
+import UserModelsCollectionView from './UserModelsCollectionView';
 
 type TemplateCategory = 'models' | 'wardrobe';
 type ViewMode = 'grid' | 'list';
@@ -303,8 +304,8 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                       setSelectedSection('user');
                     }}
                     className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${activeCategory === 'wardrobe' && selectedSection === 'user'
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-white/10 text-white font-medium'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
                       }`}
                   >
                     Wardrobe
@@ -591,10 +592,24 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
               </>
             )}
 
-            {/* Other sections (user templates, wardrobe, etc.) */}
+            {/* User-Defined Models and Wardrobe */}
             {!(selectedSection === 'predefined' && activeCategory === 'models') && (
               <>
-                {templates.length === 0 ? (
+                {selectedSection === 'user' && activeCategory === 'models' ? (
+                  <UserModelsCollectionView currentUser={currentUser} />
+                ) : selectedSection === 'user' && activeCategory === 'wardrobe' ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center">
+                    <div className="flex items-center justify-center mx-auto mb-8">
+                      <LayoutIcon className="w-16 h-16 text-gray-200 drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]" />
+                    </div>
+                    <h3 className="text-xl font-sans font-semibold text-white mb-3">
+                      Wardrobe Collection
+                    </h3>
+                    <p className="text-sm text-gray-400 leading-relaxed max-w-md mx-auto mb-6">
+                      Your wardrobe items from all projects will appear here.
+                    </p>
+                  </div>
+                ) : templates.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center">
                     <div className="flex items-center justify-center mx-auto mb-8">
                       <LayoutIcon className="w-16 h-16 text-gray-200 drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]" />

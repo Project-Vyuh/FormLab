@@ -30,8 +30,9 @@ import {
 } from '../services/geminiService';
 import { getFriendlyErrorMessage } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url } from '../services/storageService';
-import { loadPredefinedWardrobe } from '../services/firestoreService';
+import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem } from '../services/firestoreService';
 import { loadUnifiedHistory, saveStylingHistory } from '../services/dbService';
+import { getCurrentUserId } from '../services/authService';
 
 
 // Helper to convert data URL to File
@@ -486,18 +487,41 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // --- Local Storage Persistence + Pre-Defined Content ---
+  // --- Global Wardrobe Loading (Enterprise Sync) ---
   useEffect(() => {
     const loadWardrobeData = async () => {
       try {
-        // Load user wardrobe from localStorage
-        const savedWardrobe = localStorage.getItem('formlab-wardrobe');
-        const userWardrobe: WardrobeItem[] = savedWardrobe ? JSON.parse(savedWardrobe) : [];
+        const userId = getCurrentUserId();
+        let userWardrobe: WardrobeItem[] = [];
 
-        // Mark user items with source
-        userWardrobe.forEach(item => {
-          if (!item.source) item.source = 'user';
-        });
+        if (userId && currentProjectId) {
+          console.log('Loading global wardrobe for user:', userId, 'project:', currentProjectId);
+          const globalItems = await getGlobalWardrobeItems(userId, currentProjectId);
+          userWardrobe = globalItems.map(item => ({
+            id: item.id,
+            url: item.url,
+            name: item.name,
+            category: item.category as WardrobeCategory,
+            source: 'user',
+            createdAt: new Date(item.createdAt).getTime(),
+            // Default values for required WardrobeItem fields
+            sku: '',
+            subcategory: 'Custom',
+            color: 'N/A',
+            fabric: 'N/A',
+            print: 'N/A',
+            fit: 'relaxed',
+            season: 'N/A',
+            gender: 'unisex',
+            priceTier: 'basic',
+            tags: { styling: [], campaign: [] }
+          }));
+        } else {
+          // Fallback to localStorage if not logged in (legacy support)
+          const savedWardrobe = localStorage.getItem('formlab-wardrobe');
+          userWardrobe = savedWardrobe ? JSON.parse(savedWardrobe) : [];
+          userWardrobe.forEach(item => { if (!item.source) item.source = 'user'; });
+        }
 
         // Load pre-defined wardrobe
         try {
@@ -509,7 +533,6 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           setWardrobe(allWardrobe);
         } catch (error) {
           console.error('Failed to load pre-defined wardrobe:', error);
-          // Fallback to just user wardrobe
           setWardrobe(userWardrobe);
         }
 
@@ -521,12 +544,12 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         const savedRecentlyUsed = localStorage.getItem('formlab-recently-used');
         if (savedRecentlyUsed) setRecentlyUsed(JSON.parse(savedRecentlyUsed));
       } catch (e) {
-        console.error("Failed to load data from localStorage", e);
+        console.error("Failed to load wardrobe data", e);
       }
     };
 
     loadWardrobeData();
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     try {
@@ -879,6 +902,21 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     const newProduct: WardrobeItem = { id: productId, url: productUrl, ...rest };
     setWardrobe(prev => [newProduct, ...prev]);
     setToastMessage(`'${newProduct.name}' added to library.`);
+
+    // Save to Global Library (Enterprise Sync)
+    if (currentUser) {
+      try {
+        await saveGlobalWardrobeItem(currentUser.uid, {
+          url: productUrl,
+          name: newProduct.name,
+          category: newProduct.category,
+          projectId: currentProjectId || undefined
+        });
+        console.log('Wardrobe item saved to Global Library');
+      } catch (err) {
+        console.error('Failed to save wardrobe item to Global Library:', err);
+      }
+    }
   }, [currentUser]);
 
   const handleCreateCategory = useCallback((name: string) => {

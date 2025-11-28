@@ -21,7 +21,7 @@ import { Model, Project, Notification, User, SelectedStylingModel, HistoryItem }
 import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, saveProjectState, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes, migrateBase64ImagesToStorage, migrateIndexedDBToFirestore, setCurrentUserId, deleteProjectState, deleteProjectMetadata } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
 import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
-import { loadPredefinedModels, PredefinedModel } from './services/firestoreService';
+import { loadPredefinedModels, PredefinedModel, getGlobalModels } from './services/firestoreService';
 import { SyncProvider } from './contexts/SyncContext';
 
 
@@ -234,32 +234,30 @@ const App: React.FC = () => {
 
           setCurrentProjectId(projectIdToLoad);
 
-          // Load only BASE models (parentId === null) from ALL projects into the gallery
+          // Load Global Models (Enterprise Sync)
           const galleryModels: Model[] = [];
-          for (const project of projects) {
-            try {
-              const state = await loadProjectState(project.id);
-              if (state?.generatedModelHistory?.length > 0) {
-                // Get only BASE models (no parent) - these are unique model creations
-                state.generatedModelHistory
-                  .filter(historyItem => historyItem.parentId === null)
-                  .forEach(historyItem => {
-                    // Extract timestamp from history item ID (format: rev-{timestamp})
-                    const timestamp = parseInt(historyItem.id.split('-').pop() || '0');
-                    galleryModels.push({
-                      id: `${project.id}-${historyItem.id}`,
-                      url: historyItem.imageUrl,
-                      source: 'user',
-                      projectId: project.id, // Associate model with project
-                      historyItemId: historyItem.id, // Store history item ID for loading
-                      createdAt: timestamp || Date.now(),
-                      updatedAt: timestamp || Date.now(),
-                    });
-                  });
-              }
-            } catch (e) {
-              console.error(`Failed to load state for project ${project.id}`, e);
+          try {
+            if (currentUser && projectIdToLoad) {
+              console.log('Loading global models for user:', currentUser.uid, 'project:', projectIdToLoad);
+              const globalModels = await getGlobalModels(currentUser.uid, projectIdToLoad);
+
+              // Convert GlobalModel to Model type
+              globalModels.forEach(gm => {
+                galleryModels.push({
+                  id: gm.id,
+                  url: gm.url,
+                  name: gm.name,
+                  source: 'user',
+                  projectId: gm.projectId,
+                  historyItemId: gm.historyItemId,
+                  createdAt: new Date(gm.createdAt).getTime(),
+                  updatedAt: new Date(gm.updatedAt).getTime(),
+                });
+              });
+              console.log(`Loaded ${galleryModels.length} global models`);
             }
+          } catch (error) {
+            console.error('Failed to load global models:', error);
           }
 
           // Load pre-defined models
@@ -269,14 +267,14 @@ const App: React.FC = () => {
 
             // Combine user models with pre-defined models and deduplicate
             const allModels = deduplicateModels([
-              ...galleryModels.reverse(), // User models first, newest first
+              ...galleryModels.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)), // User models first, newest first
               ...predefinedModels, // Then pre-defined models
             ]);
             setModelGallery(allModels);
           } catch (error) {
             console.error('Failed to load pre-defined models:', error);
             // Fallback to just user models with deduplication
-            setModelGallery(deduplicateModels(galleryModels.reverse()));
+            setModelGallery(deduplicateModels(galleryModels));
           }
 
           setActiveView('createModel');
@@ -498,7 +496,37 @@ const App: React.FC = () => {
 
     setCurrentProjectId(id);
     localStorage.setItem('formlab-lastProject', id);
-  }, [activeView, selectedStylingModel, currentProjectId]);
+
+    // Reload global models for the new project
+    if (currentUser) {
+      try {
+        const globalModels = await getGlobalModels(currentUser.uid, id);
+        const galleryModels: Model[] = globalModels.map(gm => ({
+          id: gm.id,
+          url: gm.url,
+          name: gm.name,
+          source: 'user',
+          projectId: gm.projectId,
+          historyItemId: gm.historyItemId,
+          createdAt: new Date(gm.createdAt).getTime(),
+          updatedAt: new Date(gm.updatedAt).getTime(),
+        }));
+
+        // Load pre-defined models
+        const predefinedModels = await loadPredefinedModels();
+
+        // Combine and deduplicate
+        const allModels = deduplicateModels([
+          ...galleryModels.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)),
+          ...predefinedModels,
+        ]);
+        setModelGallery(allModels);
+        console.log(`Loaded ${galleryModels.length} global models for project ${id}`);
+      } catch (error) {
+        console.error('Failed to load global models for new project:', error);
+      }
+    }
+  }, [activeView, selectedStylingModel, currentProjectId, currentUser]);
 
   const handleOpenProjectModal = useCallback((mode: 'create' | 'edit') => {
     if (mode === 'create') {

@@ -31,7 +31,7 @@ import SwitchProjectModal from './SwitchProjectModal';
 import PromptPanel from './PromptPanel';
 import ContextMenu from './ContextMenu';
 import UserModelsModal from './UserModelsModal';
-import { loadPredefinedModels } from '../services/firestoreService';
+import { loadPredefinedModels, saveGlobalModel } from '../services/firestoreService';
 
 
 interface CreateModelProps {
@@ -365,6 +365,13 @@ const CreateModel: React.FC<CreateModelProps> = ({
     // Check if this history item exists in the ALREADY LOADED history
     const historyItem = generatedModelHistory.find(item => item.id === selectedHistoryItemId);
 
+    console.log('[CreateModel] Selection Debug:', {
+      selectedHistoryItemId,
+      historyCount: generatedModelHistory.length,
+      found: !!historyItem,
+      historyIds: generatedModelHistory.map(h => h.id)
+    });
+
     if (historyItem) {
       // FAST PATH: Project already loaded, just switch to this history item
       setCurrentHistoryItemId(selectedHistoryItemId);
@@ -555,8 +562,25 @@ const CreateModel: React.FC<CreateModelProps> = ({
     // If this is a base model (no parent) and we have a callback, notify App.tsx to update the gallery
     if (currentHistoryItemId === null && onModelAdded && currentProjectId) {
       const timestamp = Date.now();
+
+      // Save to Global Library (Enterprise Sync) first to get the Firestore model ID
+      let firestoreModelId: string | undefined;
+      if (currentUser) {
+        try {
+          firestoreModelId = await saveGlobalModel(currentUser.uid, {
+            url: finalImageUrl,
+            name: newItem.prompt || 'Generated Model',
+            projectId: currentProjectId,
+            historyItemId: newId,
+          });
+          console.log('Model saved to Global Library with ID:', firestoreModelId);
+        } catch (error) {
+          console.error('Failed to save model to Global Library:', error);
+        }
+      }
+
       const newModel: Model = {
-        id: `${currentProjectId}-${newId}`,
+        id: firestoreModelId || `${currentProjectId}-${newId}`, // Use Firestore ID if available
         url: finalImageUrl,
         source: 'user',
         projectId: currentProjectId,
@@ -940,9 +964,26 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
       // Add to model gallery
       if (onModelAdded) {
+        // Save to Global Library (Enterprise Sync) first to get the Firestore model ID
+        let firestoreModelId: string | undefined;
+        if (currentUser) {
+          try {
+            firestoreModelId = await saveGlobalModel(currentUser.uid, {
+              url: finalImageUrl,
+              name: `${template.name || 'Template'} - Copy`,
+              thumbnail: finalImageUrl,
+              projectId: currentProjectId,
+              historyItemId: newHistoryItemId
+            });
+            console.log('Template model saved to Global Library with ID:', firestoreModelId);
+          } catch (error) {
+            console.error('Failed to save template model to Global Library:', error);
+          }
+        }
+
         const timestamp = Date.now();
         const newModel: Model = {
-          id: `${currentProjectId}-${newHistoryItemId}`,
+          id: firestoreModelId || `${currentProjectId}-${newHistoryItemId}`,
           url: finalImageUrl,
           source: 'user',
           projectId: currentProjectId,
@@ -1362,7 +1403,6 @@ const CreateModel: React.FC<CreateModelProps> = ({
                   <div key={model.id}>
                     <button
                       onClick={() => onSelectModel(model)}
-                      onContextMenu={(e) => handleContextMenu(e, model)}
                       disabled={isGenerating || isSelected}
                       className={`w-[72px] h-[72px] rounded-lg overflow-hidden border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 group disabled:cursor-not-allowed ${isSelected
                         ? 'border-white shadow-[0_0_15px_rgba(255,255,255,0.15)] ring-1 ring-white/20'
@@ -1855,8 +1895,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
       <ContextMenu
         isOpen={contextMenuModel !== null}
         position={contextMenuPosition}
-        onClose={handleCloseContextMenu}
-        onDelete={handleDeleteModelClick}
+        onRenameModel={handleRename}
+        onDeleteModel={handleDeleteModel}
+        currentProjectId={currentProjectId || undefined}
       />
 
       {/* Delete Confirmation Modal */}
@@ -1883,6 +1924,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
         models={modelGallery.filter(model => model.source !== 'predefined')}
         onSelectModel={onSelectModel}
         currentModelUrl={generatedModelUrl}
+        currentProjectId={currentProjectId}
         onRenameModel={(modelId, newName) => {
           if (onRenameModel) {
             onRenameModel(modelId, newName);

@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { XIcon, UserIcon } from './icons';
 import { Model } from '../types';
+import { getGlobalModels, deleteGlobalModel, renameGlobalModel } from '../services/firestoreService';
+import { getCurrentUserId } from '../services/authService';
 import ConfirmationModal from './ConfirmationModal';
 
 interface UserModelsModalProps {
@@ -13,6 +15,7 @@ interface UserModelsModalProps {
     currentModelUrl?: string;
     onRenameModel?: (modelId: string, newName: string) => void;
     onDeleteModel?: (model: Model) => void;
+    currentProjectId?: string;
 }
 
 const UserModelsModal: React.FC<UserModelsModalProps> = ({
@@ -22,7 +25,8 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
     onSelectModel,
     currentModelUrl,
     onRenameModel,
-    onDeleteModel
+    onDeleteModel,
+    currentProjectId
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [contextMenuModel, setContextMenuModel] = useState<Model | null>(null);
@@ -30,14 +34,43 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
     const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
     const [renameValue, setRenameValue] = useState('');
     const [modelToDelete, setModelToDelete] = useState<Model | null>(null);
+    const [globalModels, setGlobalModels] = useState<Model[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
-        if (!isOpen) {
+        if (isOpen) {
+            loadGlobalModels();
+        } else {
             setSearchTerm('');
             setContextMenuModel(null);
             setContextMenuPosition(null);
         }
-    }, [isOpen]);
+    }, [isOpen, currentProjectId]);
+
+    const loadGlobalModels = async () => {
+        const userId = getCurrentUserId();
+        if (!userId) return;
+
+        setIsLoading(true);
+        try {
+            const models = await getGlobalModels(userId, currentProjectId);
+            const formattedModels: Model[] = models.map(m => ({
+                id: m.id,
+                url: m.url,
+                name: m.name,
+                source: 'user',
+                projectId: m.projectId,
+                historyItemId: m.historyItemId,
+                createdAt: new Date(m.createdAt).getTime(),
+                updatedAt: new Date(m.updatedAt).getTime(),
+            }));
+            setGlobalModels(formattedModels.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+        } catch (error) {
+            console.error('Failed to load global models:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     // Ref for context menu to detect clicks outside
     const menuRef = useRef<HTMLDivElement>(null);
@@ -69,7 +102,7 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
         };
     }, [contextMenuPosition]);
 
-    const filteredModels = models.filter(model =>
+    const filteredModels = globalModels.filter(model =>
         model.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         model.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -90,28 +123,41 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
         }
     };
 
-    const handleRenameSubmit = () => {
-        if (contextMenuModel && onRenameModel && renameValue.trim()) {
-            onRenameModel(contextMenuModel.id, renameValue.trim());
+    const handleRenameSubmit = async () => {
+        if (contextMenuModel && renameValue.trim()) {
+            const userId = getCurrentUserId();
+            if (userId) {
+                try {
+                    await renameGlobalModel(userId, contextMenuModel.id, renameValue.trim());
+                    await loadGlobalModels(); // Refresh list
+                    if (onRenameModel) onRenameModel(contextMenuModel.id, renameValue.trim());
+                } catch (error) {
+                    console.error('Failed to rename model:', error);
+                }
+            }
             setIsRenameModalOpen(false);
             setContextMenuModel(null);
             setRenameValue('');
         }
     };
 
-    const handleDeleteClick = () => {
-        if (contextMenuModel) {
-            console.log('[UserModelsModal] Opening delete confirmation for:', contextMenuModel.id);
-            setModelToDelete(contextMenuModel);
-            setContextMenuPosition(null);
-        }
+    const handleDeleteClick = (model: Model) => {
+        setModelToDelete(model);
     };
 
-    const handleDeleteConfirm = () => {
-        if (modelToDelete && onDeleteModel) {
-            onDeleteModel(modelToDelete);
+    const handleDeleteConfirm = async () => {
+        if (modelToDelete) {
+            const userId = getCurrentUserId();
+            if (userId) {
+                try {
+                    await deleteGlobalModel(userId, modelToDelete.id);
+                    await loadGlobalModels(); // Refresh list
+                    if (onDeleteModel) onDeleteModel(modelToDelete);
+                } catch (error) {
+                    console.error('Failed to delete model:', error);
+                }
+            }
             setModelToDelete(null);
-            setContextMenuModel(null);
         }
     };
 
@@ -245,7 +291,7 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
                     </button>
                     <div className="h-px bg-white/5 mx-2" />
                     <button
-                        onClick={handleDeleteClick}
+                        onClick={() => contextMenuModel && handleDeleteClick(contextMenuModel)}
                         className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 transition-all duration-200 flex items-center gap-2"
                     >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
