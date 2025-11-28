@@ -16,50 +16,78 @@ const Auth: React.FC = () => {
     const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
 
     return (
-        <div className="w-full h-screen flex items-center justify-center bg-[#111111]">
-            <div className="w-full h-full flex flex-col lg:flex-row">
-                {/* Auth Form */}
-                <div className="w-full lg:w-1/2 h-auto lg:h-full flex items-center justify-center p-4">
-                    {showForgotPassword ? (
-                        <ForgotPassword
-                            initialEmail={forgotPasswordEmail}
-                            onBackToSignIn={() => {
-                                setShowForgotPassword(false);
-                                setIsSignIn(true);
-                            }}
-                        />
-                    ) : isSignIn ? (
-                        <SignIn
-                            onSwitchToSignUp={() => setIsSignIn(false)}
-                            onForgotPassword={(email) => {
-                                setForgotPasswordEmail(email);
-                                setShowForgotPassword(true);
-                            }}
-                        />
-                    ) : (
-                        <SignUp onSwitchToSignIn={() => setIsSignIn(true)} />
-                    )}
-                </div>
+        <div
+            className="w-full h-screen flex flex-col bg-[#111111] bg-cover bg-center bg-no-repeat"
+            style={{ backgroundImage: "url('/assets/auth_bg_bw.png')" }}
+        >
+            {/* Header */}
+            <header className="w-full bg-transparent py-6 px-8">
+                <h1 className="text-2xl font-bold text-white tracking-wide">FormLab</h1>
+            </header>
 
-                {/* Brand Panel */}
-                <div className="w-full lg:w-1/2 h-1/4 lg:h-full flex flex-col items-center justify-center bg-black relative p-8">
-                    <div className="absolute inset-0 z-0">
-                        <SparklesCore
-                            background="transparent"
-                            minSize={0.4}
-                            maxSize={1.4}
-                            particleDensity={50}
-                            className="w-full h-full"
-                            particleColor="#FFFFFF"
-                        />
-                    </div>
-                    <div className="text-center z-10">
-                        <CubeIcon className="w-16 h-16 text-white mx-auto mb-4" />
-                        <h1 className="text-4xl font-bold text-white tracking-wide">FormLab</h1>
-                        <p className="text-lg text-gray-400 mt-2">The Future of Brand Content is Here.</p>
+            {/* Auth Container */}
+            <div className="flex-1 flex items-center justify-center">
+                <div className="w-full max-w-md">
+                    {/* Auth Form */}
+                    <div className="w-full h-auto flex items-center justify-center p-8 bg-black/30 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl">
+                        {showForgotPassword ? (
+                            <ForgotPassword
+                                initialEmail={forgotPasswordEmail}
+                                onBackToSignIn={() => {
+                                    setShowForgotPassword(false);
+                                    setIsSignIn(true);
+                                }}
+                            />
+                        ) : isSignIn ? (
+                            <SignIn
+                                onSwitchToSignUp={() => setIsSignIn(false)}
+                                onForgotPassword={(email) => {
+                                    setForgotPasswordEmail(email);
+                                    setShowForgotPassword(true);
+                                }}
+                            />
+                        ) : (
+                            <SignUp onSwitchToSignIn={() => setIsSignIn(true)} />
+                        )}
                     </div>
                 </div>
             </div>
+
+            {/* Footer */}
+            <footer className="w-full bg-black/30 backdrop-blur-xl border-t border-white/10 py-4 px-8">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 text-sm text-gray-300">
+                    {/* Left side - Legal notice */}
+                    <p className="text-left">
+                        Use FormLab responsibly. Avoid uploading or generating unlawful or inappropriate content.
+                    </p>
+
+                    {/* Right side - Copyright and links */}
+                    <div className="flex flex-col lg:flex-row items-start lg:items-center gap-2 lg:gap-0">
+                        <span className="whitespace-nowrap">© 2025 FormLab. All rights reserved.</span>
+                        <span className="hidden lg:inline mx-2">|</span>
+                        <a
+                            href="#"
+                            className="hover:underline transition-all duration-200"
+                        >
+                            Terms & Privacy
+                        </a>
+                        <span className="hidden lg:inline mx-2">|</span>
+                        <a
+                            href="#"
+                            className="hover:underline transition-all duration-200"
+                        >
+                            Cookie Preferences
+                        </a>
+                        <span className="hidden lg:inline mx-2">|</span>
+                        <a
+                            href="#"
+                            className="hover:underline transition-all duration-200"
+                        >
+                            Support
+                        </a>
+                    </div>
+                </div>
+            </footer>
         </div>
     );
 };
