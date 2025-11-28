@@ -30,6 +30,7 @@ import {
 } from '../services/geminiService';
 import { getFriendlyErrorMessage } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url } from '../services/storageService';
+import { convertToSquare } from '../lib/imageProcessing';
 import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem } from '../services/firestoreService';
 import { loadUnifiedHistory, saveStylingHistory } from '../services/dbService';
 import { getCurrentUserId } from '../services/authService';
@@ -907,14 +908,24 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     const { file, ...rest } = productData;
     const productId = `item-${Date.now()}`;
 
+    // Convert to 1:1 aspect ratio (2048x2048) with padding/letterboxing
+    let processedFile = file;
+    try {
+      processedFile = await convertToSquare(file, 2048);
+      console.log('✓ Converted wardrobe item to 1:1 (2048x2048)');
+    } catch (error) {
+      console.error('Failed to convert to square, using original:', error);
+      // Fallback to original file if conversion fails
+    }
+
     // Create a temporary blob URL for immediate preview
-    const tempBlobUrl = URL.createObjectURL(file);
+    const tempBlobUrl = URL.createObjectURL(processedFile);
 
     // Upload to Firebase Storage if user is logged in
     let productUrl = tempBlobUrl;
     if (currentUser) {
       try {
-        productUrl = await uploadFile(file, currentUser.uid, 'wardrobe');
+        productUrl = await uploadFile(processedFile, currentUser.uid, 'wardrobe');
         console.log('Wardrobe item uploaded to Firebase Storage:', productUrl);
 
         // Revoke the temporary blob URL to free memory
@@ -936,7 +947,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           url: productUrl,
           name: newProduct.name,
           category: newProduct.category,
-          projectId: currentProjectId || undefined
+          ...(currentProjectId && { projectId: currentProjectId })
         });
         console.log('Wardrobe item saved to Global Library');
       } catch (err) {

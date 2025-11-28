@@ -1208,6 +1208,10 @@ export const generateVirtualTryOnImage = async (modelImageUrl: string, garmentIm
 
 **Task:** Generate a high-quality photorealistic image of the Model wearing the Garment.
 
+**Technical Specifications:**
+- **Aspect Ratio:** ${settings.aspectRatio}
+- **Constraint:** Ensure the final image maintains the ${settings.aspectRatio} aspect ratio of the input model image. The subject must fit completely within this frame.
+
 **Directives:**
 1.  **Wardrobe:** The model must be wearing the garment from the second image. The fit should be natural and realistic, respecting the model's pose.
 2.  **Environment:** ${backgroundInstruction}
@@ -1248,6 +1252,10 @@ export const generateVirtualTryOnWithPoseReference = async (
 3.  **Pose Reference:** (Third image) Target pose.
 
 **Task:** Generate a new image of the Model wearing the Garment in the Target Pose.
+
+**Technical Specifications:**
+- **Aspect Ratio:** ${settings.aspectRatio}
+- **Constraint:** Ensure the final image maintains the ${settings.aspectRatio} aspect ratio of the input model image. The subject must fit completely within this frame.
 
 **Directives:**
 1.  **Subject:** Use the Model's identity.
