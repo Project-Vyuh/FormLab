@@ -311,6 +311,7 @@ export interface GenerationSettings {
   noiseAndGrain: NoiseAndGrainSettings;
   digitalDarkroom?: DigitalDarkroomSettings;
   panelToggles: PanelToggles;
+  useEnhancedTryOn?: boolean; // Enable enhanced garment detail preservation
 }
 
 export type HistoryItemType = 'model-generation' | 'model-revision' | 'try-on' | 'try-on-revision';
@@ -332,6 +333,29 @@ export interface GarmentAnalysis {
   palette: string[];
   category: string;
   material: string;
+  // Enhanced detail analysis for improved try-on accuracy
+  colors?: {
+    primary: string[];
+    secondary: string[];
+    exact_description: string;
+  };
+  patterns?: {
+    type: string;
+    description: string;
+    scale: string;
+    placement: string;
+  };
+  textures?: {
+    fabric_type: string;
+    finish: string;
+    surface_details: string;
+  };
+  construction?: {
+    details: string[];
+    embellishments: string[];
+    silhouette: string;
+  };
+  distinctive_features?: string[];
 }
 
 export interface BrandStyle {

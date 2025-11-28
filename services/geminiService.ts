@@ -1139,7 +1139,7 @@ Focus on these elements:
         contents: metaPrompt,
     });
 
-    return response.text.trim();
+    return response.text?.trim() || '';
 };
 
 export const enhanceRevisionPrompt = async (baseImageUrl: string, userInput: string, originalDescription?: string): Promise<string> => {
@@ -1188,37 +1188,32 @@ Output: Return ONLY the enhanced prompt.`;
         contents: { parts: [baseImagePart, textPart] },
     });
 
-    return response.text.trim();
+    return response.text?.trim() || '';
 };
 
-export const generateVirtualTryOnImage = async (modelImageUrl: string, garmentImage: File, settings: GenerationSettings): Promise<string> => {
+export const generateVirtualTryOnImage = async (
+    modelImageUrl: string,
+    garmentImage: File,
+    settings: GenerationSettings,
+    garmentAnalysis?: GarmentAnalysis
+): Promise<string> => {
     const model = 'gemini-2.5-flash-image';
     const modelImagePart = await dataUrlToPart(modelImageUrl);
     const garmentImagePart = await fileToPart(garmentImage);
 
     const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any] });
-
     const backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
 
+    let prompt: string;
 
-    const prompt = `You are a professional fashion design AI.
-**Inputs:**
-1.  **Model Image:** (The first image) Use this person as the model. Preserve their identity, pose, and body type.
-2.  **Garment Image:** (The second image) This is the clothing to be worn.
-
-**Task:** Generate a high-quality photorealistic image of the Model wearing the Garment.
-
-**Technical Specifications:**
-- **Aspect Ratio:** ${settings.aspectRatio}
-- **Constraint:** Ensure the final image maintains the ${settings.aspectRatio} aspect ratio of the input model image. The subject must fit completely within this frame.
-
-**Directives:**
-1.  **Wardrobe:** The model must be wearing the garment from the second image. The fit should be natural and realistic, respecting the model's pose.
-2.  **Environment:** ${backgroundInstruction}
-3.  **Safety:** The model must be fully clothed. This is a professional e-commerce image suitable for a general audience.
-4.  **Style:** ${promptSuffix}
-
-**Output:** Return ONLY the generated image.`;
+    // Use enhanced prompt if enabled and analysis is provided
+    if (settings.useEnhancedTryOn !== false && garmentAnalysis) {
+        const garmentDescription = generateDetailedGarmentDescription(garmentAnalysis);
+        prompt = buildEnhancedTryOnPrompt(garmentDescription, settings, backgroundInstruction, promptSuffix);
+    } else {
+        // Fallback to basic prompt
+        prompt = buildBasicTryOnPrompt(settings, backgroundInstruction, promptSuffix);
+    }
 
     const response = await ai.models.generateContent({
         model,
@@ -1274,6 +1269,294 @@ ${promptSuffix}`
         },
     });
     return handleApiResponse(response);
+};
+
+/**
+ * Enhanced Try-On Functions
+ * Provides detailed garment analysis and enhanced prompts for improved accuracy
+ */
+
+// Analyze garment image with extreme detail for virtual try-on accuracy
+export const analyzeGarmentDetailed = async (garmentImage: File): Promise<GarmentAnalysis> => {
+    const garmentImagePart = await fileToPart(garmentImage);
+
+    const analysisPrompt = `Analyze this garment image with extreme detail for virtual try-on accuracy.
+
+Provide comprehensive JSON with the following structure:
+{
+  "palette": ["color1", "color2", ...],
+  "category": "garment type",
+  "material": "fabric material",
+  "colors": {
+    "primary": ["exact primary colors with descriptors"],
+    "secondary": ["accent and secondary colors"],
+    "exact_description": "precise color description with hex approximations if possible"
+  },
+  "patterns": {
+    "type": "pattern type (solid, striped, floral, geometric, etc.)",
+    "description": "detailed pattern description including motifs and arrangement",
+    "scale": "pattern scale (small, medium, large, mixed)",
+    "placement": "where patterns appear on the garment"
+  },
+  "textures": {
+    "fabric_type": "precise fabric type and weave",
+    "finish": "surface finish (matte, glossy, satin, etc.)",
+    "surface_details": "visible texture details, ribbing, knit structure"
+  },
+  "construction": {
+    "details": ["visible construction elements like zippers, buttons, seams, collar type"],
+    "embellishments": ["embroidery, sequins, appliques, prints, logos, decorative elements"],
+    "silhouette": "garment silhouette and fit"
+  },
+  "distinctive_features": ["unique characteristics that make this garment immediately recognizable"]
+}
+
+Be precise and thorough - this data guides exact garment replication in virtual try-on.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [garmentImagePart, { text: analysisPrompt }] },
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    palette: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "Array of color names/hex codes visible in the garment",
+                    },
+                    category: {
+                        type: Type.STRING,
+                        description: "Garment category (e.g., dress, top, pants)",
+                    },
+                    material: {
+                        type: Type.STRING,
+                        description: "Primary fabric material",
+                    },
+                    colors: {
+                        type: Type.OBJECT,
+                        properties: {
+                            primary: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            secondary: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            exact_description: { type: Type.STRING },
+                        },
+                    },
+                    patterns: {
+                        type: Type.OBJECT,
+                        properties: {
+                            type: { type: Type.STRING },
+                            description: { type: Type.STRING },
+                            scale: { type: Type.STRING },
+                            placement: { type: Type.STRING },
+                        },
+                    },
+                    textures: {
+                        type: Type.OBJECT,
+                        properties: {
+                            fabric_type: { type: Type.STRING },
+                            finish: { type: Type.STRING },
+                            surface_details: { type: Type.STRING },
+                        },
+                    },
+                    construction: {
+                        type: Type.OBJECT,
+                        properties: {
+                            details: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            embellishments: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            silhouette: { type: Type.STRING },
+                        },
+                    },
+                    distinctive_features: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "Unique identifiable characteristics",
+                    },
+                },
+                required: ["palette", "category", "material"],
+            },
+        },
+    });
+
+    try {
+        const analysisText = response.text?.trim();
+        if (!analysisText) {
+            throw new Error("API returned empty response");
+        }
+        return JSON.parse(analysisText) as GarmentAnalysis;
+    } catch (error) {
+        console.error('Garment analysis failed:', error);
+        throw new Error("Failed to analyze garment details. Please try again.");
+    }
+};
+
+// Generate detailed garment description from analysis
+const generateDetailedGarmentDescription = (analysis: GarmentAnalysis): string => {
+    const parts: string[] = [];
+
+    // Colors
+    if (analysis.colors) {
+        parts.push(`**Colors:** ${analysis.colors.exact_description}`);
+        if (analysis.colors.primary.length > 0) {
+            parts.push(`  - Primary: ${analysis.colors.primary.join(', ')}`);
+        }
+        if (analysis.colors.secondary.length > 0) {
+            parts.push(`  - Secondary: ${analysis.colors.secondary.join(', ')}`);
+        }
+    } else if (analysis.palette.length > 0) {
+        parts.push(`**Colors:** ${analysis.palette.join(', ')}`);
+    }
+
+    // Patterns
+    if (analysis.patterns) {
+        parts.push(`**Pattern:** ${analysis.patterns.type} - ${analysis.patterns.description}`);
+        parts.push(`  - Scale: ${analysis.patterns.scale}`);
+        parts.push(`  - Placement: ${analysis.patterns.placement}`);
+    }
+
+    // Textures
+    if (analysis.textures) {
+        parts.push(`**Fabric:** ${analysis.textures.fabric_type}`);
+        parts.push(`**Finish:** ${analysis.textures.finish}`);
+        parts.push(`**Surface Details:** ${analysis.textures.surface_details}`);
+    } else if (analysis.material) {
+        parts.push(`**Material:** ${analysis.material}`);
+    }
+
+    // Construction
+    if (analysis.construction) {
+        if (analysis.construction.details.length > 0) {
+            parts.push(`**Construction Details:** ${analysis.construction.details.join(', ')}`);
+        }
+        if (analysis.construction.embellishments.length > 0) {
+            parts.push(`**Embellishments:** ${analysis.construction.embellishments.join(', ')}`);
+        }
+        parts.push(`**Silhouette:** ${analysis.construction.silhouette}`);
+    }
+
+    // Distinctive Features
+    if (analysis.distinctive_features && analysis.distinctive_features.length > 0) {
+        parts.push(`**Distinctive Features:** ${analysis.distinctive_features.join(', ')}`);
+    }
+
+    return parts.join('\n');
+};
+
+// Build enhanced try-on prompt with detailed garment analysis
+const buildEnhancedTryOnPrompt = (
+    garmentDescription: string,
+    settings: GenerationSettings,
+    backgroundInstruction: string,
+    promptSuffix: string
+): string => {
+    return `You are a PRECISION VIRTUAL TRY-ON AI, NOT a creative fashion designer.
+
+**ROLE:** Your task is PHOTOGRAPHIC TRANSFER of an exact garment onto a model, preserving every detail with forensic accuracy.
+
+**GARMENT TO REPLICATE:**
+${garmentDescription}
+
+**INPUTS:**
+1. **Model Image:** (First image) The person who will wear the garment. Preserve their identity, pose, and body type.
+2. **Garment Reference:** (Second image) The EXACT garment to apply. This is your SOURCE OF TRUTH.
+
+**TASK:** Generate a photorealistic image of the Model wearing the EXACT Garment with ZERO creative interpretation.
+
+**Technical Specifications:**
+- **Aspect Ratio:** ${settings.aspectRatio}
+- **Constraint:** Ensure the final image maintains the ${settings.aspectRatio} aspect ratio. The subject must fit completely within this frame.
+
+**CRITICAL PRESERVATION RULES - FOLLOW EXACTLY:**
+
+1. **COLOR FIDELITY (HIGHEST PRIORITY):**
+   - Extract exact color values from the garment reference image
+   - Match primary colors PRECISELY - no shifting, no approximation
+   - Preserve all secondary and accent colors exactly as shown
+   - Maintain color distribution and placement identical to reference
+   - DO NOT interpret colors creatively - copy them pixel-accurately
+
+2. **PATTERN ACCURACY (HIGHEST PRIORITY):**
+   - Every pattern element visible in reference MUST appear in output
+   - Pattern scale, spacing, and arrangement must be identical
+   - Geometric patterns: exact shapes, angles, and repetition
+   - Organic patterns: exact motifs, flow, and density
+   - Multi-pattern garments: preserve all pattern layers and interactions
+
+3. **TEXTURE REPLICATION:**
+   - Match fabric surface finish exactly (matte/glossy/satin)
+   - Replicate visible weave, knit structure, or surface texture
+   - Preserve any ribbing, pleating, or texture variations
+   - Match sheen and light interaction properties
+
+4. **DETAIL PRESERVATION:**
+   - All embroidery must match reference in color, placement, and density
+   - Hardware (zippers, buttons) in exact positions with correct finish
+   - Seam placement and topstitching patterns identical
+   - Collar, cuffs, and structural elements exactly as reference
+   - Any logos, text, or graphics must be precise replicas
+
+5. **EMBELLISHMENT FIDELITY:**
+   - Sequins, beads, appliques in exact density and distribution
+   - Prints and graphics: exact colors, scale, and placement
+   - Decorative elements: replicate size, color, and positioning
+   - Maintain layering and depth of embellishments
+
+6. **MICRO-DETAIL FIDELITY:**
+   - Stitching patterns and thread colors
+   - Small logos or branding elements
+   - Subtle color variations within the fabric
+   - Edge finishes and hem details
+
+**STRICT PROHIBITIONS - NEVER DO THESE:**
+- DO NOT change or "improve" colors - use exact reference colors
+- DO NOT simplify patterns - replicate complete complexity
+- DO NOT substitute textures - match the exact fabric appearance
+- DO NOT alter embellishments - copy them precisely
+- DO NOT use "similar" or "inspired by" - ONLY exact replication
+- DO NOT apply artistic interpretation - this is technical reproduction
+- DO NOT generate a "new design in the same style" - copy the exact garment
+
+**DIRECTIVES:**
+1. **Wardrobe Application:** Apply the garment from the reference image with forensic accuracy
+2. **Fit:** Natural and realistic fit respecting the model's pose and body type
+3. **Environment:** ${backgroundInstruction}
+4. **Safety:** The model must be fully clothed. Professional e-commerce image.
+5. **Style:** ${promptSuffix}
+
+**VERIFICATION BEFORE OUTPUT:**
+Mentally compare your output to the garment reference:
+- Colors: Do they match exactly? ✓
+- Patterns: Are all elements present and identical? ✓
+- Textures: Does the surface finish match? ✓
+- Details: Are embellishments and hardware exact? ✓
+
+**OUTPUT:** Return ONLY the generated image with the EXACT garment replicated on the model.`;
+};
+
+// Build basic try-on prompt (legacy fallback)
+const buildBasicTryOnPrompt = (
+    settings: GenerationSettings,
+    backgroundInstruction: string,
+    promptSuffix: string
+): string => {
+    return `You are a professional fashion design AI.
+**Inputs:**
+1.  **Model Image:** (The first image) Use this person as the model. Preserve their identity, pose, and body type.
+2.  **Garment Image:** (The second image) This is the clothing to be worn.
+
+**Task:** Generate a high-quality photorealistic image of the Model wearing the Garment.
+
+**Technical Specifications:**
+- **Aspect Ratio:** ${settings.aspectRatio}
+- **Constraint:** Ensure the final image maintains the ${settings.aspectRatio} aspect ratio of the input model image. The subject must fit completely within this frame.
+
+**Directives:**
+1.  **Wardrobe:** The model must be wearing the garment from the second image. The fit should be natural and realistic, respecting the model's pose.
+2.  **Environment:** ${backgroundInstruction}
+3.  **Safety:** The model must be fully clothed. This is a professional e-commerce image suitable for a general audience.
+4.  **Style:** ${promptSuffix}
+
+**Output:** Return ONLY the generated image.`;
 };
 
 export const generatePoseVariation = async (tryOnImageUrl: string, poseInstruction: string, settings: GenerationSettings): Promise<string> => {
@@ -1446,7 +1729,10 @@ export const analyzeGarment = async (garmentImage: File): Promise<GarmentAnalysi
     });
 
     try {
-        const jsonText = response.text.trim();
+        const jsonText = response.text?.trim();
+        if (!jsonText) {
+            throw new Error("API returned empty response");
+        }
         return JSON.parse(jsonText);
     } catch (e) {
         console.error("Failed to parse garment analysis JSON:", e);

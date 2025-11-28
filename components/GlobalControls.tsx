@@ -740,8 +740,30 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
             </CollapsibleSection>
 
             <CollapsibleSection title="Advanced" icon={<SlidersHorizontalIcon className="w-3.5 h-3.5 text-gray-600" />} isOpen={openSections.advanced} onToggle={() => onToggleSection('advanced')}>
-                <label className="text-[11px] text-gray-400">Negative Prompt</label>
-                <textarea value={generationSettings.negativePrompt} onChange={(e) => onSettingsChange(gs => ({ ...gs, negativePrompt: e.target.value }))} placeholder="e.g. blurry, text, watermark" rows={2} className="w-full p-3 bg-black/20 text-gray-200 border border-white/10 rounded-lg text-xs placeholder-gray-600 focus:border-white/20 focus:bg-black/30 focus:ring-0 outline-none transition-all resize-none" />
+                <div className="space-y-3">
+                    <div className="space-y-1.5">
+                        <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={generationSettings.useEnhancedTryOn ?? true}
+                                onChange={(e) => onSettingsChange(gs => ({
+                                    ...gs,
+                                    useEnhancedTryOn: e.target.checked
+                                }))}
+                                className="h-4 w-4 rounded bg-black/30 border-gray-600 text-blue-500 focus:ring-blue-500"
+                            />
+                            <span>Enhanced Detail Preservation</span>
+                        </label>
+                        <p className="text-[10px] text-gray-500 ml-6">
+                            Analyzes garments to preserve exact colors, patterns, and details during virtual try-on
+                        </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-[11px] text-gray-400">Negative Prompt</label>
+                        <textarea value={generationSettings.negativePrompt} onChange={(e) => onSettingsChange(gs => ({ ...gs, negativePrompt: e.target.value }))} placeholder="e.g. blurry, text, watermark" rows={2} className="w-full p-3 bg-black/20 text-gray-200 border border-white/10 rounded-lg text-xs placeholder-gray-600 focus:border-white/20 focus:bg-black/30 focus:ring-0 outline-none transition-all resize-none" />
+                    </div>
+                </div>
             </CollapsibleSection>
         </div>
     );

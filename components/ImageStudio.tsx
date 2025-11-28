@@ -24,6 +24,7 @@ import {
   generatePoseVariation,
   regenerateFrame,
   analyzeGarment,
+  analyzeGarmentDetailed,
   generateModelImage,
   reviseGeneratedImage,
   enhanceRevisionPrompt
@@ -63,6 +64,11 @@ const resolveImageUrl = async (url: string): Promise<string> => {
 
 // Helper for deep copying objects
 const deepCopy = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj));
+
+// Helper to generate cache key from garment URL
+const getCacheKey = (url: string): string => {
+  return url.split('/').pop() || url; // Use filename or full URL
+};
 
 const POSE_INSTRUCTIONS = [
   "Standing, forward-facing, full body shot",
@@ -148,6 +154,7 @@ const initialGenerationSettings: GenerationSettings = {
   cameraProfile: 'none',
   noiseAndGrain: initialNoiseAndGrain,
   panelToggles: initialPanelToggles,
+  useEnhancedTryOn: true, // Enhanced garment detail preservation enabled by default
 };
 
 interface ImageStudioProps {
@@ -230,6 +237,9 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   const [favorites, setFavorites] = useState<string[]>([]);
   const [recentlyUsed, setRecentlyUsed] = useState<WardrobeItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<WardrobeItem | null>(null);
+
+  // Enhanced Try-On: Garment Analysis Cache
+  const [garmentAnalysisCache, setGarmentAnalysisCache] = useState<Map<string, GarmentAnalysis>>(new Map());
 
   // NEW: Revision Prompt State
   const [revisionPrompt, setRevisionPrompt] = useState('');
@@ -664,7 +674,26 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         const layer = visibleGarmentLayers[i];
         setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
         const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
-        currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings);
+
+        // Enhanced Try-On: Use cached analysis if available, or analyze garment
+        let garmentAnalysis: GarmentAnalysis | undefined;
+        if (generationSettings.useEnhancedTryOn !== false) {
+          const cacheKey = getCacheKey(layer.garment!.url);
+          garmentAnalysis = garmentAnalysisCache.get(cacheKey);
+
+          if (!garmentAnalysis) {
+            setLoadingMessage(`Analyzing garment details: ${layer.garment!.name}...`);
+            garmentAnalysis = await analyzeGarmentDetailed(garmentFile);
+            // Cache for reuse
+            setGarmentAnalysisCache(prev => new Map(prev).set(cacheKey, garmentAnalysis!));
+            console.log(`✓ Analyzed and cached: ${layer.garment!.name}`);
+          } else {
+            console.log(`✓ Using cached analysis: ${layer.garment!.name}`);
+          }
+          setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
+        }
+
+        currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
       }
 
       // Upload to Firebase Storage if user is logged in and result is base64
@@ -1116,7 +1145,26 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             const layer = visibleGarmentLayers[i];
             setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}...`);
             const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
-            currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings);
+
+            // Enhanced Try-On: Use cached analysis if available, or analyze garment
+            let garmentAnalysis: GarmentAnalysis | undefined;
+            if (generationSettings.useEnhancedTryOn !== false) {
+              const cacheKey = getCacheKey(layer.garment!.url);
+              garmentAnalysis = garmentAnalysisCache.get(cacheKey);
+
+              if (!garmentAnalysis) {
+                setLoadingMessage(`Analyzing garment details: ${layer.garment!.name}...`);
+                garmentAnalysis = await analyzeGarmentDetailed(garmentFile);
+                // Cache for reuse
+                setGarmentAnalysisCache(prev => new Map(prev).set(cacheKey, garmentAnalysis!));
+                console.log(`✓ Analyzed and cached: ${layer.garment!.name}`);
+              } else {
+                console.log(`✓ Using cached analysis: ${layer.garment!.name}`);
+              }
+              setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}...`);
+            }
+
+            currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
           }
           promptForHistory += `Applied ${visibleGarmentLayers.map(l => l.garment!.name).join(', ')}`;
         }
