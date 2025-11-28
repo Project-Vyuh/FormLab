@@ -204,7 +204,7 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
           />
         </div>
         <ResizeHandle onMouseDown={handleLeftDrag} />
-        <div className="flex-grow h-full flex items-center justify-center bg-[#EEEEEE] dark:bg-[#1a1a1a] relative p-4">
+        <div className="flex-grow h-full flex items-center justify-center bg-[#0f0f0f] relative p-4">
           <VideoCanvas
             videoUrl={videoUrl}
             isLoading={isLoading}
