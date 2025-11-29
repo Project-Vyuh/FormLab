@@ -546,3 +546,24 @@ export async function getGlobalWardrobeItems(userId: string, projectId?: string)
     return [];
   }
 }
+
+/**
+ * Delete a global wardrobe item
+ * @param userId - User ID
+ * @param itemId - Wardrobe item ID
+ */
+export async function deleteGlobalWardrobeItem(userId: string, itemId: string): Promise<void> {
+  try {
+    console.log('[deleteGlobalWardrobeItem] Deleting item:', { userId, itemId });
+
+    if (!userId || !itemId) {
+      throw new Error(`Invalid parameters: userId=${userId}, itemId=${itemId}`);
+    }
+
+    await deleteDoc(doc(db, 'users', userId, 'wardrobe', itemId));
+    console.log('[deleteGlobalWardrobeItem] Item deleted:', itemId);
+  } catch (error) {
+    console.error('[deleteGlobalWardrobeItem] Error deleting item:', error);
+    throw error;
+  }
+}

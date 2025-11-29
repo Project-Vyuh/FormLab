@@ -21,8 +21,10 @@ import {
   saveProjectState,
   loadProjectState
 } from '../services/dbService';
-import { uploadBase64Image, isBase64Url, deleteFile } from '../services/storageService';
+import { uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } from '../services/storageService';
 import { deleteStylingHistory } from '../services/dbService';
+import { deleteHistoryItemFromFirestore } from '../services/firestoreSync';
+import { auth } from '../services/firebase';
 import GlobalControls from './GlobalControls';
 import CollapsibleSection from './shared/CollapsibleSection';
 import OptionButton from './shared/OptionButton';
@@ -1410,25 +1412,58 @@ const CreateModel: React.FC<CreateModelProps> = ({
     setGeneratedModelHistory(prev => prev.map(item => item.id === id ? { ...item, name } : item));
   };
 
-  const handleDeleteVersion = (id: string) => {
-    setGeneratedModelHistory(prev => {
-      const itemToDelete = prev.find(i => i.id === id);
-      if (!itemToDelete) return prev;
+  const handleDeleteVersion = async (id: string) => {
+    const itemToDelete = generatedModelHistory.find(i => i.id === id);
+    if (!itemToDelete) return;
+
+    try {
+      // 1. Delete from Firebase Storage
+      if (itemToDelete.imageUrl && isStorageUrl(itemToDelete.imageUrl)) {
+        try {
+          await deleteFile(itemToDelete.imageUrl);
+          console.log('[CreateModel] Deleted storage file for:', id);
+        } catch (error) {
+          console.warn('[CreateModel] Storage deletion failed:', error);
+          // Continue with other deletions even if storage fails
+        }
+      }
+
+      // 2. Delete from Firestore
+      const currentUser = auth.currentUser;
+      if (currentUser && projectId) {
+        try {
+          await deleteHistoryItemFromFirestore(projectId, 'generatedModelHistory', id);
+          console.log('[CreateModel] Deleted from Firestore:', id);
+        } catch (error) {
+          console.warn('[CreateModel] Firestore deletion failed:', error);
+          // Continue with state update even if Firestore fails
+        }
+      }
+
+      // 3. Update local state (triggers IndexedDB save via useEffect)
       const parentId = itemToDelete.parentId;
 
       if (id === currentHistoryItemId) {
         setCurrentHistoryItemId(parentId);
       }
 
-      return prev
-        .filter(i => i.id !== id)
-        .map(i => {
-          if (i.parentId === id) {
-            return { ...i, parentId: parentId };
-          }
-          return i;
-        });
-    });
+      setGeneratedModelHistory(prev =>
+        prev
+          .filter(i => i.id !== id)
+          .map(i => {
+            if (i.parentId === id) {
+              return { ...i, parentId: parentId };
+            }
+            return i;
+          })
+      );
+
+      console.log('[CreateModel] Model version deleted successfully:', id);
+    } catch (error) {
+      console.error('[CreateModel] Error deleting version:', error);
+      // Still remove from UI even if backend deletion fails
+      setGeneratedModelHistory(prev => prev.filter(i => i.id !== id));
+    }
   };
 
   const renderLeftPanelContent = () => {

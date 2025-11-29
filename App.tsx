@@ -18,10 +18,13 @@ import CollectionsModal from './components/CollectionsModal';
 import ConflictResolutionModal from './components/ConflictResolutionModal';
 import ProjectSyncListener from './components/ProjectSyncListener';
 import { Model, Project, Notification, User, SelectedStylingModel, HistoryItem } from './types';
-import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, saveProjectState, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes, migrateBase64ImagesToStorage, migrateIndexedDBToFirestore, setCurrentUserId, deleteProjectState, deleteProjectMetadata } from './services/dbService';
+import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, saveProjectState, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes, migrateBase64ImagesToStorage, migrateIndexedDBToFirestore, setCurrentUserId, deleteProjectState, deleteProjectMetadata, forceImmediateSync } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
 import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
 import { loadPredefinedModels, PredefinedModel, getGlobalModels } from './services/firestoreService';
+import { loadAllUserProjectsFromFirestore, loadProjectFromFirestore, deleteProjectFromFirestore } from './services/firestoreSync';
+import { deleteFolderContents } from './services/storageService';
+import { auth } from './services/firebase';
 import { SyncProvider } from './contexts/SyncContext';
 
 
@@ -221,7 +224,31 @@ const App: React.FC = () => {
       if (!currentUser) return;
 
       try {
-        const projects = await dbGetAllProjectMetadata();
+        // Step 1: Load from IndexedDB first (instant)
+        let projects = await dbGetAllProjectMetadata();
+        console.log(`[App] Loaded ${projects.length} projects from IndexedDB`);
+
+        // Step 2: If IndexedDB is empty, load from Firestore (new device scenario)
+        if (projects.length === 0) {
+          console.log('[App] IndexedDB empty, loading from Firestore...');
+          const firestoreProjects = await loadAllUserProjectsFromFirestore(currentUser.uid);
+          console.log(`[App] Loaded ${firestoreProjects.length} projects from Firestore`);
+
+          // Step 3: Populate IndexedDB with Firestore data
+          for (const project of firestoreProjects) {
+            await saveProjectMetadata(project);
+
+            // Load full project state from Firestore and save to IndexedDB
+            const projectState = await loadProjectFromFirestore(project.id, currentUser.uid);
+            if (projectState) {
+              await saveProjectState(project.id, projectState);
+              console.log(`[App] Populated IndexedDB with project: ${project.id}`);
+            }
+          }
+
+          projects = firestoreProjects;
+        }
+
         setProjectList(projects); // Set global project list state
         if (projects.length === 0) {
           setNeedsOnboarding(true);
@@ -548,7 +575,27 @@ const App: React.FC = () => {
     };
 
     try {
+      // Save metadata to IndexedDB
       await saveProjectMetadata(newProject);
+
+      // Create initial project state
+      const initialState = {
+        id: newProject.id,
+        generatedModelHistory: [],
+        wardrobe: [],
+        generationSettings: initialGenerationSettings
+      };
+      await saveProjectState(newProject.id, initialState);
+
+      // Force immediate Firestore sync to prevent data loss
+      try {
+        await forceImmediateSync(newProject.id, initialState);
+        console.log('[App] Project synced immediately to Firestore');
+      } catch (syncError) {
+        console.warn('[App] Immediate sync failed, will retry with debounce:', syncError);
+        // Don't block UI - debounced sync will retry
+      }
+
       setProjectList(prev => [...prev, newProject]);
       setCurrentProjectId(newProject.id);
       setIsCreateProjectModalOpen(false);
@@ -560,9 +607,41 @@ const App: React.FC = () => {
 
   const handleDeleteProject = useCallback(async (projectId: string) => {
     try {
+      console.log('[App] Starting project deletion:', projectId);
+
+      // Get current user for storage paths
+      const currentUser = auth.currentUser;
+      const userId = currentUser?.uid;
+
+      // 1. Delete from Firebase Storage (all project files)
+      if (userId) {
+        try {
+          // Delete all files in the project's model folder
+          await deleteFolderContents(`users/${userId}/models/${projectId}`);
+          console.log('[App] Deleted project storage files');
+        } catch (storageError) {
+          console.warn('[App] Failed to delete some storage files:', storageError);
+          // Continue with other deletions
+        }
+
+        // 2. Delete from Firestore
+        try {
+          await deleteProjectFromFirestore(projectId, userId);
+          console.log('[App] Deleted project from Firestore');
+        } catch (firestoreError) {
+          console.warn('[App] Failed to delete from Firestore:', firestoreError);
+          // Continue with other deletions
+        }
+      } else {
+        console.warn('[App] No user logged in, skipping Firebase deletion');
+      }
+
+      // 3. Delete from IndexedDB (always do this, even if Firebase fails)
       await deleteProjectState(projectId);
       await deleteProjectMetadata(projectId);
+      console.log('[App] Deleted from IndexedDB');
 
+      // 4. Update UI state
       setProjectList(prev => {
         const newList = prev.filter(p => p.id !== projectId);
         if (newList.length === 0) {
@@ -573,10 +652,13 @@ const App: React.FC = () => {
 
       if (currentProjectId === projectId) {
         setCurrentProjectId(null);
-        // Optionally switch to another project or show start screen
       }
+
+      console.log('[App] Project deletion completed:', projectId);
     } catch (e) {
-      console.error("Failed to delete project", e);
+      console.error("[App] Failed to delete project:", e);
+      // Show error to user
+      alert("Failed to delete project. Some files may remain. Please try again.");
     }
   }, [currentProjectId]);
 

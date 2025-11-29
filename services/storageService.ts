@@ -226,6 +226,40 @@ export async function deleteFile(fileUrl: string): Promise<void> {
 }
 
 /**
+ * Delete all files in a folder from Firebase Storage
+ * @param folderPath - Path to the folder (e.g., 'users/userId/models/projectId')
+ */
+export async function deleteFolderContents(folderPath: string): Promise<void> {
+    try {
+        const { listAll } = await import('firebase/storage');
+        const folderRef = ref(storage, folderPath);
+
+        // List all items in the folder
+        const listResult = await listAll(folderRef);
+
+        // Delete all files
+        const deletePromises = listResult.items.map(itemRef =>
+            deleteObject(itemRef).catch(error => {
+                console.warn(`Failed to delete ${itemRef.fullPath}:`, error);
+                // Continue deleting other files even if one fails
+            })
+        );
+
+        // Delete all subfolder contents recursively
+        const subfolderPromises = listResult.prefixes.map(folderRef =>
+            deleteFolderContents(folderRef.fullPath)
+        );
+
+        await Promise.all([...deletePromises, ...subfolderPromises]);
+
+        console.log(`Folder deleted successfully: ${folderPath}`);
+    } catch (error) {
+        console.error('Error deleting folder:', error);
+        throw new Error('Failed to delete folder from storage');
+    }
+}
+
+/**
  * Get download URL for a file path
  * @param filePath - Storage path of the file
  * @returns Download URL

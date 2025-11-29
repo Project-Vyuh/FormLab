@@ -15,7 +15,8 @@ import {
     serverTimestamp,
     onSnapshot,
     Unsubscribe,
-    Timestamp
+    Timestamp,
+    deleteDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { HistoryItem, Project } from '../types';
@@ -162,7 +163,8 @@ const mergeArraysByIdAndTimestamp = (localArray: any[], remoteArray: any[]): any
 export const syncProjectToFirestore = async (
     projectId: string,
     userId: string,
-    projectState: ProjectState
+    projectState: ProjectState,
+    projectMetadata?: Project
 ): Promise<void> => {
     try {
         console.log('[firestoreSync] Syncing project to Firestore:', projectId);
@@ -173,7 +175,7 @@ export const syncProjectToFirestore = async (
             for (const item of projectState.generatedModelHistory) {
                 if (item.imageUrl && isBase64Url(item.imageUrl)) {
                     const error = `[firestoreSync] BLOCKED: Project ${projectId} contains base64 images in generatedModelHistory. ` +
-                                  `Item ${item.id} has base64 imageUrl. Migration to Firebase Storage required before Firestore sync.`;
+                        `Item ${item.id} has base64 imageUrl. Migration to Firebase Storage required before Firestore sync.`;
                     console.error(error);
                     throw new Error('Cannot sync project with base64 images - migration needed');
                 }
@@ -187,7 +189,7 @@ export const syncProjectToFirestore = async (
                     for (const item of historyItems) {
                         if (item.imageUrl && isBase64Url(item.imageUrl)) {
                             const error = `[firestoreSync] BLOCKED: Project ${projectId} contains base64 images in stylingHistory[${baseModelId}]. ` +
-                                          `Item ${item.id} has base64 imageUrl. Migration to Firebase Storage required before Firestore sync.`;
+                                `Item ${item.id} has base64 imageUrl. Migration to Firebase Storage required before Firestore sync.`;
                             console.error(error);
                             throw new Error('Cannot sync project with base64 images - migration needed');
                         }
@@ -201,7 +203,7 @@ export const syncProjectToFirestore = async (
             for (const item of projectState.wardrobe) {
                 if (item.url && isBase64Url(item.url)) {
                     const error = `[firestoreSync] BLOCKED: Project ${projectId} contains base64 images in wardrobe. ` +
-                                  `Item ${item.id} has base64 url. Migration to Firebase Storage required before Firestore sync.`;
+                        `Item ${item.id} has base64 url. Migration to Firebase Storage required before Firestore sync.`;
                     console.error(error);
                     throw new Error('Cannot sync project with base64 images - migration needed');
                 }
@@ -239,22 +241,35 @@ export const syncProjectToFirestore = async (
         const projectRef = doc(db, 'projects', projectId);
 
         // Prepare project metadata with all required fields
-        const projectMetadata = {
+        const projectData = {
             id: projectId,
             userId: userId, // Required by Firestore rules
+
+            // Project Metadata (from IndexedDB projectMetadata store)
+            title: projectMetadata?.title || 'Untitled Project',
+            description: projectMetadata?.description || '',
+            organization: projectMetadata?.organization || '',
+            clientDetails: projectMetadata?.clientDetails || { name: '', email: '', phone: '', location: '' },
+            deadline: projectMetadata?.deadline || '',
+            tags: projectMetadata?.tags || [],
+            status: projectMetadata?.status || 'Draft',
+            selectedForStyling: projectMetadata?.selectedForStyling || null,
+
+            // Project State (from IndexedDB modelProjects store)
             modelDescription: projectState.modelDescription || '',
             revisionPrompt: projectState.revisionPrompt || '',
             selectedModelName: projectState.selectedModelName || '',
             currentHistoryItemId: projectState.currentHistoryItemId || null,
             hasSavedInstance: projectState.hasSavedInstance || false,
             generationSettings: projectState.generationSettings || {},
+
             createdAt: serverTimestamp(), // Required by Firestore rules
             updatedAt: serverTimestamp(), // Required by Firestore rules
             syncVersion: (projectState.syncVersion || 0) + 1,
         };
 
         // Sanitize metadata to convert undefined to null (Firestore requirement)
-        const sanitizedMetadata = sanitizeForFirestore(projectMetadata);
+        const sanitizedMetadata = sanitizeForFirestore(projectData);
 
         // Validate all required fields are present before write
         if (!sanitizedMetadata.userId || !sanitizedMetadata.createdAt || !sanitizedMetadata.updatedAt) {
@@ -422,6 +437,49 @@ export const loadProjectFromFirestore = async (
 };
 
 /**
+ * Load all projects for a user from Firestore
+ * Used when logging in on a new device to populate IndexedDB
+ */
+export const loadAllUserProjectsFromFirestore = async (
+    userId: string
+): Promise<Project[]> => {
+    try {
+        console.log('[firestoreSync] Loading all projects for user from Firestore:', userId);
+
+        // Query all projects where userId matches
+        const projectsQuery = query(
+            collection(db, 'projects'),
+            where('userId', '==', userId)
+        );
+
+        const querySnapshot = await getDocs(projectsQuery);
+
+        const projects: Project[] = [];
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            projects.push({
+                id: doc.id,
+                title: data.title || 'Untitled Project',
+                description: data.description || '',
+                organization: data.organization || '',
+                clientDetails: data.clientDetails || { name: '', email: '', phone: '', location: '' },
+                createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+                deadline: data.deadline || '',
+                tags: data.tags || [],
+                status: data.status || 'Draft',
+            });
+        });
+
+        console.log(`[firestoreSync] Loaded ${projects.length} projects from Firestore`);
+        return projects;
+    } catch (error: any) {
+        console.error('[firestoreSync] Error loading projects from Firestore:', error);
+        return [];
+    }
+};
+
+
+/**
  * Sync history items to Firestore (batched)
  */
 export const syncHistoryItems = async (
@@ -467,8 +525,8 @@ export const syncHistoryItems = async (
 
             // Validate imageUrl format (must be Firebase Storage or data:image URL)
             const isValidUrl = item.imageUrl.startsWith('https://firebasestorage.googleapis.com/') ||
-                              item.imageUrl.startsWith('https://storage.googleapis.com/') ||
-                              item.imageUrl.startsWith('data:image/');
+                item.imageUrl.startsWith('https://storage.googleapis.com/') ||
+                item.imageUrl.startsWith('data:image/');
 
             if (!isValidUrl) {
                 console.warn(`[firestoreSync] Skipping history item ${item.id} - invalid imageUrl format (must be Firebase Storage or data:image URL)`);
@@ -584,6 +642,97 @@ const loadWardrobeItems = async (projectId: string): Promise<any[]> => {
     } catch (error) {
         console.error('[firestoreSync] Error loading wardrobe items:', error);
         return [];
+    }
+};
+
+/**
+ * Delete a single history item from Firestore
+ * @param projectId - Project ID
+ * @param collectionPath - Path to history collection (e.g., 'generatedModelHistory' or 'stylingHistory/baseModelId')
+ * @param itemId - History item ID to delete
+ */
+export const deleteHistoryItemFromFirestore = async (
+    projectId: string,
+    collectionPath: string,
+    itemId: string
+): Promise<void> => {
+    try {
+        const itemRef = doc(db, 'projects', projectId, collectionPath, itemId);
+        await deleteDoc(itemRef);
+        console.log(`[firestoreSync] Deleted history item ${itemId} from ${collectionPath}`);
+    } catch (error) {
+        console.error('[firestoreSync] Error deleting history item:', error);
+        throw error;
+    }
+};
+
+/**
+ * Delete a project and all its subcollections from Firestore
+ * @param projectId - Project ID to delete
+ * @param userId - User ID (for verification)
+ */
+export const deleteProjectFromFirestore = async (
+    projectId: string,
+    userId: string
+): Promise<void> => {
+    try {
+        console.log('[firestoreSync] Deleting project from Firestore:', projectId);
+
+        // Verify authentication
+        const { auth } = await import('./firebase');
+        const currentUser = auth.currentUser;
+
+        if (!currentUser || currentUser.uid !== userId) {
+            throw new Error('[firestoreSync] User not authenticated or userId mismatch');
+        }
+
+        // Use batch for atomic deletion
+        const batch = writeBatch(db);
+
+        // 1. Delete all history items in generatedModelHistory subcollection
+        const historySnapshot = await getDocs(
+            collection(db, 'projects', projectId, 'generatedModelHistory')
+        );
+        historySnapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        // 2. Delete all styling history subcollections
+        try {
+            const stylingSnapshot = await getDocs(
+                collection(db, 'projects', projectId, 'stylingHistory')
+            );
+
+            for (const baseModelDoc of stylingSnapshot.docs) {
+                const itemsSnapshot = await getDocs(
+                    collection(db, 'projects', projectId, 'stylingHistory', baseModelDoc.id)
+                );
+                itemsSnapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+            }
+        } catch (error) {
+            console.warn('[firestoreSync] Styling history deletion failed (may not exist):', error);
+        }
+
+        // 3. Delete all wardrobe items
+        const wardrobeSnapshot = await getDocs(
+            collection(db, 'projects', projectId, 'wardrobe')
+        );
+        wardrobeSnapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        // 4. Delete the project document itself
+        batch.delete(doc(db, 'projects', projectId));
+
+        // Commit the batch
+        await batch.commit();
+
+        console.log('[firestoreSync] Project deleted successfully from Firestore');
+    } catch (error) {
+        console.error('[firestoreSync] Error deleting project from Firestore:', error);
+        throw error;
     }
 };
 

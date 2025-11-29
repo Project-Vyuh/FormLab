@@ -30,9 +30,11 @@ import {
   enhanceRevisionPrompt
 } from '../services/geminiService';
 import { getFriendlyErrorMessage } from '../lib/utils';
-import { uploadFile, uploadBase64Image, isBase64Url } from '../services/storageService';
+import { uploadFile, uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } from '../services/storageService';
 import { convertToSquare } from '../lib/imageProcessing';
-import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem } from '../services/firestoreService';
+import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem, deleteGlobalWardrobeItem } from '../services/firestoreService';
+import { deleteHistoryItemFromFirestore } from '../services/firestoreSync';
+import { auth } from '../services/firebase';
 import { loadUnifiedHistory, saveStylingHistory } from '../services/dbService';
 import { getCurrentUserId } from '../services/authService';
 
@@ -876,25 +878,74 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     setGeneratedModelHistory(prev => prev.map(item => item.id === id ? { ...item, name } : item));
   };
 
-  const handleDeleteVersion = (id: string) => {
-    setGeneratedModelHistory(prev => {
-      const itemToDelete = prev.find(i => i.id === id);
-      if (!itemToDelete) return prev;
+  const handleDeleteVersion = async (id: string) => {
+    const itemToDelete = generatedModelHistory.find(i => i.id === id);
+    if (!itemToDelete) return;
+
+    try {
+      // 1. Delete from Firebase Storage
+      if (itemToDelete.imageUrl && isStorageUrl(itemToDelete.imageUrl)) {
+        try {
+          await deleteFile(itemToDelete.imageUrl);
+          console.log('[ImageStudio] Deleted storage file for:', id);
+        } catch (error) {
+          console.warn('[ImageStudio] Storage deletion failed:', error);
+          // Continue with other deletions even if storage fails
+        }
+      }
+
+      // 2. Delete from Firestore
+      const currentUser = auth.currentUser;
+      if (currentUser && projectId) {
+        try {
+          // Determine collection path based on item type
+          let collectionPath: string;
+          if (itemToDelete.type === 'try-on' || itemToDelete.type === 'try-on-revision') {
+            // Styling history - need baseModelId
+            const baseModelId = itemToDelete.baseModelId || selectedStylingModel?.baseModelId;
+            if (baseModelId) {
+              collectionPath = `stylingHistory/${baseModelId}`;
+            } else {
+              console.warn('[ImageStudio] Cannot delete from Firestore - no baseModelId for styling history item');
+              collectionPath = 'generatedModelHistory'; // fallback
+            }
+          } else {
+            // Create Model history
+            collectionPath = 'generatedModelHistory';
+          }
+
+          await deleteHistoryItemFromFirestore(projectId, collectionPath, id);
+          console.log('[ImageStudio] Deleted from Firestore:', id);
+        } catch (error) {
+          console.warn('[ImageStudio] Firestore deletion failed:', error);
+          // Continue with state update even if Firestore fails
+        }
+      }
+
+      // 3. Update local state (triggers IndexedDB save via useEffect)
       const parentId = itemToDelete.parentId;
 
       if (id === currentHistoryItemId) {
         setCurrentHistoryItemId(parentId);
       }
 
-      return prev
-        .filter(i => i.id !== id)
-        .map(i => {
-          if (i.parentId === id) {
-            return { ...i, parentId: parentId };
-          }
-          return i;
-        });
-    });
+      setGeneratedModelHistory(prev =>
+        prev
+          .filter(i => i.id !== id)
+          .map(i => {
+            if (i.parentId === id) {
+              return { ...i, parentId: parentId };
+            }
+            return i;
+          })
+      );
+
+      console.log('[ImageStudio] Model version deleted successfully:', id);
+    } catch (error) {
+      console.error('[ImageStudio] Error deleting version:', error);
+      // Still remove from UI even if backend deletion fails
+      setGeneratedModelHistory(prev => prev.filter(i => i.id !== id));
+    }
   };
 
   const handleAddLight = (role: LightRole) => {
@@ -1043,8 +1094,9 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     setDeleteConfirmation({ type: 'product', item: product });
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteConfirmation) return;
+
     if (deleteConfirmation.type === 'category') {
       const categoryToDelete = deleteConfirmation.item as string;
       setWardrobe(prev => prev.map(item => item.category.toLowerCase() === categoryToDelete.toLowerCase() ? { ...item, category: 'Uncategorized' } : item));
@@ -1052,10 +1104,46 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       setSelectedCategories(prev => prev.filter(c => c.toLowerCase() !== categoryToDelete.toLowerCase()));
       setToastMessage(`Category "${categoryToDelete}" deleted. Items moved to "Uncategorized".`);
     } else {
+      // Product deletion
       const productToDelete = deleteConfirmation.item as WardrobeItem;
-      setWardrobe(prev => prev.filter(item => item.id !== productToDelete.id));
-      setToastMessage(`Product "${productToDelete.name}" deleted.`);
+
+      try {
+        console.log('[ImageStudio] Deleting wardrobe product:', productToDelete.id);
+
+        // 1. Delete from Firebase Storage (user-uploaded only)
+        if (productToDelete.source === 'user' && productToDelete.url && isStorageUrl(productToDelete.url)) {
+          try {
+            await deleteFile(productToDelete.url);
+            console.log('[ImageStudio] Deleted storage file for product:', productToDelete.id);
+          } catch (error) {
+            console.warn('[ImageStudio] Storage deletion failed:', error);
+            // Continue with other deletions
+          }
+        }
+
+        // 2. Delete from global wardrobe in Firestore (if user-created and saved globally)
+        const currentUser = auth.currentUser;
+        if (currentUser && (productToDelete.source === 'user-global' || productToDelete.source === 'user')) {
+          try {
+            await deleteGlobalWardrobeItem(currentUser.uid, productToDelete.id);
+            console.log('[ImageStudio] Deleted from global wardrobe:', productToDelete.id);
+          } catch (error) {
+            console.warn('[ImageStudio] Global wardrobe deletion failed:', error);
+            // Continue with other deletions
+          }
+        }
+
+        // 3. Update state (triggers IndexedDB save via useEffect)
+        setWardrobe(prev => prev.filter(item => item.id !== productToDelete.id));
+        setToastMessage(`Product "${productToDelete.name}" deleted.`);
+
+        console.log('[ImageStudio] Product deletion completed:', productToDelete.id);
+      } catch (error) {
+        console.error('[ImageStudio] Error deleting product:', error);
+        setToastMessage(`Failed to delete product "${productToDelete.name}". Please try again.`);
+      }
     }
+
     setDeleteConfirmation(null);
   };
 

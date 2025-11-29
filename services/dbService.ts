@@ -84,6 +84,15 @@ const queueFirestoreSync = (projectId: string, state: any) => {
                 request.onerror = () => reject(request.error);
             });
 
+            // Load project metadata from IndexedDB
+            const projectMetadata = await new Promise<any>((resolve, reject) => {
+                const transaction = db.transaction([METADATA_STORE_NAME], 'readonly');
+                const store = transaction.objectStore(METADATA_STORE_NAME);
+                const request = store.get(projectId);
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = () => reject(request.error);
+            });
+
             // Use fresh state if available, otherwise fall back to the state passed in
             const stateToSync = freshState || state;
 
@@ -93,7 +102,7 @@ const queueFirestoreSync = (projectId: string, state: any) => {
                 updatedAt: Date.now(),
             };
 
-            await syncProjectToFirestore(projectId, currentUserId, projectState);
+            await syncProjectToFirestore(projectId, currentUserId, projectState, projectMetadata);
             syncQueue.delete(projectId);
             syncInProgress.delete(projectId); // Mark as complete
             console.log('[dbService] Firestore sync completed successfully');
@@ -113,6 +122,57 @@ const queueFirestoreSync = (projectId: string, state: any) => {
     }, 5000); // Increased from 2000ms to 5000ms to reduce sync frequency and prevent write stream exhaustion
 
     syncQueue.set(projectId, timer);
+};
+
+/**
+ * Force immediate Firestore sync (no debounce)
+ * Use for critical operations like project creation to prevent data loss
+ */
+export const forceImmediateSync = async (projectId: string, state: any): Promise<void> => {
+    if (!currentUserId) {
+        console.warn('[dbService] Cannot force sync - no user logged in');
+        return;
+    }
+
+    // Cancel any pending debounced sync
+    if (syncQueue.has(projectId)) {
+        clearTimeout(syncQueue.get(projectId)!);
+        syncQueue.delete(projectId);
+    }
+
+    // Check if sync already in progress
+    if (syncInProgress.has(projectId)) {
+        console.log('[dbService] Sync already in progress, skipping force sync');
+        return;
+    }
+
+    try {
+        console.log('[dbService] Force immediate sync:', projectId);
+        syncInProgress.add(projectId);
+
+        // Load fresh metadata from IndexedDB
+        const projectMetadata = await new Promise<any>((resolve, reject) => {
+            const transaction = db.transaction([METADATA_STORE_NAME], 'readonly');
+            const store = transaction.objectStore(METADATA_STORE_NAME);
+            const request = store.get(projectId);
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+
+        const projectState: ProjectState = {
+            id: projectId,
+            ...state,
+            updatedAt: Date.now(),
+        };
+
+        await syncProjectToFirestore(projectId, currentUserId, projectState, projectMetadata);
+        console.log('[dbService] Force sync completed successfully');
+    } catch (error) {
+        console.error('[dbService] Force sync failed:', error);
+        throw error;
+    } finally {
+        syncInProgress.delete(projectId);
+    }
 };
 
 export const initDB = (): Promise<boolean> => {
