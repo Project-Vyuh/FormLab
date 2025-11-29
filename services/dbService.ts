@@ -16,13 +16,14 @@ let db: IDBDatabase;
 
 // --- Firestore Sync Queue ---
 const syncQueue = new Map<string, NodeJS.Timeout>();
+const syncInProgress = new Set<string>(); // Track projects currently syncing to prevent concurrent writes
 let currentUserId: string | null = null;
 
 /**
  * Set current user ID for Firestore sync
  */
 export const setCurrentUserId = (userId: string | null) => {
-  currentUserId = userId;
+    currentUserId = userId;
 };
 
 /**
@@ -30,9 +31,9 @@ export const setCurrentUserId = (userId: string | null) => {
  * Useful during migrations to prevent stale data from being synced
  */
 export const clearSyncQueue = () => {
-  console.log('[dbService] Clearing sync queue, canceling', syncQueue.size, 'pending syncs');
-  syncQueue.forEach((timer) => clearTimeout(timer));
-  syncQueue.clear();
+    console.log('[dbService] Clearing sync queue, canceling', syncQueue.size, 'pending syncs');
+    syncQueue.forEach((timer) => clearTimeout(timer));
+    syncQueue.clear();
 };
 
 /**
@@ -40,101 +41,113 @@ export const clearSyncQueue = () => {
  * Always reloads fresh state from IndexedDB before syncing to ensure migrated data is used
  */
 const queueFirestoreSync = (projectId: string, state: any) => {
-  // Skip if no user logged in
-  if (!currentUserId) {
-    console.warn('[dbService] Skipping Firestore sync - user not authenticated yet. Project:', projectId);
-    return;
-  }
-
-  // Clear existing timer for this project
-  if (syncQueue.has(projectId)) {
-    clearTimeout(syncQueue.get(projectId)!);
-  }
-
-  // Queue new sync (debounced 2 seconds)
-  const timer = setTimeout(async () => {
-    try {
-      // Re-check userId before sync (in case user logged out during debounce period)
-      if (!currentUserId) {
-        console.warn('[dbService] User logged out before sync could complete. Skipping sync for project:', projectId);
-        syncQueue.delete(projectId);
+    // Skip if no user logged in
+    if (!currentUserId) {
+        console.warn('[dbService] Skipping Firestore sync - user not authenticated yet. Project:', projectId);
         return;
-      }
-
-      console.log('[dbService] Starting background Firestore sync for project:', projectId);
-
-      // CRITICAL: Reload fresh state from IndexedDB to ensure we sync migrated data
-      // This prevents race conditions where in-memory state is stale (e.g., contains base64 before migration)
-      const freshState = await new Promise<any>((resolve, reject) => {
-        const transaction = db.transaction([STATE_STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STATE_STORE_NAME);
-        const request = store.get(projectId);
-        request.onsuccess = () => resolve(request.result || null);
-        request.onerror = () => reject(request.error);
-      });
-
-      // Use fresh state if available, otherwise fall back to the state passed in
-      const stateToSync = freshState || state;
-
-      const projectState: ProjectState = {
-        id: projectId,
-        ...stateToSync,
-        updatedAt: Date.now(),
-      };
-
-      await syncProjectToFirestore(projectId, currentUserId, projectState);
-      syncQueue.delete(projectId);
-      console.log('[dbService] Firestore sync completed successfully');
-    } catch (error: any) {
-      // Provide more detailed error logging
-      if (error?.code === 'permission-denied') {
-        console.error('[dbService] Firestore sync failed: Permission denied. Check Firestore rules and ensure user is authenticated.');
-      } else if (error?.message?.includes('Missing or insufficient permissions')) {
-        console.error('[dbService] Firestore sync failed: Missing required fields or userId mismatch. Error:', error.message);
-      } else {
-        console.error('[dbService] Firestore sync failed:', error);
-      }
-      // Keep in IndexedDB, will retry next time
-      syncQueue.delete(projectId);
     }
-  }, 2000);
 
-  syncQueue.set(projectId, timer);
+    // Clear existing timer for this project
+    if (syncQueue.has(projectId)) {
+        clearTimeout(syncQueue.get(projectId)!);
+    }
+
+    // Queue new sync (debounced 5 seconds - increased from 2s to reduce Firestore write stream pressure)
+    const timer = setTimeout(async () => {
+        try {
+            // Re-check userId before sync (in case user logged out during debounce period)
+            if (!currentUserId) {
+                console.warn('[dbService] User logged out before sync could complete. Skipping sync for project:', projectId);
+                syncQueue.delete(projectId);
+                return;
+            }
+
+            // Check if sync already in progress for this project
+            if (syncInProgress.has(projectId)) {
+                console.log('[dbService] Sync already in progress for project:', projectId, '- will retry after completion');
+                syncQueue.delete(projectId);
+                // Re-queue the sync to try again after current sync completes
+                queueFirestoreSync(projectId, state);
+                return;
+            }
+
+            console.log('[dbService] Starting background Firestore sync for project:', projectId);
+            syncInProgress.add(projectId); // Mark as in progress
+
+            // CRITICAL: Reload fresh state from IndexedDB to ensure we sync migrated data
+            // This prevents race conditions where in-memory state is stale (e.g., contains base64 before migration)
+            const freshState = await new Promise<any>((resolve, reject) => {
+                const transaction = db.transaction([STATE_STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STATE_STORE_NAME);
+                const request = store.get(projectId);
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = () => reject(request.error);
+            });
+
+            // Use fresh state if available, otherwise fall back to the state passed in
+            const stateToSync = freshState || state;
+
+            const projectState: ProjectState = {
+                id: projectId,
+                ...stateToSync,
+                updatedAt: Date.now(),
+            };
+
+            await syncProjectToFirestore(projectId, currentUserId, projectState);
+            syncQueue.delete(projectId);
+            syncInProgress.delete(projectId); // Mark as complete
+            console.log('[dbService] Firestore sync completed successfully');
+        } catch (error: any) {
+            // Provide more detailed error logging
+            if (error?.code === 'permission-denied') {
+                console.error('[dbService] Firestore sync failed: Permission denied. Check Firestore rules and ensure user is authenticated.');
+            } else if (error?.message?.includes('Missing or insufficient permissions')) {
+                console.error('[dbService] Firestore sync failed: Missing required fields or userId mismatch. Error:', error.message);
+            } else {
+                console.error('[dbService] Firestore sync failed:', error);
+            }
+            // Keep in IndexedDB, will retry next time
+            syncQueue.delete(projectId);
+            syncInProgress.delete(projectId); // Mark as complete even on error
+        }
+    }, 5000); // Increased from 2000ms to 5000ms to reduce sync frequency and prevent write stream exhaustion
+
+    syncQueue.set(projectId, timer);
 };
 
 export const initDB = (): Promise<boolean> => {
-  return new Promise((resolve, reject) => {
-    if (db) return resolve(true);
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onerror = () => reject('Error opening DB');
-    request.onsuccess = () => { db = request.result; resolve(true); };
-    request.onupgradeneeded = e => {
-      const dbInstance = (e.target as IDBOpenDBRequest).result;
-      if (!dbInstance.objectStoreNames.contains(STATE_STORE_NAME)) {
-        dbInstance.createObjectStore(STATE_STORE_NAME, { keyPath: 'id' });
-      }
-      if (!dbInstance.objectStoreNames.contains(METADATA_STORE_NAME)) {
-        dbInstance.createObjectStore(METADATA_STORE_NAME, { keyPath: 'id' });
-      }
-    };
-  });
+    return new Promise((resolve, reject) => {
+        if (db) return resolve(true);
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onerror = () => reject('Error opening DB');
+        request.onsuccess = () => { db = request.result; resolve(true); };
+        request.onupgradeneeded = e => {
+            const dbInstance = (e.target as IDBOpenDBRequest).result;
+            if (!dbInstance.objectStoreNames.contains(STATE_STORE_NAME)) {
+                dbInstance.createObjectStore(STATE_STORE_NAME, { keyPath: 'id' });
+            }
+            if (!dbInstance.objectStoreNames.contains(METADATA_STORE_NAME)) {
+                dbInstance.createObjectStore(METADATA_STORE_NAME, { keyPath: 'id' });
+            }
+        };
+    });
 };
 
 export const saveProjectState = async (id: string, state: object) => {
-  if (!id.trim()) return;
-  if (!db) await initDB();
+    if (!id.trim()) return;
+    if (!db) await initDB();
 
-  // Save to IndexedDB (instant, no network latency)
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction([STATE_STORE_NAME], 'readwrite');
-    const store = transaction.objectStore(STATE_STORE_NAME);
-    const request = store.put({ id, ...state });
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+    // Save to IndexedDB (instant, no network latency)
+    await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction([STATE_STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STATE_STORE_NAME);
+        const request = store.put({ id, ...state });
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
 
-  // Queue Firestore sync (background, debounced 2 seconds)
-  queueFirestoreSync(id, state);
+    // Queue Firestore sync (background, debounced 2 seconds)
+    queueFirestoreSync(id, state);
 };
 
 export const saveProjectMetadata = async (project: Project) => {
@@ -150,47 +163,47 @@ export const saveProjectMetadata = async (project: Project) => {
 };
 
 export const loadProjectState = async (id: string): Promise<any | null> => {
-  if (!db) await initDB();
+    if (!db) await initDB();
 
-  // Load from IndexedDB first (instant)
-  const localState = await new Promise<any>((resolve, reject) => {
-    const transaction = db.transaction([STATE_STORE_NAME], 'readonly');
-    const store = transaction.objectStore(STATE_STORE_NAME);
-    const request = store.get(id);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error);
-  });
-
-  // Skip Firestore check if no user logged in
-  if (!currentUserId) {
-    return localState;
-  }
-
-  // Check Firestore for newer version (background, don't block UI)
-  try {
-    const remoteState = await loadProjectFromFirestore(id, currentUserId);
-
-    if (remoteState && (!localState || (remoteState.updatedAt || 0) > (localState.updatedAt || 0))) {
-      console.log('[dbService] Remote version is newer, merging with local');
-      // Remote is newer, merge and save locally
-      const merged = mergeProjectStates(localState || { id }, remoteState, 'prefer-remote');
-
-      // Save merged state to IndexedDB (don't trigger another Firestore sync)
-      await new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction([STATE_STORE_NAME], 'readwrite');
+    // Load from IndexedDB first (instant)
+    const localState = await new Promise<any>((resolve, reject) => {
+        const transaction = db.transaction([STATE_STORE_NAME], 'readonly');
         const store = transaction.objectStore(STATE_STORE_NAME);
-        const request = store.put(merged);
-        request.onsuccess = () => resolve();
+        const request = store.get(id);
+        request.onsuccess = () => resolve(request.result || null);
         request.onerror = () => reject(request.error);
-      });
+    });
 
-      return merged;
+    // Skip Firestore check if no user logged in
+    if (!currentUserId) {
+        return localState;
     }
-  } catch (error) {
-    console.warn('[dbService] Failed to check Firestore, using local state:', error);
-  }
 
-  return localState;
+    // Check Firestore for newer version (background, don't block UI)
+    try {
+        const remoteState = await loadProjectFromFirestore(id, currentUserId);
+
+        if (remoteState && (!localState || (remoteState.updatedAt || 0) > (localState.updatedAt || 0))) {
+            console.log('[dbService] Remote version is newer, merging with local');
+            // Remote is newer, merge and save locally
+            const merged = mergeProjectStates(localState || { id }, remoteState, 'prefer-remote');
+
+            // Save merged state to IndexedDB (don't trigger another Firestore sync)
+            await new Promise<void>((resolve, reject) => {
+                const transaction = db.transaction([STATE_STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STATE_STORE_NAME);
+                const request = store.put(merged);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+
+            return merged;
+        }
+    } catch (error) {
+        console.warn('[dbService] Failed to check Firestore, using local state:', error);
+    }
+
+    return localState;
 };
 
 export const getAllProjectMetadata = async (): Promise<Project[]> => {
