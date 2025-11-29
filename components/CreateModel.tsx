@@ -34,7 +34,7 @@ import SwitchProjectModal from './SwitchProjectModal';
 import PromptPanel from './PromptPanel';
 import ContextMenu from './ContextMenu';
 import UserModelsModal from './UserModelsModal';
-import { loadPredefinedModels, saveGlobalModel } from '../services/firestoreService';
+import { loadPredefinedModels, saveGlobalModel, checkModelExists, subscribeToGlobalModels } from '../services/firestoreService';
 
 
 interface CreateModelProps {
@@ -956,35 +956,24 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
   // Handler: Save template from modal to user's models
   const handleSaveTemplateFromModal = useCallback(async (template: Model) => {
-    if (!currentProjectId) return;
+    if (!currentProjectId || !currentUser) return;
 
     setIsSavingTemplate(true);
 
-    // Check if this template is already saved in the current project
-    const existingTemplate = generatedModelHistory.find(
-      item => item.imageUrl === template.url &&
-        item.parentId === null &&
-        item.prompt?.includes('Saved from template')
-    );
-
-    if (existingTemplate) {
-      // Template already saved, just load it instead of creating duplicate
-      setCurrentHistoryItemId(existingTemplate.id);
-      setGenerationSettings(existingTemplate.settings);
-      setSelectedModelName(existingTemplate.modelName);
-      setModelDescription(existingTemplate.prompt || '');
-      setRevisionPrompt('');
-      setRedoStack([]);
-      setIsMaskingMode(false);
-      setMaskDataUrl(null);
-
-      setSelectedTemplateForPreview(null);
-      setIsSavingTemplate(false);
-      setToastMessage('Collection already in Your Models!');
-      return;
-    }
-
     try {
+      // Check if this template already exists in Firestore for this project
+      // Use template.id as the historyItemId to check
+      const templateHistoryId = template.historyItemId || template.id;
+      const existsInFirestore = await checkModelExists(currentUser.uid, currentProjectId, templateHistoryId);
+
+      if (existsInFirestore) {
+        // Template already saved in Firestore, show accurate message
+        setSelectedTemplateForPreview(null);
+        setIsSavingTemplate(false);
+        setToastMessage('Model already in Your Models!');
+        return;
+      }
+
       // Upload image to Firebase Storage if it's a base64 URL
       let finalImageUrl = template.url;
       if (currentUser && isBase64Url(template.url)) {
@@ -1043,9 +1032,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
               projectId: currentProjectId,
               historyItemId: newHistoryItemId
             });
-            console.log('Template model saved to Global Library with ID:', firestoreModelId);
+            console.log('[CreateModel] Template model saved to Global Library with ID:', firestoreModelId);
           } catch (error) {
-            console.error('Failed to save template model to Global Library:', error);
+            console.error('[CreateModel] Failed to save template model to Global Library:', error);
           }
         }
 
@@ -1430,9 +1419,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
       // 2. Delete from Firestore
       const currentUser = auth.currentUser;
-      if (currentUser && projectId) {
+      if (currentUser && currentProjectId) {
         try {
-          await deleteHistoryItemFromFirestore(projectId, 'generatedModelHistory', id);
+          await deleteHistoryItemFromFirestore(currentProjectId, 'generatedModelHistory', id);
           console.log('[CreateModel] Deleted from Firestore:', id);
         } catch (error) {
           console.warn('[CreateModel] Firestore deletion failed:', error);

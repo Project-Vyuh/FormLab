@@ -1419,90 +1419,88 @@ export const analyzeGarmentDetailed = async (
     const isRetry = retryCount > 0;
 
     const analysisPrompt = isRetry
-        ? `Analyze this garment and return ONLY valid JSON with this exact structure:
+        ? `Analyze this garment. Return ONLY valid JSON with this exact structure:
 {
   "palette": ["color1", "color2"],
-  "category": "garment type",
-  "material": "fabric material",
+  "category": "type",
+  "material": "fabric",
   "colors": {
-    "primary": ["main colors"],
-    "secondary": ["accent colors"],
-    "exact_description": "color description"
+    "primary": ["main"],
+    "secondary": ["accent"],
+    "exact_description": "brief color desc"
   },
   "patterns": {
-    "type": "pattern type",
+    "type": "pattern",
+    "description": "brief",
+    "scale": "small/medium/large",
+    "placement": "where"
+  },
+  "textures": {
+    "fabric_type": "fabric",
+    "finish": "matte/glossy/satin",
+    "surface_details": "brief"
+  },
+  "construction": {
+    "details": ["brief elements"],
+    "embellishments": ["brief"],
+    "silhouette": "shape"
+  },
+  "distinctive_features": ["brief unique traits"]
+}
+
+CRITICAL: Return ONLY JSON. No markdown. No explanations. Keep ALL descriptions under 50 characters.`
+        : `Analyze this garment for virtual try-on. Return JSON:
+{
+  "palette": ["color names"],
+  "category": "garment type",
+  "material": "fabric",
+  "colors": {
+    "primary": ["main colors"],
+    "secondary": ["accents"],
+    "exact_description": "precise color description"
+  },
+  "patterns": {
+    "type": "solid/striped/floral/geometric/etc",
     "description": "pattern details",
     "scale": "small/medium/large",
     "placement": "where patterns appear"
   },
   "textures": {
-    "fabric_type": "fabric type",
+    "fabric_type": "fabric and weave",
     "finish": "matte/glossy/satin",
     "surface_details": "texture details"
   },
   "construction": {
-    "details": ["construction elements"],
-    "embellishments": ["decorative elements"],
-    "silhouette": "garment shape"
+    "details": ["zippers, buttons, seams, collar"],
+    "embellishments": ["embroidery, prints, logos"],
+    "silhouette": "fit and shape"
   },
-  "distinctive_features": ["unique characteristics"]
+  "distinctive_features": ["unique recognizable traits"]
 }
 
-IMPORTANT: Return ONLY the JSON object. No markdown, no explanations, no code blocks. Keep descriptions concise.`
-        : `Analyze this garment image with extreme detail for virtual try-on accuracy.
-
-Provide comprehensive JSON with the following structure:
-{
-  "palette": ["color1", "color2", ...],
-  "category": "garment type",
-  "material": "fabric material",
-  "colors": {
-    "primary": ["exact primary colors with descriptors"],
-    "secondary": ["accent and secondary colors"],
-    "exact_description": "precise color description with hex approximations if possible"
-  },
-  "patterns": {
-    "type": "pattern type (solid, striped, floral, geometric, etc.)",
-    "description": "detailed pattern description including motifs and arrangement",
-    "scale": "pattern scale (small, medium, large, mixed)",
-    "placement": "where patterns appear on the garment"
-  },
-  "textures": {
-    "fabric_type": "precise fabric type and weave",
-    "finish": "surface finish (matte, glossy, satin, etc.)",
-    "surface_details": "visible texture details, ribbing, knit structure"
-  },
-  "construction": {
-    "details": ["visible construction elements like zippers, buttons, seams, collar type"],
-    "embellishments": ["embroidery, sequins, appliques, prints, logos, decorative elements"],
-    "silhouette": "garment silhouette and fit"
-  },
-  "distinctive_features": ["unique characteristics that make this garment immediately recognizable"]
-}
-
-Be precise and thorough - this data guides exact garment replication in virtual try-on.
-IMPORTANT: Ensure all text values are properly formatted for JSON. Avoid special characters that need escaping.`;
+Be precise but concise. Keep descriptions under 100 characters each.`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [garmentImagePart, { text: analysisPrompt }] },
         config: {
             responseMimeType: 'application/json',
+            maxOutputTokens: 2048, // Limit response size to ~8KB (prevents 300KB+ responses)
             responseSchema: {
                 type: Type.OBJECT,
                 properties: {
                     palette: {
                         type: Type.ARRAY,
                         items: { type: Type.STRING },
-                        description: "Array of color names/hex codes visible in the garment",
+                        description: "Color names visible in garment",
                     },
                     category: {
                         type: Type.STRING,
-                        description: "Garment category (e.g., dress, top, pants)",
+                        description: "Garment type",
                     },
                     material: {
                         type: Type.STRING,
-                        description: "Primary fabric material",
+                        description: "Primary fabric",
                     },
                     colors: {
                         type: Type.OBJECT,
@@ -1540,7 +1538,7 @@ IMPORTANT: Ensure all text values are properly formatted for JSON. Avoid special
                     distinctive_features: {
                         type: Type.ARRAY,
                         items: { type: Type.STRING },
-                        description: "Unique identifiable characteristics",
+                        description: "Unique characteristics",
                     },
                 },
                 required: ["palette", "category", "material"],
@@ -1561,11 +1559,18 @@ IMPORTANT: Ensure all text values are properly formatted for JSON. Avoid special
         const parsed = robustJsonParse(analysisText);
 
         if (!parsed) {
+            console.error('[analyzeGarmentDetailed] JSON parsing failed');
+            console.error('[analyzeGarmentDetailed] Response preview:', analysisText.substring(0, 500));
             throw new Error("Failed to parse JSON response after all strategies");
         }
 
         // Validate required fields
         if (!parsed.palette || !parsed.category || !parsed.material) {
+            console.error('[analyzeGarmentDetailed] Missing required fields:', {
+                hasPalette: !!parsed.palette,
+                hasCategory: !!parsed.category,
+                hasMaterial: !!parsed.material
+            });
             throw new Error("Missing required fields in analysis response");
         }
 

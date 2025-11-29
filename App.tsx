@@ -21,7 +21,7 @@ import { Model, Project, Notification, User, SelectedStylingModel, HistoryItem }
 import { getAllProjectMetadata as dbGetAllProjectMetadata, loadProjectState, saveProjectMetadata, saveProjectState, cleanupBlobUrls, saveStylingHistory, migrateHistoryItemTypes, migrateBase64ImagesToStorage, migrateIndexedDBToFirestore, setCurrentUserId, deleteProjectState, deleteProjectMetadata, forceImmediateSync } from './services/dbService';
 import { onAuthStateChanged, signOutUser } from './services/authService';
 import { getUserDocument, updateLastLogin, createUserDocument } from './services/userService';
-import { loadPredefinedModels, PredefinedModel, getGlobalModels } from './services/firestoreService';
+import { loadPredefinedModels, PredefinedModel, getGlobalModels, subscribeToGlobalModels } from './services/firestoreService';
 import { loadAllUserProjectsFromFirestore, loadProjectFromFirestore, deleteProjectFromFirestore } from './services/firestoreSync';
 import { deleteFolderContents } from './services/storageService';
 import { auth } from './services/firebase';
@@ -288,16 +288,23 @@ const App: React.FC = () => {
         if (projectIdToLoad) {
           setNeedsOnboarding(false);
 
-          // Load Global Models (Enterprise Sync)
-          const galleryModels: Model[] = [];
+          // Load pre-defined models first (these don't change)
           try {
-            if (currentUser && projectIdToLoad) {
-              console.log('Loading global models for user:', currentUser.uid, 'project:', projectIdToLoad);
-              const globalModels = await getGlobalModels(currentUser.uid, projectIdToLoad);
+            const predefinedModels = await loadPredefinedModels();
+            console.log(`Loaded ${predefinedModels.length} pre-defined models`);
 
-              // Convert GlobalModel to Model type
-              globalModels.forEach(gm => {
-                galleryModels.push({
+            // Set initial model gallery with just pre-defined models
+            setModelGallery(predefinedModels);
+
+            // Subscribe to real-time updates for global models (Enterprise Sync)
+            if (currentUser) {
+              console.log('[App] Subscribing to global models for user:', currentUser.uid, 'project:', projectIdToLoad);
+
+              const unsubscribe = subscribeToGlobalModels(currentUser.uid, projectIdToLoad, (globalModels) => {
+                console.log(`[App] Received ${globalModels.length} global models from Firestore`);
+
+                // Convert GlobalModel to Model type
+                const galleryModels: Model[] = globalModels.map(gm => ({
                   id: gm.id,
                   url: gm.url,
                   name: gm.name,
@@ -306,29 +313,26 @@ const App: React.FC = () => {
                   historyItemId: gm.historyItemId,
                   createdAt: new Date(gm.createdAt).getTime(),
                   updatedAt: new Date(gm.updatedAt).getTime(),
-                });
+                }));
+
+                // Combine user models with pre-defined models and deduplicate
+                const allModels = deduplicateModels([
+                  ...galleryModels.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)), // User models first, newest first
+                  ...predefinedModels, // Then pre-defined models
+                ]);
+
+                console.log(`[App] Updated model gallery with ${allModels.length} total models`);
+                setModelGallery(allModels);
               });
-              console.log(`Loaded ${galleryModels.length} global models`);
+
+              // Store unsubscribe function to clean up later
+              return () => {
+                console.log('[App] Unsubscribing from global models');
+                unsubscribe();
+              };
             }
           } catch (error) {
-            console.error('Failed to load global models:', error);
-          }
-
-          // Load pre-defined models
-          try {
-            const predefinedModels = await loadPredefinedModels();
-            console.log(`Loaded ${predefinedModels.length} pre-defined models`);
-
-            // Combine user models with pre-defined models and deduplicate
-            const allModels = deduplicateModels([
-              ...galleryModels.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)), // User models first, newest first
-              ...predefinedModels, // Then pre-defined models
-            ]);
-            setModelGallery(allModels);
-          } catch (error) {
             console.error('Failed to load pre-defined models:', error);
-            // Fallback to just user models with deduplication
-            setModelGallery(deduplicateModels(galleryModels));
           }
 
           setActiveView('createModel');

@@ -32,8 +32,8 @@ import {
 import { getFriendlyErrorMessage } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } from '../services/storageService';
 import { convertToSquare } from '../lib/imageProcessing';
-import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem, deleteGlobalWardrobeItem, subscribeToGlobalWardrobe } from '../services/firestoreService';
-import { deleteHistoryItemFromFirestore } from '../services/firestoreSync';
+import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem, deleteGlobalWardrobeItem, subscribeToGlobalWardrobe, checkWardrobeItemExists } from '../services/firestoreService';
+import { deleteHistoryItemFromFirestore, subscribeToStylingHistory } from '../services/firestoreSync';
 import { auth } from '../services/firebase';
 import { loadUnifiedHistory, saveStylingHistory } from '../services/dbService';
 import { getCurrentUserId } from '../services/authService';
@@ -533,6 +533,48 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     return () => clearTimeout(timeoutId);
   }, [generatedModelHistory, selectedStylingModel, currentProjectId, onSaveStylingHistory]);
 
+  // --- Real-time Styling History Sync (Enterprise Sync) ---
+  useEffect(() => {
+    if (!selectedStylingModel || !currentProjectId) return;
+
+    console.log('[ImageStudio] Subscribing to styling history for baseModelId:', selectedStylingModel.baseModelId);
+
+    // Subscribe to real-time updates from Firestore
+    const unsubscribe = subscribeToStylingHistory(
+      currentProjectId,
+      selectedStylingModel.baseModelId,
+      (stylingHistoryItems) => {
+        console.log(`[ImageStudio] Received ${stylingHistoryItems.length} styling history items from Firestore`);
+
+        // Merge with existing Create Model history (from generatedModelHistory)
+        // Only update if we received styling items (try-on, try-on-revision)
+        if (stylingHistoryItems.length > 0) {
+          setGeneratedModelHistory(prev => {
+            // Get Create Model history items (model-generation, model-revision)
+            const createModelItems = prev.filter(item =>
+              item.type === 'model-generation' || item.type === 'model-revision'
+            );
+
+            // Merge with styling history and sort by timestamp
+            const merged = [...createModelItems, ...stylingHistoryItems].sort((a, b) => {
+              const aTime = parseInt(a.id.split('-').pop() || '0');
+              const bTime = parseInt(b.id.split('-').pop() || '0');
+              return aTime - bTime;
+            });
+
+            console.log(`[ImageStudio] Updated history: ${merged.length} total items`);
+            return merged;
+          });
+        }
+      }
+    );
+
+    return () => {
+      console.log('[ImageStudio] Unsubscribing from styling history');
+      unsubscribe();
+    };
+  }, [selectedStylingModel, currentProjectId]);
+
   // --- Toast & Layout Effects ---
   useEffect(() => {
     if (toastMessage) {
@@ -1020,7 +1062,18 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
   const handleAddProduct = useCallback(async (productData: Omit<WardrobeItem, 'id' | 'url'> & { file: File }) => {
     const { file, ...rest } = productData;
-    const productId = `item-${Date.now()}`;
+
+    // Generate unique ID using timestamp and random string
+    const productId = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Check for duplicates if user is logged in
+    if (currentUser) {
+      const exists = await checkWardrobeItemExists(currentUser.uid, productId);
+      if (exists) {
+        setToastMessage('This item already exists in your wardrobe.');
+        return;
+      }
+    }
 
     // Convert to 1:1 aspect ratio with background matching studio environment (preserves original resolution)
     let processedFile = file;
@@ -1055,21 +1108,25 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     setWardrobe(prev => [newProduct, ...prev]);
     setToastMessage(`'${newProduct.name}' added to library.`);
 
-    // Save to Global Library (Enterprise Sync)
-    if (currentUser) {
+    // Save to Global Library (Enterprise Sync) - ALWAYS include projectId
+    if (currentUser && currentProjectId) {
       try {
         await saveGlobalWardrobeItem(currentUser.uid, {
           url: productUrl,
           name: newProduct.name,
           category: newProduct.category,
-          ...(currentProjectId && { projectId: currentProjectId })
+          projectId: currentProjectId // Always include projectId
         });
-        console.log('Wardrobe item saved to Global Library');
+        console.log('[ImageStudio] Wardrobe item saved to Global Library with projectId:', currentProjectId);
       } catch (err) {
         console.error('Failed to save wardrobe item to Global Library:', err);
+        setToastMessage('Item added locally but failed to sync. Please check your connection.');
       }
+    } else if (currentUser && !currentProjectId) {
+      console.warn('[ImageStudio] No projectId available, wardrobe item not saved to Firestore');
+      setToastMessage('Item added locally. Please select a project to enable sync.');
     }
-  }, [currentUser]);
+  }, [currentUser, currentProjectId, generationSettings]);
 
   const handleCreateCategory = useCallback((name: string) => {
     if (name && name.trim()) {

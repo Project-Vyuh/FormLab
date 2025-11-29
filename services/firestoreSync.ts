@@ -911,6 +911,59 @@ export const subscribeToProject = (
 };
 
 /**
+ * Subscribe to styling history changes for a specific base model
+ * Enables real-time sync of Image Studio version history across devices
+ */
+export const subscribeToStylingHistory = (
+    projectId: string,
+    baseModelId: string,
+    onUpdate: (historyItems: HistoryItem[]) => void
+): Unsubscribe => {
+    console.log('[firestoreSync] Subscribing to styling history:', { projectId, baseModelId });
+
+    const stylingHistoryRef = collection(db, 'projects', projectId, baseModelId);
+
+    return onSnapshot(stylingHistoryRef, (snapshot) => {
+        const historyItems: HistoryItem[] = [];
+
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            historyItems.push({
+                id: data.id,
+                parentId: data.parentId,
+                imageUrl: data.imageUrl,
+                prompt: data.prompt,
+                settings: data.settings,
+                modelName: data.modelName,
+                isStarred: data.isStarred || false,
+                name: data.name,
+                type: data.type,
+                baseModelId: data.baseModelId,
+            });
+        });
+
+        // Sort by timestamp in ID
+        const sortedItems = historyItems.sort((a, b) => {
+            const aTime = parseInt(a.id.split('-').pop() || '0');
+            const bTime = parseInt(b.id.split('-').pop() || '0');
+            return aTime - bTime;
+        });
+
+        console.log(`[firestoreSync] Styling history updated: ${sortedItems.length} items for ${baseModelId}`);
+        onUpdate(sortedItems);
+    }, (error: any) => {
+        // Handle permission errors gracefully
+        if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+            console.log('[firestoreSync] Styling history not yet synced to Firestore, skipping real-time updates');
+            onUpdate([]);
+            return;
+        }
+        console.error('[firestoreSync] Error in styling history subscription:', error);
+        onUpdate([]);
+    });
+};
+
+/**
  * Mark device last sync timestamp
  */
 export const markDeviceLastSync = async (userId: string, deviceId: string): Promise<void> => {

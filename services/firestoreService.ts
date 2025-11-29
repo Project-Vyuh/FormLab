@@ -592,3 +592,75 @@ export function subscribeToGlobalWardrobe(
     console.error("Error subscribing to global wardrobe:", error);
   });
 }
+
+/**
+ * Subscribe to real-time updates for global models
+ * @param userId - User ID
+ * @param projectId - Optional Project ID to filter by
+ * @param onUpdate - Callback function with updated models
+ * @returns Unsubscribe function
+ */
+export function subscribeToGlobalModels(
+  userId: string,
+  projectId: string | undefined,
+  onUpdate: (models: GlobalModel[]) => void
+): () => void {
+  let q = query(collection(db, 'users', userId, 'models'));
+  if (projectId) {
+    q = query(q, where('projectId', '==', projectId));
+  }
+
+  return onSnapshot(q, (snapshot) => {
+    const models = snapshot.docs.map(doc => doc.data() as GlobalModel);
+    console.log(`[subscribeToGlobalModels] Received ${models.length} models for project ${projectId || 'all'}`);
+    onUpdate(models);
+  }, (error) => {
+    console.error("Error subscribing to global models:", error);
+  });
+}
+
+/**
+ * Check if a model already exists in Firestore for a specific project
+ * @param userId - User ID
+ * @param projectId - Project ID
+ * @param historyItemId - History item ID to check
+ * @returns True if model exists, false otherwise
+ */
+export async function checkModelExists(
+  userId: string,
+  projectId: string,
+  historyItemId: string
+): Promise<boolean> {
+  try {
+    const q = query(
+      collection(db, 'users', userId, 'models'),
+      where('projectId', '==', projectId),
+      where('historyItemId', '==', historyItemId)
+    );
+    const querySnapshot = await getDocs(q);
+    return !querySnapshot.empty;
+  } catch (error) {
+    console.error('Error checking if model exists:', error);
+    return false;
+  }
+}
+
+/**
+ * Check if a wardrobe item already exists in Firestore
+ * @param userId - User ID
+ * @param itemId - Item ID to check
+ * @returns True if item exists, false otherwise
+ */
+export async function checkWardrobeItemExists(
+  userId: string,
+  itemId: string
+): Promise<boolean> {
+  try {
+    const docRef = doc(db, 'users', userId, 'wardrobe', itemId);
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists();
+  } catch (error) {
+    console.error('Error checking if wardrobe item exists:', error);
+    return false;
+  }
+}
