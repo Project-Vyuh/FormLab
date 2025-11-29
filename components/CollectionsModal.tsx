@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { XIcon, ChevronRightIcon, GridIcon, LayoutIcon, StarIcon } from './icons';
-import { loadPredefinedModels, PredefinedModel } from '../services/firestoreService';
+import { loadPredefinedModels, PredefinedModel, getGlobalModels, getGlobalWardrobeItems } from '../services/firestoreService';
+import { User, Project, WardrobeItem, Model } from '../types';
 
 interface CollectionsModalProps {
     isOpen: boolean;
@@ -9,14 +10,18 @@ interface CollectionsModalProps {
     onUseTemplate: (template: PredefinedModel) => void;
     onNavigateToCollections: () => void;
     onStartBlankCanvas: () => void;
+    currentUser: User | null;
+    projects: Project[];
 }
 
-type MenuSection = 'models';
-type MenuItem = 'featured' | 'latest' | 'categories';
+type MenuSection = 'models' | 'user-content';
+type MenuItem = 'featured' | 'latest' | 'categories' | 'user-models' | 'user-wardrobe';
 
-const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, onUseTemplate, onNavigateToCollections, onStartBlankCanvas }) => {
+const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, onUseTemplate, onNavigateToCollections, onStartBlankCanvas, currentUser, projects }) => {
     const [activeItem, setActiveItem] = useState<MenuItem>('featured');
     const [models, setModels] = useState<PredefinedModel[]>([]);
+    const [userModels, setUserModels] = useState<Model[]>([]);
+    const [userWardrobe, setUserWardrobe] = useState<WardrobeItem[]>([]);
     const [selectedTemplate, setSelectedTemplate] = useState<PredefinedModel | null>(null);
     const [isBlankCanvasSelected, setIsBlankCanvasSelected] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -30,16 +35,24 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
     const loadContent = async () => {
         setIsLoading(true);
         try {
-            // For now, both Featured and Latest load all models
-            // Categories is empty as per requirements
             if (activeItem === 'featured' || activeItem === 'latest') {
                 const data = await loadPredefinedModels();
                 setModels(data);
+            } else if (activeItem === 'user-models') {
+                if (currentUser) {
+                    const data = await getGlobalModels(currentUser.uid);
+                    setUserModels(data);
+                }
+            } else if (activeItem === 'user-wardrobe') {
+                if (currentUser) {
+                    const data = await getGlobalWardrobeItems(currentUser.uid);
+                    setUserWardrobe(data);
+                }
             } else {
                 setModels([]);
             }
         } catch (error) {
-            console.error("Failed to load models", error);
+            console.error("Failed to load content", error);
         } finally {
             setIsLoading(false);
         }
@@ -143,6 +156,37 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                             </button>
                                         </div>
                                     </div>
+
+                                    {/* User Content Section */}
+                                    {currentUser && (
+                                        <div className="mb-2 mt-4">
+                                            <div className="px-6 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                                User Content
+                                            </div>
+                                            <div className="space-y-0.5">
+                                                <button
+                                                    onClick={() => setActiveItem('user-models')}
+                                                    className={`w-full flex items-center gap-3 px-6 py-2 text-sm transition-colors ${activeItem === 'user-models'
+                                                        ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
+                                                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                        }`}
+                                                >
+                                                    <StarIcon className="w-4 h-4" />
+                                                    Your Models
+                                                </button>
+                                                <button
+                                                    onClick={() => setActiveItem('user-wardrobe')}
+                                                    className={`w-full flex items-center gap-3 px-6 py-2 text-sm transition-colors ${activeItem === 'user-wardrobe'
+                                                        ? 'bg-blue-500/10 text-blue-400 border-r-2 border-blue-500'
+                                                        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                                                        }`}
+                                                >
+                                                    <LayoutIcon className="w-4 h-4" />
+                                                    Your Wardrobe
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="p-4 border-t border-white/5">
@@ -226,6 +270,69 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                                 </div>
                                             ))}
                                         </div>
+
+                                    ) : activeItem === 'user-models' ? (
+                                        <div className="space-y-8">
+                                            {Object.entries(userModels.reduce((acc, model) => {
+                                                const pid = model.projectId || 'unknown';
+                                                if (!acc[pid]) acc[pid] = [];
+                                                acc[pid].push(model);
+                                                return acc;
+                                            }, {} as Record<string, Model[]>)).map(([projectId, projectModels]: [string, Model[]]) => {
+                                                const projectTitle = projects.find(p => p.id === projectId)?.title || (projectId === 'unknown' ? 'Unassigned' : 'Unknown Project');
+                                                return (
+                                                    <div key={projectId}>
+                                                        <h3 className="text-sm font-semibold text-gray-400 mb-3 px-1">{projectTitle}</h3>
+                                                        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                                            {projectModels.map((model) => (
+                                                                <div key={model.id} className="group relative aspect-[2/3] rounded-xl overflow-hidden border border-white/10 bg-white/5">
+                                                                    <img src={model.url} alt={model.name} className="w-full h-full object-cover" />
+                                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                                                                        <p className="text-xs font-medium text-white truncate">{model.name}</p>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {userModels.length === 0 && (
+                                                <div className="flex flex-col items-center justify-center h-40 text-gray-500">
+                                                    <p>No user models found.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : activeItem === 'user-wardrobe' ? (
+                                        <div className="space-y-8">
+                                            {Object.entries(userWardrobe.reduce((acc, item) => {
+                                                const pid = item.projectId || 'unknown';
+                                                if (!acc[pid]) acc[pid] = [];
+                                                acc[pid].push(item);
+                                                return acc;
+                                            }, {} as Record<string, WardrobeItem[]>)).map(([projectId, projectItems]: [string, WardrobeItem[]]) => {
+                                                const projectTitle = projects.find(p => p.id === projectId)?.title || (projectId === 'unknown' ? 'Unassigned' : 'Unknown Project');
+                                                return (
+                                                    <div key={projectId}>
+                                                        <h3 className="text-sm font-semibold text-gray-400 mb-3 px-1">{projectTitle}</h3>
+                                                        <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
+                                                            {projectItems.map((item) => (
+                                                                <div key={item.id} className="group relative aspect-square rounded-xl overflow-hidden border border-white/10 bg-white/5">
+                                                                    <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+                                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+                                                                        <p className="text-xs font-medium text-white truncate">{item.name}</p>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {userWardrobe.length === 0 && (
+                                                <div className="flex flex-col items-center justify-center h-40 text-gray-500">
+                                                    <p>No wardrobe items found.</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-full text-gray-500">
                                             <LayoutIcon className="w-12 h-12 mb-3 opacity-20" />
@@ -249,8 +356,9 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                         </div>
                     </motion.div>
                 </motion.div>
-            )}
-        </AnimatePresence>
+            )
+            }
+        </AnimatePresence >
     );
 };
 

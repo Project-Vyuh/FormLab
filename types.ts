@@ -40,7 +40,7 @@ export interface WardrobeItem {
     campaign: string[]; // 'Lookbook 01'
   };
   notes?: string;
-  source?: 'user' | 'predefined'; // Source of the wardrobe item
+  source?: 'user' | 'predefined' | 'user-global'; // Source of the wardrobe item
 }
 
 
@@ -414,6 +414,7 @@ export interface Project {
   status: 'Draft' | 'In Progress' | 'In Review' | 'On Hold' | 'Completed';
   selectedForStyling?: string | null; // History item ID selected for Image Studio
   stylingHistory?: Record<string, HistoryItem[]>; // Try-on history indexed by baseModelId
+  updatedAt?: string;
 }
 
 export interface Notification {

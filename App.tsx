@@ -228,38 +228,65 @@ const App: React.FC = () => {
         let projects = await dbGetAllProjectMetadata();
         console.log(`[App] Loaded ${projects.length} projects from IndexedDB`);
 
-        // Step 2: If IndexedDB is empty, load from Firestore (new device scenario)
-        if (projects.length === 0) {
-          console.log('[App] IndexedDB empty, loading from Firestore...');
+        // Step 2: ALWAYS load from Firestore to ensure sync across devices
+        console.log('[App] Checking Firestore for project updates...');
+        try {
           const firestoreProjects = await loadAllUserProjectsFromFirestore(currentUser.uid);
           console.log(`[App] Loaded ${firestoreProjects.length} projects from Firestore`);
 
-          // Step 3: Populate IndexedDB with Firestore data
-          for (const project of firestoreProjects) {
-            await saveProjectMetadata(project);
-
-            // Load full project state from Firestore and save to IndexedDB
-            const projectState = await loadProjectFromFirestore(project.id, currentUser.uid);
-            if (projectState) {
-              await saveProjectState(project.id, projectState);
-              console.log(`[App] Populated IndexedDB with project: ${project.id}`);
+          if (firestoreProjects.length > 0) {
+            // Merge strategy: Firestore is the source of truth for existence.
+            // 1. Save all Firestore projects to IndexedDB (updating existing ones)
+            for (const project of firestoreProjects) {
+              await saveProjectMetadata(project);
             }
-          }
 
-          projects = firestoreProjects;
+            // 2. Update local projects list to reflect Firestore data
+            projects = await dbGetAllProjectMetadata();
+          }
+        } catch (err) {
+          console.error("[App] Failed to sync projects from Firestore:", err);
+          // Fallback to local projects if offline
+        }
+
+        // Step 3: If still no projects (new user), create default
+        if (projects.length === 0) {
+          console.log('[App] No projects found, creating default...');
+          const defaultProject: Project = {
+            id: `project-${Date.now()}`,
+            title: 'My First Project',
+            description: 'Welcome to your first project!',
+            organization: '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            tags: [],
+            status: 'In Progress',
+          };
+          await saveProjectMetadata(defaultProject);
+          projects = [defaultProject];
         }
 
         setProjectList(projects); // Set global project list state
-        if (projects.length === 0) {
-          setNeedsOnboarding(true);
-        } else {
-          setNeedsOnboarding(false);
-          const lastProject = localStorage.getItem('formlab-lastProject');
-          const projectIdToLoad =
-            (lastProject && projects.some(p => p.id === lastProject) ? lastProject : null) ||
-            projects[0].id;
 
-          setCurrentProjectId(projectIdToLoad);
+        // Auto-select most recent project
+        if (projects.length > 0) {
+          // Sort by updatedAt desc
+          const sorted = [...projects].sort((a, b) => {
+            const dateA = new Date(a.updatedAt || 0).getTime();
+            const dateB = new Date(b.updatedAt || 0).getTime();
+            return dateB - dateA;
+          });
+
+          setCurrentProjectId(sorted[0].id);
+        } else {
+          setNeedsOnboarding(true);
+        }
+
+        // Determine projectIdToLoad based on the newly set currentProjectId
+        const projectIdToLoad = currentProjectId || (projects.length > 0 ? projects[0].id : null);
+
+        if (projectIdToLoad) {
+          setNeedsOnboarding(false);
 
           // Load Global Models (Enterprise Sync)
           const galleryModels: Model[] = [];
@@ -852,6 +879,8 @@ const App: React.FC = () => {
           onUseTemplate={handleUseTemplate}
           onNavigateToCollections={handleNavigateToCollections}
           onStartBlankCanvas={handleStartBlankCanvas}
+          currentUser={currentUser}
+          projects={projectList}
         />
 
         {/* Real-time Sync Listener (invisible component) */}

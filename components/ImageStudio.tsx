@@ -32,7 +32,7 @@ import {
 import { getFriendlyErrorMessage } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } from '../services/storageService';
 import { convertToSquare } from '../lib/imageProcessing';
-import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem, deleteGlobalWardrobeItem } from '../services/firestoreService';
+import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem, deleteGlobalWardrobeItem, subscribeToGlobalWardrobe } from '../services/firestoreService';
 import { deleteHistoryItemFromFirestore } from '../services/firestoreSync';
 import { auth } from '../services/firebase';
 import { loadUnifiedHistory, saveStylingHistory } from '../services/dbService';
@@ -548,68 +548,76 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   }, []);
 
   // --- Global Wardrobe Loading (Enterprise Sync) ---
+  // --- Local Storage Loading ---
   useEffect(() => {
-    const loadWardrobeData = async () => {
-      try {
-        const userId = getCurrentUserId();
-        let userWardrobe: WardrobeItem[] = [];
+    const savedCategories = localStorage.getItem('formlab-categories');
+    if (savedCategories) setCategories(JSON.parse(savedCategories));
+    const savedFavorites = localStorage.getItem('formlab-favorites');
+    if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
+    const savedRecentlyUsed = localStorage.getItem('formlab-recently-used');
+    if (savedRecentlyUsed) setRecentlyUsed(JSON.parse(savedRecentlyUsed));
+  }, []);
 
-        if (userId && currentProjectId) {
-          console.log('Loading global wardrobe for user:', userId, 'project:', currentProjectId);
-          const globalItems = await getGlobalWardrobeItems(userId, currentProjectId);
-          userWardrobe = globalItems.map(item => ({
-            id: item.id,
-            url: item.url,
-            name: item.name,
-            category: item.category as WardrobeCategory,
-            source: 'user',
-            createdAt: new Date(item.createdAt).getTime(),
-            // Default values for required WardrobeItem fields
-            sku: '',
-            subcategory: 'Custom',
-            color: 'N/A',
-            fabric: 'N/A',
-            print: 'N/A',
-            fit: 'relaxed',
-            season: 'N/A',
-            gender: 'unisex',
-            priceTier: 'basic',
-            tags: { styling: [], campaign: [] }
-          }));
-        } else {
-          // Fallback to localStorage if not logged in (legacy support)
-          const savedWardrobe = localStorage.getItem('formlab-wardrobe');
-          userWardrobe = savedWardrobe ? JSON.parse(savedWardrobe) : [];
-          userWardrobe.forEach(item => { if (!item.source) item.source = 'user'; });
-        }
+  // --- Global Wardrobe Subscription (Enterprise Sync) ---
+  useEffect(() => {
+    const userId = getCurrentUserId();
+    if (!userId || !currentProjectId) {
+      // Fallback to localStorage if not logged in (legacy support)
+      const savedWardrobe = localStorage.getItem('formlab-wardrobe');
+      if (savedWardrobe) {
+        const userWardrobe = JSON.parse(savedWardrobe);
+        userWardrobe.forEach((item: any) => { if (!item.source) item.source = 'user'; });
 
         // Load pre-defined wardrobe
-        try {
-          const predefinedWardrobe = await loadPredefinedWardrobe();
-          console.log(`Loaded ${predefinedWardrobe.length} pre-defined wardrobe items`);
-
-          // Combine user wardrobe with pre-defined items
-          const allWardrobe = [...userWardrobe, ...predefinedWardrobe];
-          setWardrobe(allWardrobe);
-        } catch (error) {
-          console.error('Failed to load pre-defined wardrobe:', error);
+        loadPredefinedWardrobe().then(predefined => {
+          setWardrobe([...userWardrobe, ...predefined]);
+        }).catch(err => {
+          console.error('Failed to load pre-defined wardrobe:', err);
           setWardrobe(userWardrobe);
-        }
-
-        // Load other data from localStorage
-        const savedCategories = localStorage.getItem('formlab-categories');
-        if (savedCategories) setCategories(JSON.parse(savedCategories));
-        const savedFavorites = localStorage.getItem('formlab-favorites');
-        if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
-        const savedRecentlyUsed = localStorage.getItem('formlab-recently-used');
-        if (savedRecentlyUsed) setRecentlyUsed(JSON.parse(savedRecentlyUsed));
-      } catch (e) {
-        console.error("Failed to load wardrobe data", e);
+        });
+      } else {
+        loadPredefinedWardrobe().then(predefined => {
+          setWardrobe(predefined);
+        });
       }
-    };
+      return;
+    }
 
-    loadWardrobeData();
-  }, [currentUser]);
+    console.log('Subscribing to global wardrobe for user:', userId, 'project:', currentProjectId);
+
+    // Subscribe to user wardrobe items
+    const unsubscribe = subscribeToGlobalWardrobe(userId, currentProjectId, async (globalItems) => {
+      const userWardrobe = globalItems.map(item => ({
+        id: item.id,
+        url: item.url,
+        name: item.name,
+        category: item.category as WardrobeCategory,
+        source: 'user',
+        createdAt: new Date(item.createdAt).getTime(),
+        // Default values for required WardrobeItem fields
+        sku: '',
+        subcategory: 'Custom',
+        color: 'N/A',
+        fabric: 'N/A',
+        print: 'N/A',
+        fit: 'relaxed',
+        season: 'N/A',
+        gender: 'unisex',
+        priceTier: 'basic',
+        tags: { styling: [], campaign: [] }
+      } as WardrobeItem));
+
+      try {
+        const predefinedWardrobe = await loadPredefinedWardrobe();
+        setWardrobe([...userWardrobe, ...predefinedWardrobe]);
+      } catch (error) {
+        console.error('Failed to load pre-defined wardrobe:', error);
+        setWardrobe(userWardrobe);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentUser, currentProjectId]);
 
   useEffect(() => {
     try {
@@ -896,7 +904,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
       // 2. Delete from Firestore
       const currentUser = auth.currentUser;
-      if (currentUser && projectId) {
+      if (currentUser && currentProjectId) {
         try {
           // Determine collection path based on item type
           let collectionPath: string;
@@ -914,7 +922,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             collectionPath = 'generatedModelHistory';
           }
 
-          await deleteHistoryItemFromFirestore(projectId, collectionPath, id);
+          await deleteHistoryItemFromFirestore(currentProjectId, collectionPath, id);
           console.log('[ImageStudio] Deleted from Firestore:', id);
         } catch (error) {
           console.warn('[ImageStudio] Firestore deletion failed:', error);

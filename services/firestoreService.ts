@@ -567,3 +567,28 @@ export async function deleteGlobalWardrobeItem(userId: string, itemId: string): 
     throw error;
   }
 }
+
+/**
+ * Subscribe to real-time updates for global wardrobe items
+ * @param userId - User ID
+ * @param projectId - Optional Project ID to filter by
+ * @param onUpdate - Callback function with updated items
+ * @returns Unsubscribe function
+ */
+export function subscribeToGlobalWardrobe(
+  userId: string,
+  projectId: string | undefined,
+  onUpdate: (items: GlobalWardrobeItem[]) => void
+): () => void {
+  let q = query(collection(db, 'users', userId, 'wardrobe'));
+  if (projectId) {
+    q = query(q, where('projectId', '==', projectId));
+  }
+
+  return onSnapshot(q, (snapshot) => {
+    const items = snapshot.docs.map(doc => doc.data() as GlobalWardrobeItem);
+    onUpdate(items);
+  }, (error) => {
+    console.error("Error subscribing to global wardrobe:", error);
+  });
+}
