@@ -1445,10 +1445,28 @@ export const analyzeGarmentDetailed = async (
     "embellishments": ["brief"],
     "silhouette": "shape"
   },
-  "distinctive_features": ["brief unique traits"]
+  "distinctive_features": ["unique recognizable traits"],
+  "volumetric_features": {
+    "ruffles": true/false,
+    "pleats": true/false,
+    "gathering": true/false,
+    "structure": "description of volume (e.g., puff sleeves, tiered skirt)"
+  },
+  "layering": {
+    "has_layers": true/false,
+    "description": "visible layers, overlays, lining"
+  },
+  "accessories": ["belt", "tie", "brooch", "hardware"],
+  "is_multi_piece": true/false,
+  "pieces": ["top", "pants"]
 }
 
-CRITICAL: Return ONLY JSON. No markdown. No explanations. Keep ALL descriptions under 50 characters.`
+CRITICAL: Return ONLY valid JSON.
+1. Use ONLY English for all values.
+2. Do NOT include any markdown formatting (no \`\`\`json).
+3. Do NOT repeat text or generate loops.
+4. Keep descriptions precise but under 100 characters.
+5. Identify if this is a matching set (co-ord, suit, tracksuit) and set is_multi_piece to true.`
         : `Analyze this garment for virtual try-on. Return JSON:
 {
   "palette": ["color names"],
@@ -1485,7 +1503,7 @@ Be precise but concise. Keep descriptions under 100 characters each.`;
         contents: { parts: [garmentImagePart, { text: analysisPrompt }] },
         config: {
             responseMimeType: 'application/json',
-            maxOutputTokens: 2048, // Limit response size to ~8KB (prevents 300KB+ responses)
+            maxOutputTokens: 8192, // Increased limit to prevent JSON truncation
             responseSchema: {
                 type: Type.OBJECT,
                 properties: {
@@ -1525,6 +1543,7 @@ Be precise but concise. Keep descriptions under 100 characters each.`;
                             fabric_type: { type: Type.STRING },
                             finish: { type: Type.STRING },
                             surface_details: { type: Type.STRING },
+                            weight: { type: Type.STRING },
                         },
                     },
                     construction: {
@@ -1539,6 +1558,36 @@ Be precise but concise. Keep descriptions under 100 characters each.`;
                         type: Type.ARRAY,
                         items: { type: Type.STRING },
                         description: "Unique characteristics",
+                    },
+                    volumetric_features: {
+                        type: Type.OBJECT,
+                        properties: {
+                            ruffles: { type: Type.BOOLEAN },
+                            pleats: { type: Type.BOOLEAN },
+                            gathering: { type: Type.BOOLEAN },
+                            structure: { type: Type.STRING },
+                        },
+                    },
+                    layering: {
+                        type: Type.OBJECT,
+                        properties: {
+                            has_layers: { type: Type.BOOLEAN },
+                            description: { type: Type.STRING },
+                        },
+                    },
+                    accessories: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "Attached accessories like belts, ties, etc.",
+                    },
+                    is_multi_piece: {
+                        type: Type.BOOLEAN,
+                        description: "True if the garment is a multi-piece outfit (co-ord, suit, etc.)",
+                    },
+                    pieces: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "List of pieces in the outfit (e.g., ['top', 'pants'])",
                     },
                 },
                 required: ["palette", "category", "material"],
@@ -1624,6 +1673,7 @@ const generateDetailedGarmentDescription = (analysis: GarmentAnalysis): string =
     if (analysis.textures) {
         parts.push(`**Fabric:** ${analysis.textures.fabric_type}`);
         parts.push(`**Finish:** ${analysis.textures.finish}`);
+        parts.push(`**Weight/Drape:** ${analysis.textures.weight || 'Not specified'}`);
         parts.push(`**Surface Details:** ${analysis.textures.surface_details}`);
     } else if (analysis.material) {
         parts.push(`**Material:** ${analysis.material}`);
@@ -1643,6 +1693,35 @@ const generateDetailedGarmentDescription = (analysis: GarmentAnalysis): string =
     // Distinctive Features
     if (analysis.distinctive_features && analysis.distinctive_features.length > 0) {
         parts.push(`**Distinctive Features:** ${analysis.distinctive_features.join(', ')}`);
+    }
+
+    // Volumetric Features
+    if (analysis.volumetric_features) {
+        const vol = analysis.volumetric_features;
+        const features = [];
+        if (vol.ruffles) features.push('ruffles');
+        if (vol.pleats) features.push('pleats');
+        if (vol.gathering) features.push('gathering');
+        if (features.length > 0 || vol.structure) {
+            parts.push(`**Volumetric Details:** ${features.join(', ')} ${vol.structure ? `(${vol.structure})` : ''}`);
+        }
+    }
+
+    // Layering
+    if (analysis.layering && analysis.layering.has_layers) {
+        parts.push(`**Layering:** ${analysis.layering.description}`);
+    }
+
+    // Accessories
+    if (analysis.accessories && analysis.accessories.length > 0) {
+        parts.push(`**Attached Accessories:** ${analysis.accessories.join(', ')}`);
+    }
+
+    // Multi-piece Outfit Handling
+    if (analysis.is_multi_piece) {
+        const piecesList = analysis.pieces && analysis.pieces.length > 0 ? analysis.pieces.join(', ') : 'top and bottom';
+        parts.push(`\n**CRITICAL - MULTI-PIECE OUTFIT:** This is a MATCHING SET consisting of: ${piecesList}.`);
+        parts.push(`**REQUIREMENT:** The model MUST wear ALL pieces of this set. Do NOT generate only the top.`);
     }
 
     return parts.join('\n');
@@ -1721,6 +1800,11 @@ The Model Image (first input) may contain letterboxing or padding (transparent o
    - Small logos or branding elements
    - Subtle color variations within the fabric
    - Edge finishes and hem details
+
+7. **MULTI-PIECE OUTFIT ENFORCEMENT:**
+   - If the garment is a set (e.g., top + pants, suit), the model MUST wear BOTH pieces.
+   - Do NOT crop the image to just the top.
+   - Ensure visual continuity between pieces (matching fabric, pattern alignment).
 
 **STRICT PROHIBITIONS - NEVER DO THESE:**
 - DO NOT change or "improve" colors - use exact reference colors

@@ -349,6 +349,7 @@ export interface GarmentAnalysis {
     fabric_type: string;
     finish: string;
     surface_details: string;
+    weight?: string;
   };
   construction?: {
     details: string[];
@@ -356,6 +357,19 @@ export interface GarmentAnalysis {
     silhouette: string;
   };
   distinctive_features?: string[];
+  volumetric_features?: {
+    ruffles?: boolean;
+    pleats?: boolean;
+    gathering?: boolean;
+    structure?: string;
+  };
+  layering?: {
+    has_layers: boolean;
+    description?: string;
+  };
+  accessories?: string[];
+  is_multi_piece?: boolean;
+  pieces?: string[];
 }
 
 export interface BrandStyle {

@@ -552,7 +552,7 @@ export const EyeOffIcon = (props: React.SVGProps<SVGSVGElement>) => (
 export const ReplaceIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 26 26" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 22v-4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v4" />
-    <path d="M2 14v- архитек4a2 2 0 0 1 2-2h4" />
+    <path d="M2 14v-4a2 2 0 0 1 2-2h4" />
     <path d="M22 10V6a2 2 0 0 0-2-2H12a2 2 0 0 0-2 2v4" />
     <path d="m22 16-3-3 3-3" />
     <path d="m2 8 3 3-3 3" />
