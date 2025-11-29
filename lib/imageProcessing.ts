@@ -43,49 +43,49 @@ export const getImageDimensions = async (
 
 /**
  * Convert an image to square aspect ratio (1:1) using padding/letterboxing
+ * Preserves original resolution - no upscaling or downscaling
  *
  * @param file - The image file to convert
- * @param targetSize - Target size for both width and height (default: 2048)
- * @returns A new File object with square aspect ratio
+ * @param backgroundColor - Background color for padding (hex color like '#FFFFFF' or 'transparent')
+ * @returns A new File object with square aspect ratio at original resolution
  */
 export const convertToSquare = async (
   file: File,
-  targetSize: number = 2048
+  backgroundColor: string = 'transparent'
 ): Promise<File> => {
   // 1. Load image
   const img = await loadImage(file);
 
-  // 2. Determine dimensions
+  // 2. Determine dimensions - use original max dimension (no fixed resolution)
   const { width, height } = img;
   const maxDim = Math.max(width, height);
 
-  // 3. Create square canvas
+  // 3. Create square canvas using ORIGINAL dimensions (no upscaling)
   const canvas = document.createElement('canvas');
-  canvas.width = targetSize;
-  canvas.height = targetSize;
+  canvas.width = maxDim;   // Use original max, NOT a fixed resolution
+  canvas.height = maxDim;
   const ctx = canvas.getContext('2d');
 
   if (!ctx) {
     throw new Error('Failed to get canvas context');
   }
 
-  // 4. Fill with white background for letterboxing
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, targetSize, targetSize);
+  // 4. Fill with background for letterboxing
+  if (backgroundColor && backgroundColor !== 'transparent') {
+    // Use specified background color
+    ctx.fillStyle = backgroundColor;
+    ctx.fillRect(0, 0, maxDim, maxDim);
+  }
+  // If backgroundColor is 'transparent', canvas starts with transparent pixels by default
 
-  // 5. Calculate scaling to fit image within square
-  const scale = targetSize / maxDim;
-  const scaledWidth = width * scale;
-  const scaledHeight = height * scale;
+  // 5. Calculate centering (NO SCALING - keep 100% original resolution)
+  const x = (maxDim - width) / 2;
+  const y = (maxDim - height) / 2;
 
-  // 6. Center the image
-  const x = (targetSize - scaledWidth) / 2;
-  const y = (targetSize - scaledHeight) / 2;
+  // 6. Draw image at original resolution with padding
+  ctx.drawImage(img, x, y, width, height);
 
-  // 7. Draw image centered with padding
-  ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
-
-  // 8. Convert canvas to File
+  // 7. Convert canvas to File
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
@@ -101,7 +101,7 @@ export const convertToSquare = async (
         resolve(newFile);
       },
       'image/png',
-      0.95 // High quality PNG
+      1.0 // Max quality
     );
   });
 };

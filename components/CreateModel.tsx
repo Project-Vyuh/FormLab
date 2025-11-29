@@ -10,6 +10,7 @@ import { UploadCloudIcon, CubeIcon, BookmarkIcon, CameraIcon, WandIcon, ChevronR
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
 import Spinner from './Spinner';
 import { getFriendlyErrorMessage, cn } from "../lib/utils";
+import { convertToSquare } from '../lib/imageProcessing';
 import { Loader2Icon, UndoIcon, RedoIcon, PenLineIcon, ZapIcon, RotateCcwIcon } from "lucide-react";
 import { GenerationSettings, UpscaleResolution, PhotoStyle, ShotFraming, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItem, HistoryItemType, User, SelectedStylingModel, Model } from '../types';
 import { createUpscaleRequest, listenToUpscaleRequest, UpscaleRequest } from '../services/firestoreService';
@@ -185,6 +186,54 @@ const STYLE_PRESETS: { label: string, settings: Partial<GenerationSettings> }[] 
   { label: "Edgy", settings: { photoStyle: 'modern', negativePrompt: 'soft, warm tones', sensorSize: 'medium-format', lightingRig: { lights: [{ id: 'rim-1', type: 'spot', role: 'rim', position: { angle: 0, distance: 0.9, elevation: 45 }, power: 2.0, size: 0.4, kelvin: 7500, tint: 0, saturation: 1 }], hdri: { map: 'high-contrast', rotation: 270 } } } }
 ];
 
+// Robust deep merge function to handle loading state from older versions
+const deepMerge = (target: any, source: any): any => {
+  if (!source || typeof source !== 'object') return target;
+  const result = { ...target };
+  for (const key in source) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      result[key] = deepMerge(target[key] || {}, source[key]);
+    } else {
+      result[key] = source[key];
+    }
+  }
+  return result;
+};
+
+/**
+ * Extract background color from generation settings for image padding
+ * This ensures the padding color matches the studio environment background
+ */
+const getBackgroundColorFromSettings = (settings: GenerationSettings): string => {
+  const env = settings.studioEnvironment;
+
+  switch (env.type) {
+    case 'high-key':
+      // High-key white studio
+      return '#FFFFFF';
+    case 'mid-gray':
+      // Mid-gray studio
+      return '#808080';
+    case 'colored-seamless':
+      // Use the specified color
+      return env.color || '#FFFFFF';
+    case 'gradient':
+      // Use the primary gradient color for padding
+      return env.color1 || '#FFFFFF';
+    case 'textured':
+      // For textured backgrounds, use a neutral gray
+      return '#C0C0C0';
+    case 'custom':
+      // For custom backgrounds, use white as safe default
+      return '#FFFFFF';
+    case 'transparent':
+      // Keep transparent for transparent backgrounds
+      return 'transparent';
+    default:
+      // Safe default: white
+      return '#FFFFFF';
+  }
+};
 
 const CreateModel: React.FC<CreateModelProps> = ({
   onModelFinalized,
@@ -624,7 +673,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
     setRevisionPrompt('');
     setModelDescription('');
     setGenerationSettings(initialGenerationSettings);
-    setSelectedModelName('gemini-2.5-flash-image');
+    setSelectedModelName('Nano Banana');
     setIsMaskingMode(false);
     setMaskDataUrl(null);
     setToastMessage('Started over - all changes cleared');
@@ -637,19 +686,36 @@ const CreateModel: React.FC<CreateModelProps> = ({
     }
 
     setIsGenerating(true);
-    setLoadingMessage(file ? 'Generating model from photo...' : 'Generating model from description...');
+    setLoadingMessage(file ? 'Preparing reference photo...' : 'Generating model from description...');
     if (isResultView) {
       setGeneratedModelHistory([]);
       setCurrentHistoryItemId(null);
     }
 
     try {
+      // Convert reference photo to 1:1 aspect ratio with background matching studio environment
+      let processedFile = file;
+      if (file) {
+        try {
+          setLoadingMessage('Normalizing reference photo to 1:1 aspect ratio...');
+          // Extract background color from settings to ensure padding matches studio environment
+          const backgroundColor = getBackgroundColorFromSettings(generationSettings);
+          processedFile = await convertToSquare(file, backgroundColor);
+          console.log(`✓ Converted reference photo to 1:1 with background: ${backgroundColor}`);
+        } catch (error) {
+          console.error('Failed to convert reference photo, using original:', error);
+          processedFile = file; // Fallback to original file
+        }
+      }
+
       const prompt = file ? "Model generated from uploaded photo" : modelDescription;
       const modelInfo = generationModels.find(m => m.name === selectedModelName);
       if (!modelInfo || !modelInfo.id) throw new Error("Invalid model selected.");
 
-      const result = file
-        ? await generateModelImage(file, generationSettings, modelInfo.id)
+      setLoadingMessage(file ? 'Generating model from photo...' : 'Generating model from description...');
+
+      const result = processedFile
+        ? await generateModelImage(processedFile, generationSettings, modelInfo.id)
         : await generateModelFromDescription(modelDescription, generationSettings, modelInfo.id);
       await addHistoryItem({ prompt, settings: generationSettings, modelName: selectedModelName }, result);
     } catch (err) {
@@ -694,7 +760,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
       const result = isMasked
         ? await reviseMaskedImage(generatedModelUrl, maskDataUrl!, revisionInstruction, currentSettings)
-        : await reviseGeneratedImage(generatedModelUrl, revisionInstruction, currentSettings, modelInfo.id);
+        : await reviseGeneratedImage(generatedModelUrl, revisionInstruction, currentSettings, 'gemini-2.5-flash-image');
 
       await addHistoryItem({ prompt: promptForHistory, settings: currentSettings, modelName: selectedModelName }, result);
       setRevisionPrompt('');

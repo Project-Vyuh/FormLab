@@ -280,11 +280,9 @@ export async function analyzeGarment(garmentImage: File): Promise<GarmentAnalysi
   } catch {
     // If parsing fails, return a default structure
     return {
-      type: "Unknown",
-      color: "Unknown",
+      palette: [],
+      category: "Unknown",
       material: "Unknown",
-      style: "Unknown",
-      pattern: "Unknown",
     };
   }
 }

@@ -320,25 +320,32 @@ const getStudioEnvironmentPrompt = (environment: StudioEnvironment, sculpting: S
     switch (environment.type) {
         case 'high-key':
             prompt += ` The scene is a professional high-key white studio environment. The seamless background is exposed to be pure white (brightness ${environment.brightness.toFixed(2)}).`;
+            prompt += ' IMPORTANT: The white background must extend to ALL edges of the output frame. Any areas from the reference image that were transparent padding should be seamlessly filled with this white background.';
             if (environment.reflectionStrength > 0.1) prompt += ` Faint, soft floor reflections are visible under the model's feet (strength ${environment.reflectionStrength.toFixed(2)}).`;
             break;
         case 'mid-gray':
             prompt += ' The scene is a professional studio with a perfectly neutral, 18% gray seamless background, ensuring accurate color and exposure.';
+            prompt += ' IMPORTANT: The gray background must fill the entire output frame, including any areas that were transparent padding in the reference image.';
             break;
         case 'textured':
             prompt += ` The background is a seamless ${environment.textureType} wall. The texture has an intensity of ${environment.intensity.toFixed(2)} and a surface roughness of ${environment.roughness.toFixed(2)}, which should affect shadow crispness.`;
+            prompt += ' IMPORTANT: The textured background must extend to all edges, replacing any transparent padding from the reference image.';
             break;
         case 'colored-seamless':
             prompt += ` The background is a seamless paper roll of a specific color: ${environment.color}. The material is perfectly matte.`;
+            prompt += ` IMPORTANT: The ${environment.color} background must fill the entire frame, seamlessly replacing any transparent padding.`;
             break;
         case 'gradient':
             prompt += ` The background is an illuminated wall with a smooth ${environment.gradientType} gradient, transitioning from ${environment.color1} to ${environment.color2}.`;
+            prompt += ' IMPORTANT: The gradient background must extend across the full output, including areas that were padding in the reference.';
             break;
         case 'transparent':
             prompt += ' The background MUST be perfectly transparent (alpha channel). The output must be a PNG file.';
+            prompt += ' IMPORTANT: If the input reference image contains padding/letterboxing (transparent or white borders), completely remove it. Only render the actual subject with a transparent background. The output should show ONLY the person with transparent pixels around them, NO black or colored borders.';
             break;
         case 'custom':
             prompt += ` The background is: "${environment.prompt}".`;
+            prompt += ' IMPORTANT: This background must fill the entire output frame, replacing any transparent padding from the reference image.';
             break;
     }
 
@@ -942,9 +949,13 @@ const getPoseAndExpressionPrompt = (settings: GenerationSettings): string => {
 export const generateModelImage = async (userImage: File, settings: GenerationSettings, model: string): Promise<string> => {
     const userImagePart = await fileToPart(userImage);
 
-    // Prioritize Global Controls
-    const lightingPrompt = getLightingPrompt(settings.lightingRig, settings.accessoryPrompt);
-    const environmentPrompt = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
+    // Conditionally apply Global Controls based on panel toggles
+    const lightingPrompt = settings.panelToggles.lighting
+        ? getLightingPrompt(settings.lightingRig, settings.accessoryPrompt)
+        : '';
+    const environmentPrompt = settings.panelToggles.environment
+        ? getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings)
+        : '';
     const cameraPrompt = getGenerationPromptSuffix(settings, { exclude: ['lightingRig', 'studioEnvironment', 'floorSettings', 'shadowSculpting'] });
 
     const framingPrompt = getFramingPrompt(settings.shotFraming);
@@ -963,6 +974,45 @@ ${outfitRule}
 [STRICT FRAMING RULE]
 ${framingPrompt}
 
+[CRITICAL: REFERENCE IMAGE PREPROCESSING & BACKGROUND HANDLING]
+The reference image has been preprocessed with padding to create a 1:1 aspect ratio.
+**IMPORTANT INSTRUCTIONS**:
+
+1. SUBJECT EXTRACTION:
+   - The actual person/model is centered in the reference image
+   - Padding areas around the subject match the studio background color specified below
+   - Focus ONLY on the human subject - preserve their exact facial features, body proportions, and pose
+
+2. BACKGROUND RENDERING:
+   - The ENTIRE output must use the studio background specified in [STUDIO SETUP & GLOBAL CONTROLS]
+   - Extend the background seamlessly to all edges of the output frame
+   - NO black, white, or gray bars/borders should appear unless explicitly part of the studio background
+   - The background should look natural and continuous, not layered or composited
+
+3. SUBJECT POSITIONING:
+   - Frame the subject according to the shot type specified in [STRICT FRAMING RULE]
+   - The subject should appear as if photographed directly in the studio environment
+   - Maintain the subject's natural position and pose from the reference image
+
+4. FACIAL & BODY ACCURACY (HIGHEST PRIORITY):
+   - Match the reference photo's facial features with EXTREME precision:
+     * Exact eye shape, color, spacing, and expression
+     * Precise nose structure, bridge width, and nostril shape
+     * Accurate mouth shape, lip fullness, and natural expression
+     * Identical face shape, jawline, and chin structure
+     * Same cheekbone prominence and facial proportions
+     * Exact skin tone, complexion, and any visible features (freckles, moles, etc.)
+   - Preserve exact body proportions and build from reference:
+     * Same height-to-width ratio
+     * Identical shoulder width and posture
+     * Matching limb proportions and body type
+   - Maintain the same hair:
+     * Exact color, including highlights or variations
+     * Same style, length, and texture
+     * Identical hairline and volume
+
+CRITICAL: The output must show a seamless studio photograph with no visible padding or borders. The subject's identity must be perfectly preserved.
+
 [DYNAMIC POSE & EXPRESSION]
 ${posePrompt}
 
@@ -976,13 +1026,13 @@ ${cameraPrompt}
 - Constraint: Ensure the subject fits completely within the ${settings.aspectRatio} frame.
 
 [SUBJECT SPECIFICATIONS]
-- Identity: Match the face, hair, and ethnicity of the reference photo.
+- Identity: Match the face, hair, and ethnicity of the reference photo with forensic accuracy.
 - Skin Details: ${REALISM_TOKENS}
 - Anatomy: ${ANATOMY_TOKENS}
 
 [NEGATIVE CONSTRAINTS]
 ${QA_NEGATIVE_PROMPT}
-Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distorted face, bad hands, bad feet, cartoonish style, illustration style, low resolution, blurry, artifacts, watermark, text, signature, shoes (unless specified), socks (unless specified).`;
+Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distorted face, bad hands, bad feet, cartoonish style, illustration style, low resolution, blurry, artifacts, watermark, text, signature, shoes (unless specified), socks (unless specified), black borders, padding artifacts, letterboxing.`;
 
     const response = await ai.models.generateContent({
         model: model || 'gemini-2.5-flash-image',
@@ -996,9 +1046,13 @@ Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distort
 };
 
 export const generateModelFromDescription = async (description: string, settings: GenerationSettings, model: string): Promise<string> => {
-    // Prioritize Global Controls
-    const lightingPrompt = getLightingPrompt(settings.lightingRig, settings.accessoryPrompt);
-    const environmentPrompt = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
+    // Conditionally apply Global Controls based on panel toggles
+    const lightingPrompt = settings.panelToggles.lighting
+        ? getLightingPrompt(settings.lightingRig, settings.accessoryPrompt)
+        : '';
+    const environmentPrompt = settings.panelToggles.environment
+        ? getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings)
+        : '';
     const cameraPrompt = getGenerationPromptSuffix(settings, { exclude: ['lightingRig', 'studioEnvironment', 'floorSettings', 'shadowSculpting'] });
 
     const framingPrompt = getFramingPrompt(settings.shotFraming);
@@ -1276,11 +1330,126 @@ ${promptSuffix}`
  * Provides detailed garment analysis and enhanced prompts for improved accuracy
  */
 
-// Analyze garment image with extreme detail for virtual try-on accuracy
-export const analyzeGarmentDetailed = async (garmentImage: File): Promise<GarmentAnalysis> => {
-    const garmentImagePart = await fileToPart(garmentImage);
+/**
+ * Sanitize JSON string to fix common formatting issues
+ * Handles unescaped quotes, newlines, and other problematic characters
+ */
+const sanitizeJsonString = (jsonStr: string): string => {
+    try {
+        // Remove any markdown code block markers
+        let cleaned = jsonStr.replace(/```json\n?/g, '').replace(/```\n?/g, '');
 
-    const analysisPrompt = `Analyze this garment image with extreme detail for virtual try-on accuracy.
+        // Trim whitespace
+        cleaned = cleaned.trim();
+
+        // Try to find JSON object boundaries if there's extra text
+        const jsonStart = cleaned.indexOf('{');
+        const jsonEnd = cleaned.lastIndexOf('}');
+        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+            cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+        }
+
+        return cleaned;
+    } catch (error) {
+        console.error('Error sanitizing JSON:', error);
+        return jsonStr;
+    }
+};
+
+/**
+ * Attempt to parse JSON with multiple strategies
+ * Returns parsed object or null if all strategies fail
+ */
+const robustJsonParse = (jsonStr: string): any | null => {
+    // Strategy 1: Direct parse
+    try {
+        return JSON.parse(jsonStr);
+    } catch (e1) {
+        console.warn('Direct JSON parse failed, trying sanitization...');
+
+        // Strategy 2: Parse after sanitization
+        try {
+            const sanitized = sanitizeJsonString(jsonStr);
+            return JSON.parse(sanitized);
+        } catch (e2) {
+            console.warn('Sanitized JSON parse failed, trying character-by-character validation...');
+
+            // Strategy 3: Try to extract valid JSON by finding matching braces
+            try {
+                const sanitized = sanitizeJsonString(jsonStr);
+                let braceCount = 0;
+                let startIndex = -1;
+                let endIndex = -1;
+
+                for (let i = 0; i < sanitized.length; i++) {
+                    if (sanitized[i] === '{') {
+                        if (startIndex === -1) startIndex = i;
+                        braceCount++;
+                    } else if (sanitized[i] === '}') {
+                        braceCount--;
+                        if (braceCount === 0 && startIndex !== -1) {
+                            endIndex = i;
+                            break;
+                        }
+                    }
+                }
+
+                if (startIndex !== -1 && endIndex !== -1) {
+                    const extracted = sanitized.substring(startIndex, endIndex + 1);
+                    return JSON.parse(extracted);
+                }
+            } catch (e3) {
+                console.error('All JSON parsing strategies failed');
+            }
+        }
+    }
+
+    return null;
+};
+
+// Analyze garment image with extreme detail for virtual try-on accuracy
+export const analyzeGarmentDetailed = async (
+    garmentImage: File,
+    retryCount: number = 0
+): Promise<GarmentAnalysis> => {
+    const garmentImagePart = await fileToPart(garmentImage);
+    const maxRetries = 2;
+
+    // Use simplified prompt on retry to reduce chance of malformed JSON
+    const isRetry = retryCount > 0;
+
+    const analysisPrompt = isRetry
+        ? `Analyze this garment and return ONLY valid JSON with this exact structure:
+{
+  "palette": ["color1", "color2"],
+  "category": "garment type",
+  "material": "fabric material",
+  "colors": {
+    "primary": ["main colors"],
+    "secondary": ["accent colors"],
+    "exact_description": "color description"
+  },
+  "patterns": {
+    "type": "pattern type",
+    "description": "pattern details",
+    "scale": "small/medium/large",
+    "placement": "where patterns appear"
+  },
+  "textures": {
+    "fabric_type": "fabric type",
+    "finish": "matte/glossy/satin",
+    "surface_details": "texture details"
+  },
+  "construction": {
+    "details": ["construction elements"],
+    "embellishments": ["decorative elements"],
+    "silhouette": "garment shape"
+  },
+  "distinctive_features": ["unique characteristics"]
+}
+
+IMPORTANT: Return ONLY the JSON object. No markdown, no explanations, no code blocks. Keep descriptions concise.`
+        : `Analyze this garment image with extreme detail for virtual try-on accuracy.
 
 Provide comprehensive JSON with the following structure:
 {
@@ -1311,7 +1480,8 @@ Provide comprehensive JSON with the following structure:
   "distinctive_features": ["unique characteristics that make this garment immediately recognizable"]
 }
 
-Be precise and thorough - this data guides exact garment replication in virtual try-on.`;
+Be precise and thorough - this data guides exact garment replication in virtual try-on.
+IMPORTANT: Ensure all text values are properly formatted for JSON. Avoid special characters that need escaping.`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -1380,13 +1550,44 @@ Be precise and thorough - this data guides exact garment replication in virtual 
 
     try {
         const analysisText = response.text?.trim();
+
         if (!analysisText) {
             throw new Error("API returned empty response");
         }
-        return JSON.parse(analysisText) as GarmentAnalysis;
+
+        console.log(`Garment analysis response length: ${analysisText.length} characters`);
+
+        // Use robust JSON parsing
+        const parsed = robustJsonParse(analysisText);
+
+        if (!parsed) {
+            throw new Error("Failed to parse JSON response after all strategies");
+        }
+
+        // Validate required fields
+        if (!parsed.palette || !parsed.category || !parsed.material) {
+            throw new Error("Missing required fields in analysis response");
+        }
+
+        console.log('✓ Garment analysis successful:', parsed.category);
+        return parsed as GarmentAnalysis;
+
     } catch (error) {
-        console.error('Garment analysis failed:', error);
-        throw new Error("Failed to analyze garment details. Please try again.");
+        console.error('Garment analysis parsing error:', error);
+        console.error('Response text preview:', response.text?.substring(0, 500));
+
+        // Retry with simplified prompt if we haven't exceeded max retries
+        if (retryCount < maxRetries) {
+            console.log(`Retrying garment analysis (attempt ${retryCount + 1}/${maxRetries})...`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
+            return analyzeGarmentDetailed(garmentImage, retryCount + 1);
+        }
+
+        // If all retries failed, throw a user-friendly error
+        throw new Error(
+            "Failed to analyze garment details. The image may be too complex or unclear. " +
+            "Please try with a clearer image of the garment on a plain background."
+        );
     }
 };
 
@@ -1459,6 +1660,15 @@ ${garmentDescription}
 **INPUTS:**
 1. **Model Image:** (First image) The person who will wear the garment. Preserve their identity, pose, and body type.
 2. **Garment Reference:** (Second image) The EXACT garment to apply. This is your SOURCE OF TRUTH.
+
+**IMPORTANT - REFERENCE IMAGE PREPROCESSING:**
+The Model Image (first input) may contain letterboxing or padding (transparent or white borders) that was added during preprocessing to create a 1:1 aspect ratio.
+**YOU MUST HANDLE THIS CORRECTLY**:
+- The padding is NOT part of the compositional intent
+- Extract ONLY the actual human subject, discarding all padding
+- Position the subject naturally in the output frame
+- Apply the studio background to the ENTIRE output, including areas that were padding
+- NO black, white, or gray borders should be visible in the final output
 
 **TASK:** Generate a photorealistic image of the Model wearing the EXACT Garment with ZERO creative interpretation.
 

@@ -176,6 +176,32 @@ const generationModels: { name: string, id: GenerationModel | null, disabled?: b
   { name: 'Nano Banana', id: 'gemini-2.5-flash-image', title: 'Fastest generation, good for quick iterations.' },
 ];
 
+/**
+ * Extract background color from generation settings for image padding
+ * This ensures the padding color matches the studio environment background
+ */
+const getBackgroundColorFromSettings = (settings: GenerationSettings): string => {
+  const env = settings.studioEnvironment;
+
+  switch (env.type) {
+    case 'high-key':
+      return '#FFFFFF';
+    case 'mid-gray':
+      return '#808080';
+    case 'colored-seamless':
+      return env.color || '#FFFFFF';
+    case 'gradient':
+      return env.color1 || '#FFFFFF';
+    case 'textured':
+      return '#C0C0C0';
+    case 'custom':
+      return '#FFFFFF';
+    case 'transparent':
+      return 'transparent';
+    default:
+      return '#FFFFFF';
+  }
+};
 
 const ImageStudio: React.FC<ImageStudioProps> = ({
   selectedStylingModel,
@@ -460,7 +486,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             imageUrl: selectedStylingModel.url,
             prompt: "Initial Model",
             settings: initialGenerationSettings,
-            modelName: "gemini-2.5-flash-image",
+            modelName: "Nano Banana",
             isStarred: true,
             name: selectedStylingModel.name,
             type: 'try-on',
@@ -720,7 +746,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         imageUrl: finalImageUrl,
         prompt: "Applied " + visibleGarmentLayers.map(l => l.garment!.name).join(', '),
         settings: deepCopy(generationSettings),
-        modelName: "gemini-2.5-flash-image",
+        modelName: "Nano Banana",
         isStarred: false,
         type: 'try-on',
         baseModelId: selectedStylingModel!.baseModelId,
@@ -937,11 +963,12 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     const { file, ...rest } = productData;
     const productId = `item-${Date.now()}`;
 
-    // Convert to 1:1 aspect ratio (2048x2048) with padding/letterboxing
+    // Convert to 1:1 aspect ratio with background matching studio environment (preserves original resolution)
     let processedFile = file;
     try {
-      processedFile = await convertToSquare(file, 2048);
-      console.log('✓ Converted wardrobe item to 1:1 (2048x2048)');
+      const backgroundColor = getBackgroundColorFromSettings(generationSettings);
+      processedFile = await convertToSquare(file, backgroundColor);
+      console.log(`✓ Converted wardrobe item to 1:1 aspect ratio with background: ${backgroundColor}`);
     } catch (error) {
       console.error('Failed to convert to square, using original:', error);
       // Fallback to original file if conversion fails
@@ -1093,7 +1120,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         imageUrl: finalImageUrl,
         prompt: revisionPrompt,
         settings: deepCopy(generationSettings),
-        modelName: "gemini-2.5-flash-image",
+        modelName: "Nano Banana",
         isStarred: false,
         type: 'try-on-revision',
         baseModelId: selectedStylingModel!.baseModelId,
@@ -1233,7 +1260,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         imageUrl: finalImageUrl,
         prompt: promptForHistory,
         settings: deepCopy(generationSettings),
-        modelName: "gemini-2.5-flash-image",
+        modelName: "Nano Banana",
         isStarred: false,
         type: 'try-on-revision',
         baseModelId: selectedStylingModel!.baseModelId,
