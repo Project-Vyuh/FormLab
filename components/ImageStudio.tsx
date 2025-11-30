@@ -34,6 +34,7 @@ import { uploadFile, uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } 
 import { convertToSquare } from '../lib/imageProcessing';
 import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem, deleteGlobalWardrobeItem, subscribeToGlobalWardrobe, checkWardrobeItemExists } from '../services/firestoreService';
 import { deleteHistoryItemFromFirestore, subscribeToStylingHistory, loadHistoryItems } from '../services/firestoreSync';
+import { createUpscaleRequest, listenToUpscaleRequest, UpscaleRequest } from '../services/firestoreService';
 import { auth } from '../services/firebase';
 import { loadUnifiedHistory, saveStylingHistory } from '../services/dbService';
 import { getCurrentUserId } from '../services/authService';
@@ -351,23 +352,56 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   }, []);
 
   const handleUpscale = useCallback(async (resolution: '2k' | '4k') => {
-    if (!displayImageUrl) return;
+    if (!displayImageUrl || !currentUser || !currentProjectId) return;
     setIsUpscaleMenuOpen(false);
     setIsLoading(true);
     setLoadingMessage(`Upscaling to ${resolution.toUpperCase()}...`);
 
     try {
-      // Simulate upscale for now or call actual service if available
-      // In a real implementation, this would call the backend
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setToastMessage(`Image upscaled to ${resolution.toUpperCase()}!`);
+      // Create the upscale request in Firestore
+      const requestId = await createUpscaleRequest(currentUser.uid, displayImageUrl, resolution);
+      console.log('Upscale request created:', requestId);
+
+      // Listen for updates
+      const unsubscribe = listenToUpscaleRequest(requestId, async (request: UpscaleRequest) => {
+        if (request.status === 'completed' && request.outputUrl) {
+          // Upscale successful!
+          unsubscribe(); // Stop listening
+
+          // Add to history
+          const newHistoryItem: HistoryItem = {
+            id: `hist-${Date.now()}`,
+            parentId: currentHistoryItemId,
+            imageUrl: request.outputUrl,
+            prompt: `Upscaled to ${resolution.toUpperCase()}`,
+            settings: deepCopy(generationSettings),
+            modelName: "Nano Banana",
+            isStarred: false,
+            type: 'try-on-revision', // Treat as a revision
+            baseModelId: selectedStylingModel!.baseModelId,
+          };
+
+          setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
+          setCurrentHistoryItemId(newHistoryItem.id);
+          setRedoStack([]);
+
+          setIsLoading(false);
+          setLoadingMessage('');
+          setToastMessage(`Image upscaled to ${resolution.toUpperCase()}!`);
+        } else if (request.status === 'failed') {
+          unsubscribe();
+          setIsLoading(false);
+          setLoadingMessage('');
+          setError(request.error || 'Upscale failed');
+        }
+      });
+
     } catch (err) {
-      setError(getFriendlyErrorMessage(err, "Failed to upscale image"));
-    } finally {
       setIsLoading(false);
       setLoadingMessage('');
+      setError(getFriendlyErrorMessage(err, "Failed to upscale image"));
     }
-  }, [displayImageUrl]);
+  }, [displayImageUrl, currentUser, currentProjectId, currentHistoryItemId, generationSettings, selectedStylingModel]);
 
   const handleDownload = useCallback(async (format: 'png' | 'jpg' | 'webp') => {
     if (!displayImageUrl) return;
