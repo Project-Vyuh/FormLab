@@ -33,7 +33,7 @@ import { getFriendlyErrorMessage } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } from '../services/storageService';
 import { convertToSquare } from '../lib/imageProcessing';
 import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem, deleteGlobalWardrobeItem, subscribeToGlobalWardrobe, checkWardrobeItemExists } from '../services/firestoreService';
-import { deleteHistoryItemFromFirestore, subscribeToStylingHistory } from '../services/firestoreSync';
+import { deleteHistoryItemFromFirestore, subscribeToStylingHistory, loadHistoryItems } from '../services/firestoreSync';
 import { auth } from '../services/firebase';
 import { loadUnifiedHistory, saveStylingHistory } from '../services/dbService';
 import { getCurrentUserId } from '../services/authService';
@@ -479,7 +479,48 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
               setInitialSettings(lastItem.settings);
             }
           }
-        } else {
+        }
+
+        // ROBUST FETCH: Explicitly fetch styling history from Firestore for this model
+        // This ensures we have the data even if loadProjectFromFirestore missed it (e.g. missing stylingModelIds)
+        try {
+          console.log('[ImageStudio] Explicitly fetching styling history for:', selectedStylingModel.baseModelId);
+          const directStylingHistory = await loadHistoryItems(currentProjectId, selectedStylingModel.baseModelId);
+
+          if (directStylingHistory && directStylingHistory.length > 0) {
+            console.log(`[ImageStudio] Fetched ${directStylingHistory.length} styling items directly`);
+
+            setGeneratedModelHistory(prev => {
+              // Merge with existing history (deduplicate by ID)
+              const existingIds = new Set(prev.map(item => item.id));
+              const newItems = directStylingHistory.filter(item => !existingIds.has(item.id));
+
+              if (newItems.length === 0) return prev;
+
+              const merged = [...prev, ...newItems].sort((a, b) => {
+                const aTime = parseInt(a.id.split('-').pop() || '0');
+                const bTime = parseInt(b.id.split('-').pop() || '0');
+                return aTime - bTime;
+              });
+
+              return merged;
+            });
+
+            // If we didn't have a current item before (or it was a fallback), try to find a better one now
+            if (!currentHistoryItemId || currentHistoryItemId.startsWith('hist-')) {
+              const lastTryonItem = directStylingHistory[directStylingHistory.length - 1];
+              if (lastTryonItem) {
+                // Only switch if we don't have a specific user selection
+                // For now, we'll keep the logic simple and not auto-switch to avoid jumping
+                // unless we are in the "initial" state
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[ImageStudio] Failed to directly fetch styling history:', err);
+        }
+
+        if (generatedModelHistory.length === 0 && (!unifiedHistory || unifiedHistory.length === 0)) {
           // No history exists yet - Create new root history item for this model
           // This happens when first entering Image Studio from a newly created model
           const rootHistoryItem: HistoryItem = {

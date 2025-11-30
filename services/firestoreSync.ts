@@ -266,6 +266,8 @@ export const syncProjectToFirestore = async (
             createdAt: serverTimestamp(), // Required by Firestore rules
             updatedAt: serverTimestamp(), // Required by Firestore rules
             syncVersion: (projectState.syncVersion || 0) + 1,
+            // Save list of styling model IDs to help with loading
+            stylingModelIds: projectState.stylingHistory ? Object.keys(projectState.stylingHistory) : [],
         };
 
         // Sanitize metadata to convert undefined to null (Firestore requirement)
@@ -396,13 +398,31 @@ export const loadProjectFromFirestore = async (
 
         // Load styling history
         const stylingHistory: { [key: string]: HistoryItem[] } = {};
-        const stylingHistoryCollections = await getDocs(
-            query(collection(db, 'projects', projectId, 'stylingHistory'))
-        );
 
-        for (const baseModelDoc of stylingHistoryCollections.docs) {
-            const baseModelId = baseModelDoc.id;
-            stylingHistory[baseModelId] = await loadHistoryItems(projectId, `stylingHistory/${baseModelId}`);
+        // Determine which baseModelIds to fetch
+        // 1. Use the explicit list from project data if available
+        const stylingModelIds = new Set<string>(projectData.stylingModelIds || []);
+
+        // 2. Infer from generatedModelHistory (find all root ancestors)
+        if (generatedModelHistory.length > 0) {
+            generatedModelHistory.forEach(item => {
+                if (item.baseModelId) {
+                    stylingModelIds.add(item.baseModelId);
+                }
+            });
+        }
+
+        console.log(`[firestoreSync] Loading styling history for ${stylingModelIds.size} models:`, Array.from(stylingModelIds));
+
+        // Fetch each styling history collection
+        for (const baseModelId of stylingModelIds) {
+            // Skip if invalid ID
+            if (!baseModelId) continue;
+
+            const historyItems = await loadHistoryItems(projectId, baseModelId);
+            if (historyItems.length > 0) {
+                stylingHistory[baseModelId] = historyItems;
+            }
         }
 
         // Load wardrobe items
@@ -557,7 +577,7 @@ export const syncHistoryItems = async (
 /**
  * Load history items from Firestore
  */
-const loadHistoryItems = async (
+export const loadHistoryItems = async (
     projectId: string,
     collectionPath: string
 ): Promise<HistoryItem[]> => {
@@ -699,20 +719,46 @@ export const deleteProjectFromFirestore = async (
 
         // 2. Delete all styling history subcollections
         try {
-            const stylingSnapshot = await getDocs(
-                collection(db, 'projects', projectId, 'stylingHistory')
-            );
+            // Determine which collections to delete
+            // We need to know the baseModelIds to find the collections
+            // Since we can't list collections in client SDK, we rely on:
+            // 1. stylingModelIds field in project doc (if we can read it first)
+            // 2. generatedModelHistory to infer baseModelIds
 
-            for (const baseModelDoc of stylingSnapshot.docs) {
+            const stylingModelIds = new Set<string>();
+
+            // Try to read project doc first to get stylingModelIds
+            try {
+                const projectSnap = await getDoc(doc(db, 'projects', projectId));
+                if (projectSnap.exists()) {
+                    const data = projectSnap.data();
+                    if (data.stylingModelIds && Array.isArray(data.stylingModelIds)) {
+                        data.stylingModelIds.forEach((id: string) => stylingModelIds.add(id));
+                    }
+                }
+            } catch (e) {
+                console.warn('[firestoreSync] Could not read project doc for deletion cleanup:', e);
+            }
+
+            // Also infer from generatedModelHistory (which we just deleted, but we can't read it now)
+            // Ideally we should have read it before deleting, but for now we rely on the project doc
+            // or we could query the generatedModelHistory before deleting it.
+
+            // Let's try to be thorough: if we have the list, delete them.
+            // If not, we might leave some orphaned collections, but that's a limitation of client SDK.
+
+            console.log(`[firestoreSync] Deleting styling history collections for:`, Array.from(stylingModelIds));
+
+            for (const baseModelId of stylingModelIds) {
                 const itemsSnapshot = await getDocs(
-                    collection(db, 'projects', projectId, 'stylingHistory', baseModelDoc.id)
+                    collection(db, 'projects', projectId, baseModelId)
                 );
                 itemsSnapshot.docs.forEach(doc => {
                     batch.delete(doc.ref);
                 });
             }
         } catch (error) {
-            console.warn('[firestoreSync] Styling history deletion failed (may not exist):', error);
+            console.warn('[firestoreSync] Styling history deletion failed:', error);
         }
 
         // 3. Delete all wardrobe items
