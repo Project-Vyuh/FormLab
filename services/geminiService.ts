@@ -1256,7 +1256,14 @@ export const generateVirtualTryOnImage = async (
     const garmentImagePart = await fileToPart(garmentImage);
 
     const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any] });
-    const backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
+
+    // CRITICAL: Check if environment panel is enabled. If not, preserve original background.
+    let backgroundInstruction = '';
+    if (settings.panelToggles?.environment) {
+        backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
+    } else {
+        backgroundInstruction = " **Background Preservation:** The background MUST remain EXACTLY as it is in the Model Image. Do NOT replace, blur, or alter the background in any way. The subject should be integrated naturally into this existing environment.";
+    }
 
     let prompt: string;
 
@@ -1292,7 +1299,13 @@ export const generateVirtualTryOnWithPoseReference = async (
 
     const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any, 'posePrompt'] });
 
-    const backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
+    // CRITICAL: Check if environment panel is enabled. If not, preserve original background.
+    let backgroundInstruction = '';
+    if (settings.panelToggles?.environment) {
+        backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
+    } else {
+        backgroundInstruction = " **Background Preservation:** The background MUST remain EXACTLY as it is in the Model Image. Do NOT replace, blur, or alter the background in any way. The subject should be integrated naturally into this existing environment.";
+    }
 
     const prompt = `You are a professional fashion AI.
 **Inputs:**
@@ -1467,36 +1480,54 @@ CRITICAL: Return ONLY valid JSON.
 3. Do NOT repeat text or generate loops.
 4. Keep descriptions precise but under 100 characters.
 5. Identify if this is a matching set (co-ord, suit, tracksuit) and set is_multi_piece to true.`
-        : `Analyze this garment for virtual try-on. Return JSON:
+        : `Analyze this garment for virtual try-on with FORENSIC ACCURACY. Return JSON:
 {
-  "palette": ["color names"],
-  "category": "garment type",
-  "material": "fabric",
+  "palette": ["exact color names"],
+  "category": "precise garment type",
+  "material": "specific fabric (e.g., heavy cotton twill, sheer chiffon)",
   "colors": {
-    "primary": ["main colors"],
-    "secondary": ["accents"],
-    "exact_description": "precise color description"
+    "primary": ["dominant colors"],
+    "secondary": ["accent colors"],
+    "exact_description": "detailed description of color values, gradients, and placement"
   },
   "patterns": {
-    "type": "solid/striped/floral/geometric/etc",
-    "description": "pattern details",
-    "scale": "small/medium/large",
-    "placement": "where patterns appear"
+    "type": "specific pattern type",
+    "description": "detailed description of motifs, spacing, and alignment",
+    "scale": "exact scale relative to garment",
+    "placement": "precise location of pattern elements"
   },
   "textures": {
-    "fabric_type": "fabric and weave",
-    "finish": "matte/glossy/satin",
-    "surface_details": "texture details"
+    "fabric_type": "specific weave/knit",
+    "finish": "matte/glossy/satin/sequined/metallic",
+    "surface_details": "micro-textures, ribbing, distressing, transparency",
+    "weight": "visual weight and drape characteristics"
   },
   "construction": {
-    "details": ["zippers, buttons, seams, collar"],
-    "embellishments": ["embroidery, prints, logos"],
-    "silhouette": "fit and shape"
+    "details": ["neckline style", "sleeve construction", "hem type", "closure details", "seam placement"],
+    "embellishments": ["embroidery", "beading", "logos", "text", "hardware"],
+    "silhouette": "fit, cut, and structural shape"
   },
-  "distinctive_features": ["unique recognizable traits"]
+  "distinctive_features": ["unique design elements", "branding", "flaws/distress"],
+  "volumetric_features": {
+    "ruffles": true/false,
+    "pleats": true/false,
+    "gathering": true/false,
+    "structure": "description of 3D volume and shape"
+  },
+  "layering": {
+    "has_layers": true/false,
+    "description": "visible underlayers, lining, or overlays"
+  },
+  "accessories": ["attached belts", "ties", "brooches", "hardware"],
+  "is_multi_piece": true/false,
+  "pieces": ["list of all distinct pieces if it is a set"]
 }
 
-Be precise but concise. Keep descriptions under 100 characters each.`;
+CRITICAL INSTRUCTIONS:
+1. Be EXTREMELY precise. Do not generalize.
+2. Describe materials physically (stiffness, drape, sheen).
+3. Capture ALL text, logos, and branding exactly.
+4. Note any asymmetry or unique construction details.`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -1734,102 +1765,42 @@ const buildEnhancedTryOnPrompt = (
     backgroundInstruction: string,
     promptSuffix: string
 ): string => {
-    return `You are a PRECISION VIRTUAL TRY-ON AI, NOT a creative fashion designer.
-
-**ROLE:** Your task is PHOTOGRAPHIC TRANSFER of an exact garment onto a model, preserving every detail with forensic accuracy.
-
-**GARMENT TO REPLICATE:**
-${garmentDescription}
+    return `You are a PRECISION VIRTUAL TRY-ON AI.
+**ROLE:** PHOTOGRAPHIC TRANSFER of an exact garment onto a model with FORENSIC ACCURACY.
 
 **INPUTS:**
-1. **Model Image:** (First image) The person who will wear the garment. Preserve their identity, pose, and body type.
-2. **Garment Reference:** (Second image) The EXACT garment to apply. This is your SOURCE OF TRUTH.
+1. **Model Image:** (First image) The subject. Preserve identity, pose, and body type.
+2. **Garment Reference:** (Second image) The MASTER REFERENCE.
 
-**IMPORTANT - REFERENCE IMAGE PREPROCESSING:**
-The Model Image (first input) may contain letterboxing or padding (transparent or white borders) that was added during preprocessing to create a 1:1 aspect ratio.
-**YOU MUST HANDLE THIS CORRECTLY**:
-- The padding is NOT part of the compositional intent
-- Extract ONLY the actual human subject, discarding all padding
-- Position the subject naturally in the output frame
-- Apply the studio background to the ENTIRE output, including areas that were padding
-- NO black, white, or gray borders should be visible in the final output
+**GARMENT ANALYSIS:**
+${garmentDescription}
 
-**TASK:** Generate a photorealistic image of the Model wearing the EXACT Garment with ZERO creative interpretation.
+**CRITICAL - BACKGROUND HANDLING:**
+${backgroundInstruction}
 
-**Technical Specifications:**
-- **Aspect Ratio:** ${settings.aspectRatio}
-- **Constraint:** Ensure the final image maintains the ${settings.aspectRatio} aspect ratio. The subject must fit completely within this frame.
+**TASK:** Generate a photorealistic image of the Model wearing the EXACT Garment.
 
-**CRITICAL PRESERVATION RULES - FOLLOW EXACTLY:**
+**FORENSIC REPLICATION RULES (ZERO CREATIVITY ALLOWED):**
+1. **COLOR:** Copy exact RGB values. Do NOT color grade the garment.
+2. **PATTERN:** Map patterns with 100% fidelity. Preserve scale, spacing, and alignment.
+3. **TEXTURE:** Replicate exact fabric physics (stiffness, drape, sheen).
+4. **DETAILS:** All hardware (buttons, zips), logos, and text must be SHARP and EXACT.
+5. **FIT:** Drape the garment naturally on the model's pose.
+6. **MULTI-PIECE:** If the garment is a set, the model MUST wear ALL pieces.
 
-1. **COLOR FIDELITY (HIGHEST PRIORITY):**
-   - Extract exact color values from the garment reference image
-   - Match primary colors PRECISELY - no shifting, no approximation
-   - Preserve all secondary and accent colors exactly as shown
-   - Maintain color distribution and placement identical to reference
-   - DO NOT interpret colors creatively - copy them pixel-accurately
+**PROHIBITED:**
+- NO changing colors or patterns.
+- NO "improving" the design.
+- NO changing the background (unless instructed).
+- NO cropping the outfit.
 
-2. **PATTERN ACCURACY (HIGHEST PRIORITY):**
-   - Every pattern element visible in reference MUST appear in output
-   - Pattern scale, spacing, and arrangement must be identical
-   - Geometric patterns: exact shapes, angles, and repetition
-   - Organic patterns: exact motifs, flow, and density
-   - Multi-pattern garments: preserve all pattern layers and interactions
+**Directives:**
+1. **Wardrobe:** Apply the garment from the reference image with forensic accuracy.
+2. **Environment:** Follow the background instruction strictly.
+3. **Style:** ${promptSuffix}
+4. **Safety:** The model must be fully clothed.
 
-3. **TEXTURE REPLICATION:**
-   - Match fabric surface finish exactly (matte/glossy/satin)
-   - Replicate visible weave, knit structure, or surface texture
-   - Preserve any ribbing, pleating, or texture variations
-   - Match sheen and light interaction properties
-
-4. **DETAIL PRESERVATION:**
-   - All embroidery must match reference in color, placement, and density
-   - Hardware (zippers, buttons) in exact positions with correct finish
-   - Seam placement and topstitching patterns identical
-   - Collar, cuffs, and structural elements exactly as reference
-   - Any logos, text, or graphics must be precise replicas
-
-5. **EMBELLISHMENT FIDELITY:**
-   - Sequins, beads, appliques in exact density and distribution
-   - Prints and graphics: exact colors, scale, and placement
-   - Decorative elements: replicate size, color, and positioning
-   - Maintain layering and depth of embellishments
-
-6. **MICRO-DETAIL FIDELITY:**
-   - Stitching patterns and thread colors
-   - Small logos or branding elements
-   - Subtle color variations within the fabric
-   - Edge finishes and hem details
-
-7. **MULTI-PIECE OUTFIT ENFORCEMENT:**
-   - If the garment is a set (e.g., top + pants, suit), the model MUST wear BOTH pieces.
-   - Do NOT crop the image to just the top.
-   - Ensure visual continuity between pieces (matching fabric, pattern alignment).
-
-**STRICT PROHIBITIONS - NEVER DO THESE:**
-- DO NOT change or "improve" colors - use exact reference colors
-- DO NOT simplify patterns - replicate complete complexity
-- DO NOT substitute textures - match the exact fabric appearance
-- DO NOT alter embellishments - copy them precisely
-- DO NOT use "similar" or "inspired by" - ONLY exact replication
-- DO NOT apply artistic interpretation - this is technical reproduction
-- DO NOT generate a "new design in the same style" - copy the exact garment
-
-**DIRECTIVES:**
-1. **Wardrobe Application:** Apply the garment from the reference image with forensic accuracy
-2. **Fit:** Natural and realistic fit respecting the model's pose and body type
-3. **Environment:** ${backgroundInstruction}
-4. **Safety:** The model must be fully clothed. Professional e-commerce image.
-5. **Style:** ${promptSuffix}
-
-**VERIFICATION BEFORE OUTPUT:**
-Mentally compare your output to the garment reference:
-- Colors: Do they match exactly? ✓
-- Patterns: Are all elements present and identical? ✓
-- Textures: Does the surface finish match? ✓
-- Details: Are embellishments and hardware exact? ✓
-
-**OUTPUT:** Return ONLY the generated image with the EXACT garment replicated on the model.`;
+**OUTPUT:** Return ONLY the generated image.`;
 };
 
 // Build basic try-on prompt (legacy fallback)
