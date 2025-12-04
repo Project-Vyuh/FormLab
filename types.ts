@@ -329,6 +329,7 @@ export interface HistoryItem {
   type: HistoryItemType; // Type of history item: model-generation, model-revision, try-on, try-on-revision
   baseModelId: string; // References the root base model (consistent across Create Model and Image Studio)
   sourceTemplateId?: string; // ID of the template this history item was created from
+  outfitGarmentIds?: string[]; // IDs of garments in the outfit stack (for Image Studio) - simplified for Firestore serialization
 }
 
 export interface GarmentAnalysis {

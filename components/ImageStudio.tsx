@@ -369,6 +369,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           unsubscribe(); // Stop listening
 
           // Add to history
+          const garmentIds = outfitStack.filter(l => l.isVisible && l.garment).map(l => l.garment!.id);
           const newHistoryItem: HistoryItem = {
             id: `hist-${Date.now()}`,
             parentId: currentHistoryItemId,
@@ -379,6 +380,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             isStarred: false,
             type: 'try-on-revision', // Treat as a revision
             baseModelId: selectedStylingModel!.baseModelId,
+            outfitGarmentIds: garmentIds,
           };
 
           setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
@@ -568,6 +570,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             name: selectedStylingModel.name,
             type: 'try-on',
             baseModelId: selectedStylingModel.baseModelId,
+            outfitGarmentIds: [], // Base model has no garments
           };
           setGeneratedModelHistory([rootHistoryItem]);
           setCurrentHistoryItemId(rootHistoryItem.id);
@@ -867,6 +870,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         }
       }
 
+      const garmentIds = visibleGarmentLayers.map(l => l.garment!.id);
       const newHistoryItem: HistoryItem = {
         id: `hist-${Date.now()}`,
         parentId: currentHistoryItemId,
@@ -877,7 +881,10 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         isStarred: false,
         type: 'try-on',
         baseModelId: selectedStylingModel!.baseModelId,
+        outfitGarmentIds: garmentIds,
       };
+      console.log('[ImageStudio] Saving outfit stack to history:', outfitStack);
+      console.log('[ImageStudio] Saving garment IDs:', garmentIds);
 
       setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
       setCurrentHistoryItemId(newHistoryItem.id);
@@ -980,11 +987,35 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     setCurrentHistoryItemId(id);
     setGenerationSettings(item.settings);
 
-    // Reset outfit stack to base model when switching versions
-    const baseLayer: OutfitLayer = { id: 'base-model', garment: null, isVisible: true };
-    setOutfitStack([baseLayer]);
+    // Restore outfit stack from garment IDs
+    console.log('[ImageStudio] Restoring history item:', id, 'outfitGarmentIds:', item.outfitGarmentIds);
+    if (item.outfitGarmentIds && item.outfitGarmentIds.length > 0) {
+      // Reconstruct outfit stack from garment IDs by finding garments in wardrobe
+      const reconstructedStack: OutfitLayer[] = [
+        { id: 'base-model', garment: null, isVisible: true },
+      ];
 
-    // In Image Studio, we don't restore the outfit stack from history to allow applying new outfits to old images
+      item.outfitGarmentIds.forEach((garmentId, index) => {
+        const garment = wardrobe.find(g => g.id === garmentId);
+        if (garment) {
+          reconstructedStack.push({
+            id: `layer-${Date.now()}-${index}`,
+            garment: garment,
+            isVisible: true,
+          });
+        } else {
+          console.warn('[ImageStudio] Garment not found in wardrobe:', garmentId);
+        }
+      });
+
+      console.log('[ImageStudio] Reconstructed outfit stack:', reconstructedStack);
+      setOutfitStack(reconstructedStack);
+    } else {
+      console.log('[ImageStudio] No outfit in history, resetting to base');
+      const baseLayer: OutfitLayer = { id: 'base-model', garment: null, isVisible: true };
+      setOutfitStack([baseLayer]);
+    }
+
     setHasPendingStackChanges(false);
   }, [generatedModelHistory, currentHistoryItem]);
 
@@ -1342,6 +1373,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         }
       }
 
+      const garmentIds = outfitStack.filter(l => l.isVisible && l.garment).map(l => l.garment!.id);
       const newHistoryItem: HistoryItem = {
         id: `hist-${Date.now()}`,
         parentId: currentHistoryItemId,
@@ -1352,6 +1384,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         isStarred: false,
         type: 'try-on-revision',
         baseModelId: selectedStylingModel!.baseModelId,
+        outfitGarmentIds: garmentIds,
       };
 
       setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
@@ -1482,6 +1515,9 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       }
 
       // Create history item
+      const garmentIds = outfitStack.filter(l => l.isVisible && l.garment).map(l => l.garment!.id);
+      console.log('[ImageStudio] Creating history item with outfit stack:', outfitStack);
+      console.log('[ImageStudio] Saving garment IDs:', garmentIds);
       const newHistoryItem: HistoryItem = {
         id: `hist-${Date.now()}`,
         parentId: currentHistoryItemId,
@@ -1492,7 +1528,9 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         isStarred: false,
         type: 'try-on-revision',
         baseModelId: selectedStylingModel!.baseModelId,
+        outfitGarmentIds: garmentIds,
       };
+      console.log('[ImageStudio] History item created:', newHistoryItem.id, 'outfitGarmentIds:', newHistoryItem.outfitGarmentIds);
 
       setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
       setCurrentHistoryItemId(newHistoryItem.id);

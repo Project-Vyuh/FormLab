@@ -600,6 +600,7 @@ export const loadHistoryItems = async (
                 name: data.name,
                 type: data.type,
                 baseModelId: data.baseModelId,
+                outfitGarmentIds: data.outfitGarmentIds, // Added for outfit persistence
             });
         });
 
@@ -985,6 +986,7 @@ export const subscribeToStylingHistory = (
                 name: data.name,
                 type: data.type,
                 baseModelId: data.baseModelId,
+                outfitGarmentIds: data.outfitGarmentIds, // Added for outfit persistence
             });
         });
 
