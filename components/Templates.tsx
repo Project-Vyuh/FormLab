@@ -250,9 +250,9 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
 
             {/* USER DEFINED Section */}
             <div className="space-y-1">
-              <button
+              <div
                 onClick={() => setIsUserDefinedExpanded(!isUserDefinedExpanded)}
-                className="w-full flex items-center justify-between text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2 hover:text-gray-400 transition-colors"
+                className="w-full flex items-center justify-between text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2 hover:text-gray-400 transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-2">
                   <span>User Defined</span>
@@ -282,7 +282,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                 ) : (
                   <ChevronDownIcon className="w-4 h-4" />
                 )}
-              </button>
+              </div>
 
               {isUserDefinedExpanded && (
                 <div className="pl-3 space-y-1">

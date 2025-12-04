@@ -12,12 +12,14 @@ interface CollectionsModalProps {
     onStartBlankCanvas: () => void;
     currentUser: User | null;
     projects: Project[];
+    currentProjectId: string | null;
+    showUserContent?: boolean;
 }
 
 type MenuSection = 'models' | 'user-content';
 type MenuItem = 'featured' | 'latest' | 'categories' | 'user-models' | 'user-wardrobe';
 
-const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, onUseTemplate, onNavigateToCollections, onStartBlankCanvas, currentUser, projects }) => {
+const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, onUseTemplate, onNavigateToCollections, onStartBlankCanvas, currentUser, projects, currentProjectId, showUserContent = true }) => {
     const [activeItem, setActiveItem] = useState<MenuItem>('featured');
     const [models, setModels] = useState<PredefinedModel[]>([]);
     const [userModels, setUserModels] = useState<Model[]>([]);
@@ -25,6 +27,12 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
     const [selectedTemplate, setSelectedTemplate] = useState<PredefinedModel | null>(null);
     const [isBlankCanvasSelected, setIsBlankCanvasSelected] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+
+    // Check if selected template is already in the current project
+    const isDuplicate = React.useMemo(() => {
+        if (!selectedTemplate || !currentProjectId) return false;
+        return userModels.some(m => m.sourceTemplateId === selectedTemplate.id && m.projectId === currentProjectId);
+    }, [selectedTemplate, userModels, currentProjectId]);
 
     useEffect(() => {
         if (isOpen) {
@@ -38,6 +46,12 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
             if (activeItem === 'featured' || activeItem === 'latest') {
                 const data = await loadPredefinedModels();
                 setModels(data);
+
+                // Also load user models to check for duplicates if we haven't already
+                if (currentUser && userModels.length === 0) {
+                    const userData = await getGlobalModels(currentUser.uid);
+                    setUserModels(userData);
+                }
             } else if (activeItem === 'user-models') {
                 if (currentUser) {
                     const data = await getGlobalModels(currentUser.uid);
@@ -62,7 +76,7 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
         if (isBlankCanvasSelected) {
             onStartBlankCanvas();
             onClose();
-        } else if (selectedTemplate) {
+        } else if (selectedTemplate && !isDuplicate) {
             onUseTemplate(selectedTemplate);
             onClose();
         }
@@ -158,7 +172,7 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                     </div>
 
                                     {/* User Content Section */}
-                                    {currentUser && (
+                                    {showUserContent && currentUser && (
                                         <div className="mb-2 mt-4">
                                             <div className="px-6 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                                 User Content
@@ -238,37 +252,56 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                                 )}
                                             </div>
 
-                                            {models.map((model) => (
-                                                <div
-                                                    key={model.id}
-                                                    onClick={() => {
-                                                        setSelectedTemplate(prev => prev?.id === model.id ? null : model);
-                                                        setIsBlankCanvasSelected(false);
-                                                    }}
-                                                    className={`group relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer border transition-all ${selectedTemplate?.id === model.id
-                                                        ? 'border-blue-500 ring-2 ring-blue-500/20'
-                                                        : 'border-white/10 hover:border-white/30'
-                                                        }`}
-                                                >
-                                                    <img
-                                                        src={model.url}
-                                                        alt={model.name}
-                                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                                    />
-                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                                                        <p className="text-xs font-medium text-white truncate">{model.name}</p>
-                                                    </div>
-                                                    {selectedTemplate?.id === model.id && (
-                                                        <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center">
-                                                            <div className="bg-blue-500 rounded-full p-1">
-                                                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                                </svg>
-                                                            </div>
+                                            {models.map((model) => {
+                                                const isDuplicate = userModels.some(m =>
+                                                    m.sourceTemplateId === model.id && m.projectId === currentProjectId
+                                                );
+
+                                                return (
+                                                    <div
+                                                        key={model.id}
+                                                        onClick={() => {
+                                                            if (!isDuplicate) {
+                                                                setSelectedTemplate(prev => prev?.id === model.id ? null : model);
+                                                                setIsBlankCanvasSelected(false);
+                                                            }
+                                                        }}
+                                                        className={`group relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer border transition-all ${isDuplicate
+                                                            ? 'border-white/5 opacity-50 grayscale cursor-not-allowed'
+                                                            : selectedTemplate?.id === model.id
+                                                                ? 'border-blue-500 ring-2 ring-blue-500/20'
+                                                                : 'border-white/10 hover:border-white/30'
+                                                            }`}
+                                                    >
+                                                        <img
+                                                            src={model.url}
+                                                            alt={model.name}
+                                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                        />
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                                                            <p className="text-xs font-medium text-white truncate">{model.name}</p>
                                                         </div>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                        {selectedTemplate?.id === model.id && (
+                                                            <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center">
+                                                                <div className="bg-blue-500 rounded-full p-1">
+                                                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {isDuplicate && (
+                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                                                <div className="bg-green-500 rounded-full p-1">
+                                                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
 
                                     ) : activeItem === 'user-models' ? (
@@ -345,11 +378,11 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                 <div className="p-4 border-t border-white/5 flex justify-end bg-white/5">
                                     <button
                                         onClick={handleUseTemplate}
-                                        disabled={!selectedTemplate && !isBlankCanvasSelected}
-                                        className="px-6 py-2.5 text-sm font-semibold text-white rounded-lg shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                                        style={{ backgroundColor: '#318CE7' }}
+                                        disabled={(!selectedTemplate && !isBlankCanvasSelected) || isDuplicate}
+                                        className={`px-6 py-2.5 text-sm font-semibold text-white rounded-lg shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none ${isDuplicate ? 'bg-gray-600' : ''}`}
+                                        style={{ backgroundColor: isDuplicate ? undefined : '#318CE7' }}
                                     >
-                                        {isBlankCanvasSelected ? 'Start from scratch' : 'Use Template'}
+                                        {isBlankCanvasSelected ? 'Start from scratch' : isDuplicate ? 'Already in Project' : 'Use Template'}
                                     </button>
                                 </div>
                             </div>

@@ -22,6 +22,7 @@ interface HeaderProps {
 
 const UserMenu: React.FC<{ user: User; onLogout: () => void; onNavigateToProjects: () => void }> = ({ user, onLogout, onNavigateToProjects }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [imageError, setImageError] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -45,8 +46,14 @@ const UserMenu: React.FC<{ user: User; onLogout: () => void; onNavigateToProject
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center gap-3 text-[13px] font-semibold text-gray-300 hover:text-white transition-colors"
             >
-                {user.photoURL ? (
-                    <img src={user.photoURL} alt="Profile" className="w-6 h-6 rounded-full object-cover" />
+                {user.photoURL && !imageError ? (
+                    <img
+                        src={user.photoURL}
+                        alt="Profile"
+                        className="w-6 h-6 rounded-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={() => setImageError(true)}
+                    />
                 ) : (
                     <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center">
                         <UserIcon className="w-3 h-3 text-gray-400" />

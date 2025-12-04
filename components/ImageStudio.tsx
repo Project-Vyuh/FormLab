@@ -313,8 +313,8 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
   // Detect outfit changes (more than just base model)
   const hasOutfitChanged = useMemo(() => {
-    return outfitStack.length > 1 || hasPendingStackChanges;
-  }, [outfitStack, hasPendingStackChanges]);
+    return hasPendingStackChanges;
+  }, [hasPendingStackChanges]);
 
   // Dynamic button label logic
   const applyButtonLabel = useMemo(() => {
@@ -1502,11 +1502,9 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       setRevisionPrompt('');
       setInitialSettings(generationSettings);
 
-      // CRITICAL: Reset the outfit stack to just the base model.
-      // The generated image now HAS the outfit baked in. The stack should reflect that we are starting fresh on this new image.
-      // This ensures the "Apply" button resets and prevents accidental double-application.
-      const baseLayer: OutfitLayer = { id: 'base-model', garment: null, isVisible: true };
-      setOutfitStack([baseLayer]);
+      // CRITICAL: Do NOT reset the outfit stack here.
+      // We want to preserve the stack so subsequent revisions know what the model is wearing.
+      // We only reset the pending flag so the "Apply" button knows the current stack is "saved" in the image.
       setHasPendingStackChanges(false);
 
       setToastMessage("Changes applied successfully!");

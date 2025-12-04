@@ -313,6 +313,7 @@ const App: React.FC = () => {
                   historyItemId: gm.historyItemId,
                   createdAt: new Date(gm.createdAt).getTime(),
                   updatedAt: new Date(gm.updatedAt).getTime(),
+                  sourceTemplateId: gm.sourceTemplateId,
                 }));
 
                 // Combine user models with pre-defined models and deduplicate
@@ -568,6 +569,7 @@ const App: React.FC = () => {
           historyItemId: gm.historyItemId,
           createdAt: new Date(gm.createdAt).getTime(),
           updatedAt: new Date(gm.updatedAt).getTime(),
+          sourceTemplateId: gm.sourceTemplateId,
         }));
 
         // Load pre-defined models
@@ -824,7 +826,7 @@ const App: React.FC = () => {
                   onProjectChange={handleProjectChange}
                   onOpenProjectModal={handleOpenProjectModal}
                   currentUser={currentUser}
-                  modelGallery={currentProjectModels}
+                  modelGallery={modelGallery}
                   onSelectModel={handleSelectModelFromGallery}
                   onModelAdded={handleModelAdded}
                   onModelUpdated={handleModelUpdated}
@@ -885,6 +887,8 @@ const App: React.FC = () => {
           onStartBlankCanvas={handleStartBlankCanvas}
           currentUser={currentUser}
           projects={projectList}
+          currentProjectId={currentProjectId}
+          showUserContent={false}
         />
 
         {/* Real-time Sync Listener (invisible component) */}

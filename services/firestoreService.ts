@@ -381,6 +381,7 @@ export interface GlobalModel {
   source: 'user-global';
   projectId?: string; // Origin project
   historyItemId?: string; // Origin history item
+  sourceTemplateId?: string; // ID of the template this model was created from
 }
 
 export interface GlobalWardrobeItem {

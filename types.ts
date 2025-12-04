@@ -15,6 +15,7 @@ export interface Model {
   historyItemId?: string; // History item ID for loading version history
   createdAt?: number; // Timestamp of creation
   updatedAt?: number; // Timestamp of last modification
+  sourceTemplateId?: string; // ID of the template this model was created from
 }
 
 export type WardrobeCategory = string;
@@ -327,6 +328,7 @@ export interface HistoryItem {
   isStarred: boolean;
   type: HistoryItemType; // Type of history item: model-generation, model-revision, try-on, try-on-revision
   baseModelId: string; // References the root base model (consistent across Create Model and Image Studio)
+  sourceTemplateId?: string; // ID of the template this history item was created from
 }
 
 export interface GarmentAnalysis {

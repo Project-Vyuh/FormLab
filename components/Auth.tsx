@@ -16,17 +16,28 @@ const Auth: React.FC = () => {
     const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
 
     return (
-        <div
-            className="w-full h-screen flex flex-col bg-[#111111] bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: "url('/assets/auth_bg_bw.png')" }}
-        >
+        <div className="w-full h-screen flex flex-col bg-[#111111] relative overflow-hidden">
+            {/* Video Background */}
+            <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="absolute top-0 left-0 w-full h-full object-cover z-0"
+            >
+                <source src="/assets/FormLab_bg.mp4" type="video/mp4" />
+            </video>
+
+            {/* Overlay for better text readability */}
+            <div className="absolute top-0 left-0 w-full h-full bg-black/20 z-[1]"></div>
+
             {/* Header */}
-            <header className="w-full bg-transparent py-6 px-8">
+            <header className="w-full bg-transparent py-6 px-8 relative z-10">
                 <h1 className="text-2xl font-bold text-white tracking-wide">FormLab</h1>
             </header>
 
             {/* Auth Container */}
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center relative z-10">
                 <div className="w-full max-w-md">
                     {/* Auth Form */}
                     <div className="w-full h-auto flex items-center justify-center p-8 bg-black/30 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl">
@@ -54,7 +65,7 @@ const Auth: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <footer className="w-full bg-black/30 backdrop-blur-xl border-t border-white/10 py-4 px-8">
+            <footer className="w-full bg-black/30 backdrop-blur-xl border-t border-white/10 py-4 px-8 relative z-10">
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 text-sm text-gray-300">
                     {/* Left side - Legal notice */}
                     <p className="text-left">

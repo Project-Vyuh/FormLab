@@ -961,12 +961,13 @@ const CreateModel: React.FC<CreateModelProps> = ({
     setIsSavingTemplate(true);
 
     try {
-      // Check if this template already exists in Firestore for this project
-      // Use template.id as the historyItemId to check
-      const templateHistoryId = template.historyItemId || template.id;
-      const existsInFirestore = await checkModelExists(currentUser.uid, currentProjectId, templateHistoryId);
+      // Check if this template already exists in the current project's gallery
+      // We check if any model has this template's ID as its sourceTemplateId
+      const alreadySaved = modelGallery.some(m =>
+        m.sourceTemplateId === template.id && m.projectId === currentProjectId
+      );
 
-      if (existsInFirestore) {
+      if (alreadySaved) {
         // Template already saved in Firestore, show accurate message
         setSelectedTemplateForPreview(null);
         setIsSavingTemplate(false);
@@ -1004,6 +1005,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
         isStarred: true, // Auto-star saved templates
         type: 'model-generation',
         baseModelId: newHistoryItemId, // Self-reference for base model
+        sourceTemplateId: template.id, // Track origin
       };
 
       // Add to history
@@ -1030,7 +1032,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
               name: `${template.name || 'Template'} - Copy`,
               thumbnail: finalImageUrl,
               projectId: currentProjectId,
-              historyItemId: newHistoryItemId
+              historyItemId: newHistoryItemId,
+              sourceTemplateId: template.id // Track origin
             });
             console.log('[CreateModel] Template model saved to Global Library with ID:', firestoreModelId);
           } catch (error) {
@@ -1047,6 +1050,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
           historyItemId: newHistoryItemId,
           createdAt: timestamp,
           updatedAt: timestamp,
+          sourceTemplateId: template.id, // Track origin
         };
         onModelAdded(newModel);
       }
@@ -1202,6 +1206,14 @@ const CreateModel: React.FC<CreateModelProps> = ({
   }, [leftPanelWidth]);
 
 
+
+  // Filter models for current project display
+  const currentProjectModels = useMemo(() => {
+    if (!currentProjectId) return modelGallery;
+    return modelGallery.filter(model =>
+      model.source === 'predefined' || model.projectId === currentProjectId
+    );
+  }, [modelGallery, currentProjectId]);
 
   const handleWheel = (e: React.WheelEvent) => {
     if (!generatedModelUrl || isMaskingMode) return;
@@ -1479,7 +1491,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
             </button>
 
             {/* Existing Models - Sorted by modification date, limited to 10 */}
-            {modelGallery
+            {currentProjectModels
               .filter(model => model.source !== 'predefined')
               .sort((a, b) => {
                 const dateA = a.updatedAt || a.createdAt || 0;
@@ -1512,7 +1524,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
           >
             All User-Created Models <ChevronRightIcon className="w-3 h-3 text-gray-500 group-hover:text-gray-300 transition-colors" />
           </button>
-          {modelGallery.length === 0 && (
+          {currentProjectModels.filter(m => m.source !== 'predefined').length === 0 && (
             <div className="text-xs text-gray-400 py-2 text-center">
               Create a model through prompt or upload photo
             </div>
@@ -1549,18 +1561,43 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 ) : (
                   <>
                     <div className="grid grid-cols-[repeat(auto-fill,72px)] gap-2">
-                      {predefinedModels.slice(0, 9).map(template => (
-                        <div key={template.id} className="relative">
+                      {predefinedModels.slice(0, 9).map(template => {
+                        // DEBUG: Log first template check
+                        if (template.id === predefinedModels[0].id) {
+                          console.log('[CreateModel] Checking duplicates for project:', currentProjectId);
+                          console.log('[CreateModel] Gallery size:', modelGallery.length);
+                          const match = modelGallery.find(m => m.sourceTemplateId === template.id && m.projectId === currentProjectId);
+                          if (match) console.log('[CreateModel] Found match:', match);
+                        }
+
+                        const isDuplicate = modelGallery.some(m =>
+                          m.sourceTemplateId === template.id && m.projectId === currentProjectId
+                        );
+
+                        return (<div key={template.id} className="relative">
                           <button
-                            onClick={() => setSelectedTemplateForPreview(template)}
-                            disabled={isGenerating}
-                            className="w-[72px] h-[72px] rounded-lg overflow-hidden border border-white/10 hover:border-blue-400/50 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 group disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() => !isDuplicate && setSelectedTemplateForPreview(template)}
+                            disabled={isGenerating || isDuplicate}
+                            className={`w-[72px] h-[72px] rounded-lg overflow-hidden border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 group disabled:cursor-not-allowed ${isDuplicate
+                              ? 'border-white/5 opacity-50 grayscale'
+                              : 'border-white/10 hover:border-blue-400/50'
+                              }`}
                             aria-label={`Preview template: ${template.name || template.id}`}
                           >
                             <img src={template.thumbnail || template.url} alt={template.name || 'Template'} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                            {isDuplicate && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                <div className="bg-green-500 rounded-full p-1">
+                                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                              </div>
+                            )}
                           </button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <button
                       onClick={onOpenCollectionsModal}
