@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Placeholder garment extraction service
-// TODO: Implement actual Gemini API integration for garment extraction
+import { GoogleGenAI, GenerateContentResponse, Modality, Type } from "@google/genai";
+
+const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 export interface GarmentExtractionResult {
     extractedImageUrl: string;
@@ -14,51 +15,146 @@ export interface GarmentExtractionResult {
 }
 
 /**
- * Detect if the image contains a model wearing garments
- * TODO: Implement actual detection using Gemini API
+ * Convert File to base64 data URL
  */
-export async function detectModelInImage(imageFile: File): Promise<boolean> {
-    // Placeholder implementation
-    // In production, this would use Gemini API to analyze the image
-    console.log('[detectModelInImage] Analyzing image:', imageFile.name);
-    return true; // Assume all images have models for now
+async function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }
 
 /**
- * Extract garment from image using Gemini 2.0 Flash
- * This function removes the model and background, isolating the garment on a white background
- * 
- * TODO: Implement actual extraction using Gemini API with image editing capabilities
+ * Convert File to Part object for Gemini API
+ */
+async function fileToPart(file: File) {
+    const dataUrl = await fileToDataUrl(file);
+    const arr = dataUrl.split(',');
+    if (arr.length < 2) throw new Error("Invalid data URL");
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    if (!mimeMatch || !mimeMatch[1]) throw new Error("Could not parse MIME type from data URL");
+
+    return {
+        inlineData: {
+            mimeType: mimeMatch[1],
+            data: arr[1]
+        }
+    };
+}
+
+import { removeBackground } from "@imgly/background-removal";
+
+/**
+ * Detect if the image contains a model wearing garments
+ */
+export async function detectModelInImage(imageFile: File): Promise<boolean> {
+    try {
+        const imagePart = await fileToPart(imageFile);
+
+        const prompt = `Analyze this image and determine if it contains a person/model wearing clothing.
+
+Respond with ONLY "YES" or "NO".
+
+YES: If the image shows a person/model wearing garments
+NO: If the image shows only garments/clothing without a person (flat lay, hanger, mannequin, etc.)`;
+
+        const result = await genAI.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: [{
+                role: 'user',
+                parts: [
+                    { text: prompt },
+                    imagePart
+                ]
+            }]
+        });
+
+        const text = result.text.trim().toUpperCase();
+        console.log('[detectModelInImage] Detection result:', text);
+
+        return text === 'YES';
+    } catch (error) {
+        console.error('[detectModelInImage] Error:', error);
+        return false; // Default to no model if detection fails
+    }
+}
+
+/**
+ * Extract garment from image using @imgly/background-removal for segmentation
+ * and Gemini 2.5 Flash Image for metadata analysis.
  */
 export async function extractGarmentFromImage(imageFile: File): Promise<GarmentExtractionResult> {
     try {
-        console.log('[extractGarmentFromImage] Starting extraction for:', fileFile.name);
+        console.log('[extractGarmentFromImage] Starting extraction for:', imageFile.name);
 
-        // Detect if image contains a model
-        const hasModel = await detectModelInImage(imageFile);
+        const imagePart = await fileToPart(imageFile);
 
-        // Simulate processing time
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Run detection, analysis, and background removal in parallel
+        const detectionPromise = detectModelInImage(imageFile);
 
-        // Convert file to data URL for preview
-        const imageDataUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(imageFile);
+        // Analyze the garment to determine type and confidence
+        const analysisPrompt = `Analyze this garment image and provide:
+1. Garment type (e.g., "Dress", "T-Shirt", "Jeans", "Jacket", "Blouse", "Skirt")
+2. Confidence score (0-100) for extraction quality
+
+Respond in JSON format:
+{
+  "garmentType": "type here",
+  "confidence": 95
+}`;
+
+        const analysisPromise = genAI.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: [{
+                role: 'user',
+                parts: [
+                    { text: analysisPrompt },
+                    imagePart
+                ]
+            }]
         });
 
-        // Placeholder: Return original image
-        // TODO: Replace with actual extracted garment image from Gemini API
-        const extractedImageUrl = imageDataUrl;
+        // Background removal
+        console.log('[extractGarmentFromImage] Removing background...');
+        const removalPromise = removeBackground(imageFile, {
+            progress: (key, current, total) => {
+                console.log(`[Background Removal] ${key}: ${current}/${total}`);
+            }
+        });
 
-        // Placeholder analysis
-        const confidence = 92;
-        const garmentType = 'Garment'; // TODO: Detect actual garment type
+        // Wait for all promises
+        const [hasModel, analysisResult, blob] = await Promise.all([
+            detectionPromise,
+            analysisPromise,
+            removalPromise
+        ]);
 
-        console.log('[extractGarmentFromImage] Extraction complete:', {
-            confidence,
+        console.log('[extractGarmentFromImage] Has model:', hasModel);
+
+        // Process analysis result
+        const analysisText = analysisResult.text;
+        let garmentType = 'Garment';
+        let confidence = 90;
+
+        try {
+            const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                garmentType = parsed.garmentType || garmentType;
+                confidence = parsed.confidence || confidence;
+            }
+        } catch (e) {
+            console.warn('[extractGarmentFromImage] Failed to parse garment analysis:', e);
+        }
+
+        // Create URL for extracted image
+        const extractedImageUrl = URL.createObjectURL(blob);
+
+        console.log('[extractGarmentFromImage] Complete:', {
             garmentType,
+            confidence,
             hasModel
         });
 
@@ -71,35 +167,23 @@ export async function extractGarmentFromImage(imageFile: File): Promise<GarmentE
 
     } catch (error) {
         console.error('[extractGarmentFromImage] Error:', error);
-        throw new Error('Failed to extract garment from image');
+        throw new Error('Failed to extract garment from image. Please try again.');
     }
 }
 
 /**
  * Generate clean garment image on white background
  * This is a helper function that can be used independently
- * 
- * TODO: Implement using Gemini API
  */
 export async function generateCleanGarmentImage(
     imageFile: File,
     garmentDescription?: string
 ): Promise<string> {
     try {
-        console.log('[generateCleanGarmentImage] Generating clean image');
-
-        // Placeholder implementation
-        const imageDataUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(imageFile);
-        });
-
-        return imageDataUrl;
-
+        const blob = await removeBackground(imageFile);
+        return URL.createObjectURL(blob);
     } catch (error) {
         console.error('[generateCleanGarmentImage] Error:', error);
-        throw new Error('Failed to generate clean garment image');
+        throw new Error('Failed to generate clean garment image.');
     }
 }

@@ -64,7 +64,7 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
           setIsApiKeySelected(false);
         }
       } else {
-        console.warn('[VideoCreator] AI Studio bridge not available');
+        // AI Studio bridge not available - this is normal for standard web usage
         setIsApiKeySelected(false);
       }
     };

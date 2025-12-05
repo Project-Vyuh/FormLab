@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.10.0",
+    "@imgly/background-removal": "^1.7.0",
     "@tsparticles/engine": "^3.5.0",
     "@tsparticles/react": "^3.0.0",
     "@tsparticles/slim": "^3.5.0",

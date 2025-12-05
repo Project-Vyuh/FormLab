@@ -132,17 +132,25 @@ const GarmentExtractorModal: React.FC<GarmentExtractorModalProps> = ({ isOpen, o
         }
     };
 
-    const handleAddToWardrobe = () => {
+    const handleAddToWardrobe = async () => {
         if (!name.trim() || !extractedImageUrl) {
             setError('Please provide a product name and extract the garment first.');
             return;
         }
 
-        // Create a File object from the extracted image URL
-        // For now, use the uploaded file - will be replaced with extracted image file
-        if (uploadedFile) {
-            onAdd({ name, sku: sku.trim(), category, file: uploadedFile });
+        try {
+            // Convert extracted image data URL to File object
+            const response = await fetch(extractedImageUrl);
+            const blob = await response.blob();
+            const extractedFile = new File([blob], `extracted_${uploadedFile?.name || 'garment.png'}`, {
+                type: blob.type || 'image/png'
+            });
+
+            onAdd({ name, sku: sku.trim(), category, file: extractedFile });
             onClose();
+        } catch (err) {
+            console.error('Failed to convert extracted image:', err);
+            setError('Failed to save extracted garment. Please try again.');
         }
     };
 
@@ -164,184 +172,228 @@ const GarmentExtractorModal: React.FC<GarmentExtractorModalProps> = ({ isOpen, o
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.95, opacity: 0, y: 20 }}
                         onClick={(e) => e.stopPropagation()}
-                        className="relative w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-xl"
+                        className="relative w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a] shadow-2xl flex flex-col"
                         style={{
                             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
                         }}
                     >
                         {/* Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-                            <h2 className="text-lg font-semibold text-white tracking-tight">Extract Garment</h2>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5">
+                            <div>
+                                <h2 className="text-lg font-semibold text-white tracking-tight">Extract Garment</h2>
+                                <p className="text-xs text-gray-400 mt-0.5">Upload a product image to automatically extract the garment</p>
+                            </div>
                             <button
                                 onClick={onClose}
-                                className="rounded-full p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                                className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
                             >
                                 <XIcon className="h-5 w-5" />
                             </button>
                         </div>
 
                         {/* Two-Panel Layout */}
-                        <div className="grid grid-cols-2 gap-6 p-6">
+                        <div className="grid grid-cols-2 gap-0 border-b border-white/5">
                             {/* Left Panel: Upload & Configure */}
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Upload</h3>
+                            <div className="p-6 border-r border-white/5 bg-[#1a1a1a]">
+                                <div className="space-y-6">
+                                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Configuration</h3>
 
-                                {/* Image Upload */}
-                                <div>
-                                    <label className="text-sm font-medium text-gray-300 mb-2 block">Product Image</label>
-                                    <label
-                                        htmlFor="garment-image-upload"
-                                        className="relative w-full aspect-square border-2 border-dashed border-white/20 rounded-xl flex flex-col items-center justify-center text-gray-400 transition-all hover:border-white/30 hover:bg-white/5 cursor-pointer group"
-                                        onDrop={onDrop}
-                                        onDragOver={onDragOver}
-                                    >
-                                        {uploadedImageUrl ? (
-                                            <img src={uploadedImageUrl} alt="Uploaded garment" className="w-full h-full object-cover rounded-lg" />
-                                        ) : (
-                                            <>
-                                                <UploadCloudIcon className="w-10 h-10 mb-2 group-hover:scale-110 transition-transform" />
-                                                <span className="text-xs text-center font-medium px-2">Drag & drop or click to upload</span>
-                                            </>
-                                        )}
-                                    </label>
-                                    <input
-                                        id="garment-image-upload"
-                                        type="file"
-                                        className="hidden"
-                                        accept="image/png, image/jpeg, image/webp"
-                                        onChange={(e) => handleFileChange(e.target.files)}
-                                    />
-                                </div>
+                                    {/* Upload Area */}
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-300 mb-2 block">Product Image</label>
+                                        <label
+                                            htmlFor="garment-image-upload"
+                                            className={`relative w-full aspect-square border-2 border-dashed rounded-xl flex flex-col items-center justify-center text-gray-400 transition-all cursor-pointer group ${uploadedImageUrl ? 'border-white/20 bg-black/40' : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-black/30'}`}
+                                            onDrop={onDrop}
+                                            onDragOver={onDragOver}
+                                        >
+                                            {uploadedImageUrl ? (
+                                                <img src={uploadedImageUrl} alt="Uploaded garment" className="w-full h-full object-contain p-2" />
+                                            ) : (
+                                                <>
+                                                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                                        <UploadCloudIcon className="w-6 h-6 text-gray-400" />
+                                                    </div>
+                                                    <span className="text-sm font-medium text-gray-300">Click to upload</span>
+                                                    <span className="text-xs text-gray-500 mt-1">or drag and drop</span>
+                                                </>
+                                            )}
+                                            {/* Hover overlay for replacing image */}
+                                            {uploadedImageUrl && (
+                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                                                    <span className="text-sm font-medium text-white flex items-center gap-2">
+                                                        <UploadCloudIcon className="w-4 h-4" />
+                                                        Replace Image
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </label>
+                                        <input
+                                            id="garment-image-upload"
+                                            type="file"
+                                            className="hidden"
+                                            accept="image/png, image/jpeg, image/webp"
+                                            onChange={(e) => handleFileChange(e.target.files)}
+                                        />
+                                    </div>
 
-                                {/* Product Name */}
-                                <div className="space-y-2">
-                                    <label htmlFor="product-name" className="text-sm font-medium text-gray-300">
-                                        Product Name <span className="text-red-400">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        id="product-name"
-                                        value={name}
-                                        onChange={(e) => setName(e.target.value)}
-                                        className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-                                        placeholder="Enter product name"
-                                    />
-                                </div>
+                                    {/* Form Fields */}
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <label htmlFor="product-name" className="text-sm font-medium text-gray-300">
+                                                Product Name <span className="text-red-400">*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="product-name"
+                                                value={name}
+                                                onChange={(e) => setName(e.target.value)}
+                                                className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
+                                                placeholder="e.g. Summer Floral Dress"
+                                            />
+                                        </div>
 
-                                {/* SKU */}
-                                <div className="space-y-2">
-                                    <label htmlFor="product-sku" className="text-sm font-medium text-gray-300">
-                                        SKU <span className="text-gray-500 text-xs">(Optional)</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        id="product-sku"
-                                        value={sku}
-                                        onChange={(e) => setSku(e.target.value)}
-                                        className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-                                        placeholder="Enter SKU"
-                                    />
-                                </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label htmlFor="product-sku" className="text-sm font-medium text-gray-300">
+                                                    SKU <span className="text-gray-600 text-xs">(Optional)</span>
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    id="product-sku"
+                                                    value={sku}
+                                                    onChange={(e) => setSku(e.target.value)}
+                                                    className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
+                                                    placeholder="SKU-123"
+                                                />
+                                            </div>
 
-                                {/* Category */}
-                                <div className="space-y-2">
-                                    <label htmlFor="product-category" className="text-sm font-medium text-gray-300">
-                                        Category
-                                    </label>
-                                    <select
-                                        id="product-category"
-                                        value={category}
-                                        onChange={(e) => setCategory(e.target.value as WardrobeCategory)}
-                                        className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
-                                    >
-                                        {categories.map(cat => <option key={cat} value={cat} className="bg-gray-900">{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>)}
-                                    </select>
+                                            <div className="space-y-2">
+                                                <label htmlFor="product-category" className="text-sm font-medium text-gray-300">
+                                                    Category
+                                                </label>
+                                                <div className="relative">
+                                                    <select
+                                                        id="product-category"
+                                                        value={category}
+                                                        onChange={(e) => setCategory(e.target.value as WardrobeCategory)}
+                                                        className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all appearance-none cursor-pointer"
+                                                    >
+                                                        {categories.map(cat => <option key={cat} value={cat} className="bg-gray-900">{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>)}
+                                                    </select>
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Right Panel: Extraction Preview */}
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Preview</h3>
+                            <div className="p-6 bg-[#151515] flex flex-col">
+                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-6">Extraction Preview</h3>
 
-                                <div className="relative w-full aspect-square border border-white/10 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden">
-                                    {extractionStatus === 'idle' && (
-                                        <div className="text-center p-6">
-                                            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
-                                                <UploadCloudIcon className="w-8 h-8 text-gray-500" />
+                                <div className="flex-1 flex flex-col h-full">
+                                    <div className="relative flex-1 w-full border border-white/10 rounded-xl bg-[#151515] flex items-center justify-center overflow-hidden">
+                                        {/* Checkerboard background overlay */}
+                                        <div className="absolute inset-0 opacity-20 bg-[linear-gradient(45deg,#222_25%,transparent_25%,transparent_75%,#222_75%,#222),linear-gradient(45deg,#222_25%,transparent_25%,transparent_75%,#222_75%,#222)] bg-[length:20px_20px] bg-[position:0_0,10px_10px]"></div>
+
+                                        {extractionStatus === 'idle' && (
+                                            <div className="relative z-10 text-center p-6 max-w-sm">
+                                                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+                                                    <UploadCloudIcon className="w-8 h-8 text-gray-600" />
+                                                </div>
+                                                <p className="text-sm text-gray-400">Your extracted garment will appear here.</p>
+                                                <p className="text-xs text-gray-500 mt-1">Upload an image and click "Extract Garment" to begin.</p>
                                             </div>
-                                            <p className="text-sm text-gray-400">Upload an image and click "Extract Garment"</p>
-                                        </div>
-                                    )}
+                                        )}
 
-                                    {extractionStatus === 'extracting' && (
-                                        <div className="text-center p-6">
-                                            <div className="w-16 h-16 mx-auto mb-4">
-                                                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500"></div>
+                                        {extractionStatus === 'extracting' && (
+                                            <div className="relative z-10 text-center p-6">
+                                                <div className="w-16 h-16 mx-auto mb-4">
+                                                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500"></div>
+                                                </div>
+                                                <p className="text-sm text-gray-300 font-medium">Analyzing & Extracting...</p>
+                                                <p className="text-xs text-gray-500 mt-2">AI is processing your image. First run may take longer.</p>
                                             </div>
-                                            <p className="text-sm text-gray-300 font-medium">Extracting garment...</p>
-                                            <p className="text-xs text-gray-500 mt-2">This may take a few moments</p>
-                                        </div>
-                                    )}
+                                        )}
 
-                                    {extractionStatus === 'success' && extractedImageUrl && (
-                                        <img src={extractedImageUrl} alt="Extracted garment" className="w-full h-full object-contain bg-white" />
-                                    )}
+                                        {extractionStatus === 'success' && extractedImageUrl && (
+                                            <img src={extractedImageUrl} alt="Extracted garment" className="relative z-10 max-h-full max-w-full object-contain p-4" />
+                                        )}
 
-                                    {extractionStatus === 'error' && (
-                                        <div className="text-center p-6">
-                                            <AlertCircleIcon className="w-16 h-16 mx-auto mb-4 text-red-400" />
-                                            <p className="text-sm text-red-400 font-medium">Extraction failed</p>
-                                            <p className="text-xs text-gray-500 mt-2">Please try again</p>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Extraction Metrics */}
-                                {extractionStatus === 'success' && extractionData && (
-                                    <div className="space-y-2 p-4 rounded-lg bg-white/5 border border-white/10">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-sm text-gray-400">Confidence</span>
-                                            <div className="flex items-center gap-2">
-                                                <CheckCircleIcon className="w-4 h-4 text-green-400" />
-                                                <span className="text-sm font-semibold text-white">{extractionData.confidence}%</span>
+                                        {extractionStatus === 'error' && (
+                                            <div className="relative z-10 text-center p-6">
+                                                <AlertCircleIcon className="w-16 h-16 mx-auto mb-4 text-red-400" />
+                                                <p className="text-sm text-red-400 font-medium">Extraction failed</p>
+                                                <p className="text-xs text-gray-500 mt-2">Please try again</p>
                                             </div>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-sm text-gray-400">Type</span>
-                                            <span className="text-sm font-medium text-white">{extractionData.garmentType}</span>
-                                        </div>
+                                        )}
                                     </div>
-                                )}
+
+                                    {/* Extraction Metrics */}
+                                    <div className="mt-4 h-[72px]">
+                                        {extractionStatus === 'success' && extractionData ? (
+                                            <div className="grid grid-cols-2 gap-4 h-full">
+                                                <div className="p-3 rounded-lg bg-black/20 border border-white/5 flex flex-col justify-center">
+                                                    <span className="text-xs text-gray-500 mb-1">Confidence</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <CheckCircleIcon className="w-4 h-4 text-green-500" />
+                                                        <span className="text-lg font-semibold text-white tracking-tight">{extractionData.confidence}%</span>
+                                                    </div>
+                                                </div>
+                                                <div className="p-3 rounded-lg bg-black/20 border border-white/5 flex flex-col justify-center">
+                                                    <span className="text-xs text-gray-500 mb-1">Detected Type</span>
+                                                    <span className="text-lg font-semibold text-white tracking-tight">{extractionData.garmentType}</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="h-full border border-dashed border-white/5 rounded-lg bg-black/10 flex items-center justify-center text-xs text-gray-600">
+                                                metrics will appear here
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         {/* Error Message */}
-                        {error && <p className="text-red-400 text-sm px-6 pb-4">{error}</p>}
+                        {error && (
+                            <div className="px-6 py-3 bg-red-500/10 border-t border-red-500/20">
+                                <p className="text-red-400 text-sm flex items-center gap-2">
+                                    <AlertCircleIcon className="w-4 h-4" />
+                                    {error}
+                                </p>
+                            </div>
+                        )}
 
                         {/* Actions */}
-                        <div className="px-6 py-4 border-t border-white/10 flex gap-3">
+                        <div className="px-6 py-4 bg-white/5 border-t border-white/5 flex gap-3 justify-end items-center">
                             <button
                                 onClick={onClose}
-                                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-gray-300 transition-all hover:bg-white/10 hover:text-white"
+                                className="px-6 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
                             >
                                 Cancel
                             </button>
-                            <button
-                                onClick={handleExtractGarment}
-                                disabled={!canExtract}
-                                className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{ backgroundColor: canExtract ? '#9333EA' : '#4B5563' }}
-                            >
-                                {extractionStatus === 'extracting' ? 'Extracting...' : 'Extract Garment'}
-                            </button>
-                            <button
-                                onClick={handleAddToWardrobe}
-                                disabled={!canAddToWardrobe}
-                                className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{ backgroundColor: canAddToWardrobe ? '#318CE7' : '#4B5563' }}
-                            >
-                                Add to Wardrobe
-                            </button>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handleExtractGarment}
+                                    disabled={!canExtract}
+                                    className={`px-6 py-2.5 text-sm font-semibold text-white rounded-lg shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none ${canExtract ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20' : 'bg-gray-700'}`}
+                                >
+                                    {extractionStatus === 'extracting' ? 'Extracting...' : 'Extract Garment'}
+                                </button>
+                                <button
+                                    onClick={handleAddToWardrobe}
+                                    disabled={!canAddToWardrobe}
+                                    className={`px-6 py-2.5 text-sm font-semibold text-white rounded-lg shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2 ${canAddToWardrobe ? 'bg-green-600 hover:bg-green-500 shadow-green-500/20' : 'bg-gray-700'}`}
+                                >
+                                    <CheckCircleIcon className="w-4 h-4" />
+                                    Add to Wardrobe
+                                </button>
+                            </div>
                         </div>
                     </motion.div>
                 </motion.div>
