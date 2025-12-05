@@ -19,6 +19,7 @@ import {
     CheckCircleIcon
 } from './icons';
 import type { WardrobeItem } from '../types';
+import GarmentExtractorModal from './GarmentExtractorModal';
 
 interface WardrobeLibraryProps {
     wardrobe: WardrobeItem[];
@@ -295,113 +296,30 @@ const WardrobeLibrary: React.FC<WardrobeLibraryProps> = (props) => {
                 ))}
             </div>
 
-            {/* Add Product Modal */}
-            {isAddProductOpen && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="w-full max-w-md bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                        {/* Header */}
-                        <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
-                            <h3 className="text-sm font-semibold text-white">Add New Product</h3>
-                            <button
-                                onClick={() => setIsAddProductOpen(false)}
-                                className="text-gray-500 hover:text-white transition-colors"
-                            >
-                                <XIcon className="w-4 h-4" />
-                            </button>
-                        </div>
 
-                        {/* Body */}
-                        <form onSubmit={handleAddProductSubmit} className="p-5 space-y-5">
-                            {/* Image Upload */}
-                            <div className="flex justify-center">
-                                <div
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className={`relative w-32 h-40 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden ${addProductForm.previewUrl
-                                        ? 'border-white/20 bg-black/40'
-                                        : 'border-white/10 hover:border-white/30 hover:bg-white/5'
-                                        }`}
-                                >
-                                    {addProductForm.previewUrl ? (
-                                        <img
-                                            src={addProductForm.previewUrl}
-                                            alt="Preview"
-                                            className="w-full h-full object-cover"
-                                        />
-                                    ) : (
-                                        <>
-                                            <UploadCloudIcon className="w-6 h-6 text-gray-500 mb-2" />
-                                            <span className="text-[10px] text-gray-500 font-medium">Upload Image</span>
-                                        </>
-                                    )}
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={handleFileSelect}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Fields */}
-                            <div className="space-y-3">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Product Name</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={addProductForm.name}
-                                        onChange={(e) => setAddProductForm(prev => ({ ...prev, name: e.target.value }))}
-                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-500 focus:bg-white/10 transition-all"
-                                        placeholder="e.g. Silk Blouse"
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Category</label>
-                                        <div className="relative">
-                                            <select
-                                                value={addProductForm.category}
-                                                onChange={(e) => setAddProductForm(prev => ({ ...prev, category: e.target.value }))}
-                                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-500 focus:bg-white/10 transition-all appearance-none"
-                                            >
-                                                {categories.map(cat => (
-                                                    <option key={cat} value={cat} className="bg-[#1a1a1a] text-white">{cat}</option>
-                                                ))}
-                                            </select>
-                                            <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">SKU <span className="text-gray-600 normal-case tracking-normal">(Optional)</span></label>
-                                        <input
-                                            type="text"
-                                            value={addProductForm.sku}
-                                            onChange={(e) => setAddProductForm(prev => ({ ...prev, sku: e.target.value }))}
-                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-500 focus:bg-white/10 transition-all"
-                                            placeholder="e.g. SKU-123"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="pt-2">
-                                <button
-                                    type="submit"
-                                    disabled={!addProductForm.file || !addProductForm.name}
-                                    className="w-full py-2.5 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_15px_rgba(255,255,255,0.1)]"
-                                >
-                                    Add to Wardrobe
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>,
-                document.body
-            )}
+            {/* Garment Extractor Modal */}
+            <GarmentExtractorModal
+                isOpen={isAddProductOpen}
+                onClose={() => setIsAddProductOpen(false)}
+                onAdd={(productData) => {
+                    onAddProduct({
+                        name: productData.name,
+                        category: productData.category,
+                        sku: productData.sku,
+                        subcategory: 'Custom',
+                        color: 'N/A',
+                        fabric: 'N/A',
+                        print: 'N/A',
+                        fit: 'relaxed',
+                        season: 'N/A',
+                        gender: 'unisex',
+                        priceTier: 'basic',
+                        tags: { styling: [], campaign: [] },
+                        file: productData.file
+                    });
+                }}
+                categories={categories}
+            />
         </div>
     );
 };
