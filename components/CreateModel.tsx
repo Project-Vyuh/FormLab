@@ -1033,7 +1033,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
               thumbnail: finalImageUrl,
               projectId: currentProjectId,
               historyItemId: newHistoryItemId,
-              sourceTemplateId: template.id // Track origin
+              sourceTemplateId: template.id || null // Ensure it's not undefined
             });
             console.log('[CreateModel] Template model saved to Global Library with ID:', firestoreModelId);
           } catch (error) {
