@@ -206,6 +206,13 @@ You are a world-class professional fashion photographer and digital artist using
 [TASK]
 Generate a RAW, Hyper-Realistic Photo of a model based on the reference image.
 
+[SUBJECT SPECIFICATIONS - HIGHEST PRIORITY]
+- Identity: Match the face, hair, and ethnicity of the reference photo.
+- Body Type: ${bodyTypePrompt} (Adapt to match reference image if different)
+- Skin Details: ${REALISM_TOKENS}
+- Anatomy: ${ANATOMY_TOKENS}
+CRITICAL: The Subject Specifications take precedence over any default outfit or style rules if they conflict on body type or gender.
+
 [STRICT OUTFIT RULE]
 ${outfitRule}
 CRITICAL: The outfit MUST be the minimal base layer described above (Heather Grey). DO NOT generate fashion clothes unless EXPLICITLY requested.
@@ -230,23 +237,28 @@ ${finalPromptSuffix}
 - Aspect Ratio: ${settings.aspectRatio}
 - Constraint: Ensure the subject fits completely within the ${settings.aspectRatio} frame.
 
-[SUBJECT SPECIFICATIONS]
-- Identity: Match the face, hair, and ethnicity of the reference photo.
-- Body Type: ${bodyTypePrompt} (Adapt to match reference image if different)
-- Skin Details: ${REALISM_TOKENS}
-- Anatomy: ${ANATOMY_TOKENS}
-
 [NEGATIVE CONSTRAINTS]
 ${QA_NEGATIVE_PROMPT}
 Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distorted face, bad hands, bad feet, cartoonish style, illustration style, low resolution, blurry, artifacts, watermark, text, signature, shoes (unless specified), socks (unless specified).`;
 
+    // Construct generation config
+    const generationConfig: any = {
+        responseModalities: [Modality.IMAGE],
+        safetySettings: SAFETY_SETTINGS,
+    };
+
+    // Add image size if specified (Nano Banana Pro specific)
+    if (settings.imageSize) {
+        generationConfig.imageConfig = {
+            ...(generationConfig.imageConfig || {}),
+            imageSize: settings.imageSize
+        };
+    }
+
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: { parts: [userImagePart, { text: prompt }] },
-        config: {
-            responseModalities: [Modality.IMAGE],
-            safetySettings: SAFETY_SETTINGS,
-        },
+        config: generationConfig,
     });
     return handleApiResponse(response);
 };
@@ -270,6 +282,14 @@ You are a world-class professional fashion photographer and digital artist using
 [TASK]
 Generate a RAW, Hyper-Realistic Photo of a model based on the description.
 
+[SUBJECT SPECIFICATIONS - HIGHEST PRIORITY]
+- Appearance Description: ${description}
+- Aesthetic Instruction: Pay strict attention to all adjectives in the description (e.g., beautiful, gorgeous, fierce, elegant). Translate these qualities into the model's features, symmetry, and presence.
+- Body Type Hint: ${bodyTypePrompt}
+- Skin Details: ${REALISM_TOKENS}
+- Anatomy: ${ANATOMY_TOKENS}
+CRITICAL: The Subject Specifications take precedence over any default outfit or style rules if they conflict on body type or gender.
+
 [STRICT OUTFIT RULE]
 ${outfitRule}
 CRITICAL: The outfit MUST be the minimal base layer described above (Heather Grey). DO NOT generate fashion clothes (dresses, suits, coats) unless EXPLICITLY requested in the "Appearance" description below. If the description is just about the person (e.g. "blonde woman"), use the base outfit.
@@ -287,24 +307,28 @@ ${finalPromptSuffix}
 - Aspect Ratio: ${settings.aspectRatio}
 - Constraint: Ensure the subject fits completely within the ${settings.aspectRatio} frame.
 
-[SUBJECT SPECIFICATIONS - HIGHEST PRIORITY]
-- Appearance Description: ${description}
-- Aesthetic Instruction: Pay strict attention to all adjectives in the description (e.g., beautiful, gorgeous, fierce, elegant). Translate these qualities into the model's features, symmetry, and presence.
-- Body Type Hint: ${bodyTypePrompt}
-- Skin Details: ${REALISM_TOKENS}
-- Anatomy: ${ANATOMY_TOKENS}
-
 [NEGATIVE CONSTRAINTS]
 ${QA_NEGATIVE_PROMPT}
 Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distorted face, bad hands, bad feet, cartoonish style, illustration style, low resolution, blurry, artifacts, watermark, text, signature, shoes (unless specified), socks (unless specified).`;
 
+    // Construct generation config
+    const generationConfig: any = {
+        responseModalities: [Modality.IMAGE],
+        safetySettings: SAFETY_SETTINGS,
+    };
+
+    // Add image size if specified (Nano Banana Pro specific)
+    if (settings.imageSize) {
+        generationConfig.imageConfig = {
+            ...(generationConfig.imageConfig || {}),
+            imageSize: settings.imageSize
+        };
+    }
+
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: { parts: [{ text: structuredPrompt }] },
-        config: {
-            responseModalities: [Modality.IMAGE],
-            safetySettings: SAFETY_SETTINGS,
-        },
+        config: generationConfig,
     });
 
     return handleApiResponse(response);
@@ -339,13 +363,24 @@ ${promptSuffix}
 [NEGATIVE CONSTRAINTS]
 ${QA_NEGATIVE_PROMPT}`;
 
+    // Construct generation config
+    const generationConfig: any = {
+        responseModalities: [Modality.IMAGE],
+        safetySettings: SAFETY_SETTINGS,
+    };
+
+    // Add image size if specified (Nano Banana Pro specific)
+    if (settings.imageSize) {
+        generationConfig.imageConfig = {
+            ...(generationConfig.imageConfig || {}),
+            imageSize: settings.imageSize
+        };
+    }
+
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: { parts: [baseImagePart, { text: prompt }] },
-        config: {
-            responseModalities: [Modality.IMAGE],
-            safetySettings: SAFETY_SETTINGS,
-        },
+        config: generationConfig,
     });
     return handleApiResponse(response);
 };

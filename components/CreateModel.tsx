@@ -181,6 +181,7 @@ export const initialGenerationSettings: GenerationSettings = {
     dynamicRangeTuning: true,
   },
   panelToggles: initialPanelToggles,
+  imageSize: '1K',
 };
 
 const STYLE_PRESETS: { label: string, settings: Partial<GenerationSettings> }[] = [
@@ -1837,21 +1838,55 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 </div>
               )}
               <div ref={upscaleMenuRef} className="relative">
-                <button onClick={() => setIsUpscaleMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-sm text-gray-400 hover:text-white disabled:opacity-30 transition-colors focus:outline-none" title="Enhance & Upscale"><ZapIcon className="w-4 h-4 text-[#318CE7] group-hover:text-[#318CE7]/80 transition-colors" /></button>
-                {isUpscaleMenuOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden py-1" style={{ cursor: 'default' }} onMouseMove={(e) => e.stopPropagation()} onMouseEnter={(e) => e.stopPropagation()}>
-                    <button onClick={() => handleUpscale('2k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span> Upscale to 2K
+                {selectedModelName === 'Nano Banana Pro' ? (
+                  <>
+                    <button
+                      onClick={() => setIsUpscaleMenuOpen(p => !p)}
+                      disabled={isGenerating}
+                      className="h-8 px-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-[10px] font-medium text-gray-400 hover:text-white disabled:opacity-30 transition-colors focus:outline-none border border-transparent hover:border-white/10"
+                      title="Output Resolution"
+                    >
+                      <span className={generationSettings.imageSize ? "text-[#318CE7]" : ""}>{generationSettings.imageSize || '1K'}</span>
+                      <ChevronDownIcon className="w-3 h-3 opacity-50" />
                     </button>
-                    <button onClick={() => handleUpscale('4k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500/50"></span> Upscale to 4K
-                    </button>
-                    <div className="h-px bg-white/5 my-1 mx-2"></div>
-                    <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Enhance Details</div>
-                    <button onClick={() => handleSelectiveEnhance('face')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Face & Skin</button>
-                    <button onClick={() => handleSelectiveEnhance('fabric')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Fabric & Texture</button>
-                    <button onClick={() => handleSelectiveEnhance('accessories')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Accessories</button>
-                  </div>
+                    {isUpscaleMenuOpen && (
+                      <div className="absolute top-full left-0 mt-2 w-24 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden py-1" style={{ cursor: 'default' }} onMouseMove={(e) => e.stopPropagation()} onMouseEnter={(e) => e.stopPropagation()}>
+                        <div className="px-3 py-1.5 text-[9px] uppercase tracking-wider text-gray-500 font-semibold border-b border-white/5 mb-1">Resolution</div>
+                        {(['1K', '2K', '4K'] as const).map((size) => (
+                          <button
+                            key={size}
+                            onClick={() => {
+                              setGenerationSettings(prev => ({ ...prev, imageSize: size }));
+                              setIsUpscaleMenuOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-[10px] font-medium hover:bg-white/5 transition-colors flex items-center gap-2 ${generationSettings.imageSize === size ? 'text-white bg-white/5' : 'text-gray-400'}`}
+                          >
+                            {size}
+                            {generationSettings.imageSize === size && <span className="w-1 h-1 rounded-full bg-[#318CE7] ml-auto"></span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => setIsUpscaleMenuOpen(p => !p)} disabled={!isResultView} className="p-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-sm text-gray-400 hover:text-white disabled:opacity-30 transition-colors focus:outline-none" title="Enhance & Upscale"><ZapIcon className="w-4 h-4 text-[#318CE7] group-hover:text-[#318CE7]/80 transition-colors" /></button>
+                    {isUpscaleMenuOpen && (
+                      <div className="absolute top-full left-0 mt-2 w-48 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden py-1" style={{ cursor: 'default' }} onMouseMove={(e) => e.stopPropagation()} onMouseEnter={(e) => e.stopPropagation()}>
+                        <button onClick={() => handleUpscale('2k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span> Upscale to 2K
+                        </button>
+                        <button onClick={() => handleUpscale('4k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500/50"></span> Upscale to 4K
+                        </button>
+                        <div className="h-px bg-white/5 my-1 mx-2"></div>
+                        <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Enhance Details</div>
+                        <button onClick={() => handleSelectiveEnhance('face')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Face & Skin</button>
+                        <button onClick={() => handleSelectiveEnhance('fabric')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Fabric & Texture</button>
+                        <button onClick={() => handleSelectiveEnhance('accessories')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Accessories</button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               <div ref={downloadMenuRef} className="relative">
@@ -1907,7 +1942,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
             )}
           </div>
         </div>
-      </div>
+      </div >
 
       <AnimatePresence>
         {toastMessage && <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }} className="fixed bottom-10 right-10 bg-blue-600 text-white px-6 py-3 rounded-full shadow-xl z-[100] font-medium">{toastMessage}</motion.div>}

@@ -313,6 +313,7 @@ export interface GenerationSettings {
   digitalDarkroom?: DigitalDarkroomSettings;
   panelToggles: PanelToggles;
   useEnhancedTryOn?: boolean; // Enable enhanced garment detail preservation
+  imageSize?: '1K' | '2K' | '4K'; // Gemini 3 Pro specific resolution setting
 }
 
 export type HistoryItemType = 'model-generation' | 'model-revision' | 'try-on' | 'try-on-revision';
