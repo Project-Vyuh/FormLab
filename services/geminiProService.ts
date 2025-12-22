@@ -103,6 +103,9 @@ const REALISM_TOKENS = "8k resolution, raw photo, cinematic lighting, sharp focu
 const ANATOMY_TOKENS = "perfectly rendered hands, anatomically correct fingers, symmetrical facial features, natural eyes with corneal reflections, realistic muscle definition, natural posture, micro-expressions";
 const QA_NEGATIVE_PROMPT = "mannequin, plastic skin, waxy skin, doll-like, artificial, CGI, 3d render, illustration, cartoon, anime, drawing, painting, bad anatomy, disfigured, extra limbs, fused fingers, blurry, low quality, jpeg artifacts, watermark, text, logo, oversmoothed, airbrushed, makeup heavy, distorted face, bad hands, bad feet, shoes, socks, footwear, pants, leggings (unless specified), dead eyes, blank stare, stiff pose";
 
+const FEMALE_BODY_TOKENS = "feminine physique, hourglass figure, soft curves, elegant posture, delicate yet defined features, aesthetic proportions";
+const MALE_BODY_TOKENS = "masculine physique, broad shoulders, V-taper, athletic build, defined musculature, strong jawline";
+
 const SAFETY_SETTINGS = [
     { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
     { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
@@ -127,13 +130,23 @@ const getOutfitPrompt = (genderInput: string): string => {
     return `The model MUST be wearing a specific base outfit: ${outfitDescription}. The outfit must be simple, unbranded, and form-fitting to clearly show the model's physique for virtual try-on. The model must be barefoot. NO other clothing, shoes, or accessories are allowed unless explicitly specified in the user prompt.`;
 };
 
+const getGenderedBodyPrompt = (genderInput: string): string => {
+    const lowerInput = genderInput.toLowerCase();
+    const isFemale = lowerInput === 'female' || lowerInput.includes('woman') || lowerInput.includes('girl') || lowerInput.includes('lady') || lowerInput.includes('she');
+    const isMale = lowerInput === 'male' || lowerInput.includes('man') || lowerInput.includes('boy') || lowerInput.includes('guy') || lowerInput.includes('he');
+
+    if (isFemale) return FEMALE_BODY_TOKENS;
+    if (isMale) return MALE_BODY_TOKENS;
+    return "";
+};
+
 const getFramingPrompt = (framing: ShotFraming | undefined): string => {
     if (!framing || framing === 'full') {
-        return "FULL BODY SHOT (Head to Toe). The entire model from the top of the head to the soles of the feet MUST be visible. Do not crop the head or feet. The model should be centered in the frame with a small amount of headroom and footroom.";
+        return "FULL BODY SHOT (Head to Toe). FRONT CAMERA ANGLE. Direct eye contact with the lens. The model must be facing the camera for a professional photoshoot. The entire model from the top of the head to the soles of the feet MUST be visible. Do not crop the head or feet. The model should be centered in the frame with a small amount of headroom and footroom.";
     }
 
     const framingMap: Record<ShotFraming, string> = {
-        'full': "FULL BODY SHOT (Head to Toe). The entire model from the top of the head to the soles of the feet MUST be visible. Do not crop the head or feet.",
+        'full': "FULL BODY SHOT (Head to Toe). FRONT CAMERA ANGLE. Direct eye contact. Professional photoshoot composition. The entire model from the top of the head to the soles of the feet MUST be visible. Do not crop the head or feet.",
         'medium': "MEDIUM SHOT (Waist Up). The frame should capture the model from the waist up to the top of the head.",
         'closeup': "CLOSE-UP SHOT (Face and Shoulders). The frame should focus tightly on the model's face and shoulders."
     };
@@ -175,13 +188,17 @@ const getPoseAndExpressionPrompt = (settings: GenerationSettings): string => {
 export const generateModelImagePro = async (userImage: File, settings: GenerationSettings): Promise<string> => {
     const userImagePart = await fileToPart(userImage);
 
-    // Prompt construction remains similar to ensure consistency, but we can rely on Pro's better instruction following.
-    // We omit 'lightingRig', 'studioEnvironment' etc from prompt suffix just like in geminiService to handle them via dedicated prompts if needed,
-    // but here we just re-use the suffix generator from the main service for consistency.
     const promptSuffix = getGenerationPromptSuffix(settings);
     const framingPrompt = getFramingPrompt(settings.shotFraming);
     const outfitRule = getOutfitPrompt("female");
+    const bodyTypePrompt = getGenderedBodyPrompt("female"); // Default to female for image uploads if unknown, or rely on reference. But usually "female" prompt is safe baseline for parsing.
     const posePrompt = getPoseAndExpressionPrompt(settings);
+
+    // Check if environment is toggled. If NOT, force the high-end studio white background default.
+    let finalPromptSuffix = promptSuffix;
+    if (!settings.panelToggles.environment) {
+        finalPromptSuffix += " [DEFAULT ENVIRONMENT] Professional High-End Fashion Studio. Pure WHITE seamless background. Soft, evenly diffused studio lighting. No shadows on background. Clean, commercial look.";
+    }
 
     const prompt = `[ROLE]
 You are a world-class professional fashion photographer and digital artist using a Phase One XF IQ4 150MP camera system.
@@ -191,6 +208,7 @@ Generate a RAW, Hyper-Realistic Photo of a model based on the reference image.
 
 [STRICT OUTFIT RULE]
 ${outfitRule}
+CRITICAL: The outfit MUST be the minimal base layer described above (Heather Grey). DO NOT generate fashion clothes unless EXPLICITLY requested.
 
 [STRICT FRAMING RULE]
 ${framingPrompt}
@@ -198,7 +216,7 @@ ${framingPrompt}
 [REFERENCE IMAGE INSTRUCTIONS]
 The reference image is preprocessed to 1:1.
 1. SUBJECT EXTRACTION: Extract the person from the reference.
-2. BACKGROUND: Use the settings provided below. If none, provide a clean studio background.
+2. BACKGROUND: Use the settings provided below. If none, provide a clean white studio background.
 3. FACE & BODY: Match the reference photo's facial features and body proportions with FORENSIC ACCURACY.
 4. HAIR: Match exact color, style, and texture.
 
@@ -206,7 +224,7 @@ The reference image is preprocessed to 1:1.
 ${posePrompt}
 
 [GLOBAL CONTROLS & SETTINGS]
-${promptSuffix}
+${finalPromptSuffix}
 
 [TECHNICAL SPECIFICATIONS]
 - Aspect Ratio: ${settings.aspectRatio}
@@ -214,6 +232,7 @@ ${promptSuffix}
 
 [SUBJECT SPECIFICATIONS]
 - Identity: Match the face, hair, and ethnicity of the reference photo.
+- Body Type: ${bodyTypePrompt} (Adapt to match reference image if different)
 - Skin Details: ${REALISM_TOKENS}
 - Anatomy: ${ANATOMY_TOKENS}
 
@@ -236,7 +255,14 @@ export const generateModelFromDescriptionPro = async (description: string, setti
     const promptSuffix = getGenerationPromptSuffix(settings);
     const framingPrompt = getFramingPrompt(settings.shotFraming);
     const outfitRule = getOutfitPrompt(description);
+    const bodyTypePrompt = getGenderedBodyPrompt(description);
     const posePrompt = getPoseAndExpressionPrompt(settings);
+
+    // Check if environment is toggled. If NOT, force the high-end studio white background default.
+    let finalPromptSuffix = promptSuffix;
+    if (!settings.panelToggles.environment) {
+        finalPromptSuffix += " [DEFAULT ENVIRONMENT] Professional High-End Fashion Studio. Pure WHITE seamless background. Soft, evenly diffused studio lighting. No shadows on background. Clean, commercial look.";
+    }
 
     const structuredPrompt = `[ROLE]
 You are a world-class professional fashion photographer and digital artist using a Phase One XF IQ4 150MP camera system.
@@ -246,6 +272,7 @@ Generate a RAW, Hyper-Realistic Photo of a model based on the description.
 
 [STRICT OUTFIT RULE]
 ${outfitRule}
+CRITICAL: The outfit MUST be the minimal base layer described above (Heather Grey). DO NOT generate fashion clothes (dresses, suits, coats) unless EXPLICITLY requested in the "Appearance" description below. If the description is just about the person (e.g. "blonde woman"), use the base outfit.
 
 [STRICT FRAMING RULE]
 ${framingPrompt}
@@ -254,14 +281,16 @@ ${framingPrompt}
 ${posePrompt}
 
 [GLOBAL CONTROLS & SETTINGS]
-${promptSuffix}
+${finalPromptSuffix}
 
 [TECHNICAL SPECIFICATIONS]
 - Aspect Ratio: ${settings.aspectRatio}
 - Constraint: Ensure the subject fits completely within the ${settings.aspectRatio} frame.
 
-[SUBJECT SPECIFICATIONS]
-- Appearance: ${description}
+[SUBJECT SPECIFICATIONS - HIGHEST PRIORITY]
+- Appearance Description: ${description}
+- Aesthetic Instruction: Pay strict attention to all adjectives in the description (e.g., beautiful, gorgeous, fierce, elegant). Translate these qualities into the model's features, symmetry, and presence.
+- Body Type Hint: ${bodyTypePrompt}
 - Skin Details: ${REALISM_TOKENS}
 - Anatomy: ${ANATOMY_TOKENS}
 
