@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloudIcon, CubeIcon, BookmarkIcon, CameraIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon, Share2Icon, UserIcon, SparklesIcon, SettingsIcon, LayersIcon, DownloadIcon } from './icons';
 
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
+import { generateModelImagePro, generateModelFromDescriptionPro, reviseGeneratedImagePro } from '../services/geminiProService';
 import Spinner from './Spinner';
 import { getFriendlyErrorMessage, cn } from "../lib/utils";
 import { convertToSquare } from '../lib/imageProcessing';
@@ -57,9 +58,10 @@ interface CreateModelProps {
   onDeleteProject: (projectId: string) => void;
 }
 
-type GenerationModel = 'gemini-2.5-flash-image';
+type GenerationModel = 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview';
 
 const generationModels: { name: string, id: GenerationModel | null, disabled?: boolean, title?: string }[] = [
+  { name: 'Nano Banana Pro', id: 'gemini-3-pro-image-preview', title: 'Highest quality, advanced reasoning & strict instruction following.' },
   { name: 'Nano Banana', id: 'gemini-2.5-flash-image', title: 'Fastest generation, good for quick iterations.' },
 ];
 
@@ -267,7 +269,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
   // Content State
   const [modelDescription, setModelDescription] = useState('');
   const [revisionPrompt, setRevisionPrompt] = useState('');
-  const [selectedModelName, setSelectedModelName] = useState<string>('Nano Banana');
+  const [selectedModelName, setSelectedModelName] = useState<string>('Nano Banana Pro');
 
   // History & Settings State
   const [generatedModelHistory, setGeneratedModelHistory] = useState<HistoryItem[]>([]);
@@ -716,9 +718,18 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
       setLoadingMessage(file ? 'Generating model from photo...' : 'Generating model from description...');
 
-      const result = processedFile
-        ? await generateModelImage(processedFile, generationSettings, modelInfo.id)
-        : await generateModelFromDescription(modelDescription, generationSettings, modelInfo.id);
+      let result;
+      if (modelInfo.id === 'gemini-3-pro-image-preview') {
+        // Pro model generation
+        result = processedFile
+          ? await generateModelImagePro(processedFile, generationSettings)
+          : await generateModelFromDescriptionPro(modelDescription, generationSettings);
+      } else {
+        // Standard model generation
+        result = processedFile
+          ? await generateModelImage(processedFile, generationSettings, 'gemini-2.5-flash-image')
+          : await generateModelFromDescription(modelDescription, generationSettings, 'gemini-2.5-flash-image');
+      }
       await addHistoryItem({ prompt, settings: generationSettings, modelName: selectedModelName }, result);
     } catch (err) {
       setToastMessage(getFriendlyErrorMessage(err, 'Failed to create model'));
@@ -760,9 +771,20 @@ const CreateModel: React.FC<CreateModelProps> = ({
       const modelInfo = generationModels.find(m => m.name === selectedModelName);
       if (!modelInfo || !modelInfo.id) throw new Error("Invalid model selected.");
 
-      const result = isMasked
-        ? await reviseMaskedImage(generatedModelUrl, maskDataUrl!, revisionInstruction, currentSettings)
-        : await reviseGeneratedImage(generatedModelUrl, revisionInstruction, currentSettings, 'gemini-2.5-flash-image');
+      let result;
+      if (modelInfo.id === 'gemini-3-pro-image-preview') {
+        // Pro model revision
+        result = await reviseGeneratedImagePro(
+          generatedModelUrl,
+          revisionInstruction,
+          currentSettings
+        );
+      } else {
+        const isMasked = isMaskingMode && maskDataUrl;
+        result = isMasked
+          ? await reviseMaskedImage(generatedModelUrl, maskDataUrl!, revisionInstruction, currentSettings)
+          : await reviseGeneratedImage(generatedModelUrl, revisionInstruction, currentSettings, 'gemini-2.5-flash-image');
+      }
 
       await addHistoryItem({ prompt: promptForHistory, settings: currentSettings, modelName: selectedModelName }, result);
       setRevisionPrompt('');

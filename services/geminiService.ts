@@ -1677,7 +1677,7 @@ CRITICAL INSTRUCTIONS:
 };
 
 // Generate detailed garment description from analysis
-const generateDetailedGarmentDescription = (analysis: GarmentAnalysis): string => {
+export const generateDetailedGarmentDescription = (analysis: GarmentAnalysis): string => {
     const parts: string[] = [];
 
     // Colors

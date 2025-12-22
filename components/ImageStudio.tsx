@@ -29,6 +29,7 @@ import {
   reviseGeneratedImage,
   enhanceRevisionPrompt
 } from '../services/geminiService';
+import { reviseGeneratedImagePro } from '../services/geminiProService';
 import { getFriendlyErrorMessage } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } from '../services/storageService';
 import { convertToSquare } from '../lib/imageProcessing';
@@ -173,9 +174,10 @@ interface ImageStudioProps {
   onSaveStylingHistory: (baseModelId: string, history: HistoryItem[]) => void;
 }
 
-type GenerationModel = 'gemini-2.5-flash-image';
+type GenerationModel = 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview';
 
 const generationModels: { name: string, id: GenerationModel | null, disabled?: boolean, title?: string }[] = [
+  { name: 'Nano Banana Pro', id: 'gemini-3-pro-image-preview', title: 'Highest quality, advanced reasoning & strict instruction following.' },
   { name: 'Nano Banana', id: 'gemini-2.5-flash-image', title: 'Fastest generation, good for quick iterations.' },
 ];
 
@@ -232,7 +234,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   const [currentHistoryItemId, setCurrentHistoryItemId] = useState<string | null>(null);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const [currentPoseIndex, setCurrentPoseIndex] = useState(0);
-  const [selectedGenerationModel, setSelectedGenerationModel] = useState<string>('Nano Banana');
+  const [selectedGenerationModel, setSelectedGenerationModel] = useState<string>('Nano Banana Pro');
 
   // Loading & Feedback State
   const [isLoading, setIsLoading] = useState(false);
@@ -1353,7 +1355,18 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         outfitInstruction = `PRESERVE the current outfit (${garmentNames}) exactly as it appears in the image. Do NOT revert to base underwear. The model is ALREADY wearing the correct clothing.`;
       }
 
-      const result = await reviseGeneratedImage(displayImageUrl, revisionPrompt, generationSettings, 'gemini-2.5-flash-image', outfitInstruction);
+      let result;
+      if (selectedGenerationModel === 'gemini-3-pro-image-preview') {
+        // Pro model revision
+        result = await reviseGeneratedImagePro(
+          displayImageUrl,
+          revisionPrompt, // Use simple revision prompt for Pro, or construct a more complex one if needed
+          generationSettings
+        );
+      } else {
+        // Standard model revision
+        result = await reviseGeneratedImage(displayImageUrl, revisionPrompt, generationSettings, 'gemini-2.5-flash-image', outfitInstruction);
+      }
 
       // Upload to Firebase Storage if user is logged in and result is base64
       let finalImageUrl = result;
