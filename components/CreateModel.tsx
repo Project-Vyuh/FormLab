@@ -1923,7 +1923,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
                 </div>
               ) : (
 
-                <div ref={imageWrapperRef} className="relative flex items-center justify-center" style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`, transition: isPanning ? 'none' : 'transform 0.1s ease-out' }}>
+                <div ref={imageWrapperRef} className="relative w-full h-full flex items-center justify-center" style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`, transition: isPanning ? 'none' : 'transform 0.1s ease-out' }}>
                   <img ref={imageRef} src={generatedModelUrl!} alt="Generated Model" className="max-h-full max-w-full object-contain shadow-2xl rounded-sm block" draggable={false} />
                   {isMaskingMode && <canvas ref={maskCanvasRef} className="absolute top-0 left-0 w-full h-full z-10 pointer-events-auto" style={{ cursor: getCursor() }} />}
                 </div>
