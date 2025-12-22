@@ -9,9 +9,20 @@ import { storage } from "./firebase";
 import { ref, getBlob } from "firebase/storage";
 import {
     getGenerationPromptSuffix,
+    getStudioEnvironmentPrompt,
+    getLightingPrompt,
+    getCameraPositionPrompt,
+    buildEnhancedTryOnPrompt,
+    buildBasicTryOnPrompt,
     analyzeGarmentDetailed, // Re-use analysis from main service as it is model-agnostic
-    generateDetailedGarmentDescription, // Helper function (assumed exported or needs to be duplicated if not)
+    generateDetailedGarmentDescription, // Helper function
+    // Re-export model-agnostic functions
+    upscaleImage,
+    selectivelyEnhanceImage,
 } from "./geminiService";
+
+// Re-export model-agnostic functions for convenience
+export { upscaleImage, selectivelyEnhanceImage, analyzeGarmentDetailed, generateDetailedGarmentDescription };
 
 // Helper for file to part conversion (duplicated to avoid circular dependency issues if not exported)
 const fileToPart = async (file: File) => {
@@ -103,7 +114,7 @@ const REALISM_TOKENS = "8k resolution, raw photo, cinematic lighting, sharp focu
 const ANATOMY_TOKENS = "perfectly rendered hands, anatomically correct fingers, symmetrical facial features, natural eyes with corneal reflections, realistic muscle definition, natural posture, micro-expressions";
 const QA_NEGATIVE_PROMPT = "mannequin, plastic skin, waxy skin, doll-like, artificial, CGI, 3d render, illustration, cartoon, anime, drawing, painting, bad anatomy, disfigured, extra limbs, fused fingers, blurry, low quality, jpeg artifacts, watermark, text, logo, oversmoothed, airbrushed, makeup heavy, distorted face, bad hands, bad feet, shoes, socks, footwear, pants, leggings (unless specified), dead eyes, blank stare, stiff pose";
 
-const FEMALE_BODY_TOKENS = "feminine physique, hourglass figure, soft curves, elegant posture, delicate yet defined features, aesthetic proportions";
+const FEMALE_BODY_TOKENS = "feminine physique, hourglass figure, soft continuous curves, visual flow from shoulders to hips, lower visual center of mass, sloping shoulders, tapered limbs, smooth transitions, non-angular features, elegant stature, curvature over linearity, soft muscle definition";
 const MALE_BODY_TOKENS = "masculine physique, broad shoulders, V-taper, athletic build, defined musculature, strong jawline";
 
 const SAFETY_SETTINGS = [
@@ -115,8 +126,10 @@ const SAFETY_SETTINGS = [
 
 const getOutfitPrompt = (genderInput: string): string => {
     const lowerInput = genderInput.toLowerCase();
-    const isFemale = lowerInput === 'female' || lowerInput.includes('woman') || lowerInput.includes('girl') || lowerInput.includes('lady') || lowerInput.includes('she');
-    const isMale = lowerInput === 'male' || lowerInput.includes('man') || lowerInput.includes('boy') || lowerInput.includes('guy') || lowerInput.includes('he');
+    // Regex for strict word boundary detection to avoid "male" matching inside "female"
+    const isFemale = /\b(female|woman|girl|lady|she|her|hers)\b/i.test(lowerInput);
+    // Ensure we don't accidentally match "male" if the string is just "female" (unlikely with word boundaries but safe)
+    const isMale = /\b(male|man|boy|guy|he|him|his)\b/i.test(lowerInput) && !isFemale;
 
     let outfitDescription = "";
     if (isFemale) {
@@ -127,13 +140,14 @@ const getOutfitPrompt = (genderInput: string): string => {
         outfitDescription = "EITHER a minimal, skin-tight, solid heather grey athletic crop top and matching tight boy shorts (if female) OR a minimal, skin-tight, solid heather grey athletic tank top and matching tight boxer briefs (if male)";
     }
 
-    return `The model MUST be wearing a specific base outfit: ${outfitDescription}. The outfit must be simple, unbranded, and form-fitting to clearly show the model's physique for virtual try-on. The model must be barefoot. NO other clothing, shoes, or accessories are allowed unless explicitly specified in the user prompt.`;
+    return `The model MUST be wearing a specific base outfit: ${outfitDescription}. The outfit must be simple, unbranded, and form-fitting to clearly show the model's physique for virtual try-on. The model must be barefoot. NO other clothing, shoes, or accessories are allowed unless explicitly specified in the user prompt. Ensure the outfit does not distort the natural body flow.`;
 };
 
 const getGenderedBodyPrompt = (genderInput: string): string => {
     const lowerInput = genderInput.toLowerCase();
-    const isFemale = lowerInput === 'female' || lowerInput.includes('woman') || lowerInput.includes('girl') || lowerInput.includes('lady') || lowerInput.includes('she');
-    const isMale = lowerInput === 'male' || lowerInput.includes('man') || lowerInput.includes('boy') || lowerInput.includes('guy') || lowerInput.includes('he');
+    // Regex for strict word boundary detection
+    const isFemale = /\b(female|woman|girl|lady|she|her|hers)\b/i.test(lowerInput);
+    const isMale = /\b(male|man|boy|guy|he|him|his)\b/i.test(lowerInput) && !isFemale;
 
     if (isFemale) return FEMALE_BODY_TOKENS;
     if (isMale) return MALE_BODY_TOKENS;
@@ -160,13 +174,13 @@ const getPoseAndExpressionPrompt = (settings: GenerationSettings): string => {
     }
 
     const dynamicPoses = [
-        "walking confidently towards the camera",
-        "standing with weight on one leg, slight hip tilt",
-        "leaning casually against an invisible wall",
-        "mid-stride, capturing motion",
-        "three-quarter turn, looking over the shoulder",
-        "hands in pockets (if applicable), relaxed stance",
-        "dynamic fashion pose, angular limbs"
+        "walking confidently directly towards the camera",
+        "standing straight with weight on one leg, slight hip tilt, facing forward",
+        "standing tall, arms relaxed by sides, facing camera",
+        "mid-stride walking towards camera, capturing motion",
+        "strong fashion stance, facing forward",
+        "hands in pockets (if applicable), relaxed stance, facing camera",
+        "high fashion symmetric pose, facing camera"
     ];
 
     const expressions = [
@@ -188,66 +202,101 @@ const getPoseAndExpressionPrompt = (settings: GenerationSettings): string => {
 export const generateModelImagePro = async (userImage: File, settings: GenerationSettings): Promise<string> => {
     const userImagePart = await fileToPart(userImage);
 
-    const promptSuffix = getGenerationPromptSuffix(settings);
+    // Use the EXACT same prompt construction as Nano Banana (geminiService.ts generateModelImage)
+    // Conditionally apply Global Controls based on panel toggles
+    const lightingPrompt = settings.panelToggles.lighting
+        ? getLightingPrompt(settings.lightingRig, settings.accessoryPrompt)
+        : '';
+    const environmentPrompt = settings.panelToggles.environment
+        ? getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings)
+        : '';
+    const cameraPrompt = getGenerationPromptSuffix(settings, { exclude: ['lightingRig', 'studioEnvironment', 'floorSettings', 'shadowSculpting'] });
+
     const framingPrompt = getFramingPrompt(settings.shotFraming);
-    const outfitRule = getOutfitPrompt("female");
-    const bodyTypePrompt = getGenderedBodyPrompt("female"); // Default to female for image uploads if unknown, or rely on reference. But usually "female" prompt is safe baseline for parsing.
+    const outfitRule = getOutfitPrompt("female"); // Default to female if no description provided for image upload
     const posePrompt = getPoseAndExpressionPrompt(settings);
 
-    // Check if environment is toggled. If NOT, force the high-end studio white background default.
-    let finalPromptSuffix = promptSuffix;
-    if (!settings.panelToggles.environment) {
-        finalPromptSuffix += " [DEFAULT ENVIRONMENT] Professional High-End Fashion Studio. Pure WHITE seamless background. Soft, evenly diffused studio lighting. No shadows on background. Clean, commercial look.";
-    }
-
+    // EXACT prompt structure from Nano Banana - no modifications
     const prompt = `[ROLE]
-You are a world-class professional fashion photographer and digital artist using a Phase One XF IQ4 150MP camera system.
+You are a world-class professional fashion photographer and digital artist, renowned for creating ultra-realistic, high-end studio portraits. You are using a Phase One XF IQ4 150MP camera system.
 
 [TASK]
-Generate a RAW, Hyper-Realistic Photo of a model based on the reference image.
-
-[SUBJECT SPECIFICATIONS - HIGHEST PRIORITY]
-- Identity: Match the face, hair, and ethnicity of the reference photo.
-- Body Type: ${bodyTypePrompt} (Adapt to match reference image if different)
-- Skin Details: ${REALISM_TOKENS}
-- Anatomy: ${ANATOMY_TOKENS}
-CRITICAL: The Subject Specifications take precedence over any default outfit or style rules if they conflict on body type or gender.
+Generate a RAW, Hyper-Realistic Photo of a model based on the reference image and the following strict technical specifications.
 
 [STRICT OUTFIT RULE]
 ${outfitRule}
-CRITICAL: The outfit MUST be the minimal base layer described above (Heather Grey). DO NOT generate fashion clothes unless EXPLICITLY requested.
 
 [STRICT FRAMING RULE]
 ${framingPrompt}
 
-[REFERENCE IMAGE INSTRUCTIONS]
-The reference image is preprocessed to 1:1.
-1. SUBJECT EXTRACTION: Extract the person from the reference.
-2. BACKGROUND: Use the settings provided below. If none, provide a clean white studio background.
-3. FACE & BODY: Match the reference photo's facial features and body proportions with FORENSIC ACCURACY.
-4. HAIR: Match exact color, style, and texture.
+[CRITICAL: REFERENCE IMAGE PREPROCESSING & BACKGROUND HANDLING]
+The reference image has been preprocessed with padding to create a 1:1 aspect ratio.
+**IMPORTANT INSTRUCTIONS**:
+
+1. SUBJECT EXTRACTION:
+   - The actual person/model is centered in the reference image
+   - Padding areas around the subject match the studio background color specified below
+   - Focus ONLY on the human subject - preserve their exact facial features, body proportions, and pose
+
+2. BACKGROUND RENDERING:
+   - The ENTIRE output must use the studio background specified in [STUDIO SETUP & GLOBAL CONTROLS]
+   - Extend the background seamlessly to all edges of the output frame
+   - NO black, white, or gray bars/borders should appear unless explicitly part of the studio background
+   - The background should look natural and continuous, not layered or composited
+
+3. SUBJECT POSITIONING:
+   - Frame the subject according to the shot type specified in [STRICT FRAMING RULE]
+   - The subject should appear as if photographed directly in the studio environment
+   - Maintain the subject's natural position and pose from the reference image
+
+4. FACIAL & BODY ACCURACY (HIGHEST PRIORITY):
+   - Match the reference photo's facial features with EXTREME precision:
+     * Exact eye shape, color, spacing, and expression
+     * Precise nose structure, bridge width, and nostril shape
+     * Accurate mouth shape, lip fullness, and natural expression
+     * Identical face shape, jawline, and chin structure
+     * Same cheekbone prominence and facial proportions
+     * Exact skin tone, complexion, and any visible features (freckles, moles, etc.)
+   - Preserve exact body proportions and build from reference:
+     * Same height-to-width ratio
+     * Identical shoulder width and posture
+     * Matching limb proportions and body type
+   - Maintain the same hair:
+     * Exact color, including highlights or variations
+     * Same style, length, and texture
+     * Identical hairline and volume
+
+CRITICAL: The output must show a seamless studio photograph with no visible padding or borders. The subject's identity must be perfectly preserved.
 
 [DYNAMIC POSE & EXPRESSION]
 ${posePrompt}
 
-[GLOBAL CONTROLS & SETTINGS]
-${finalPromptSuffix}
+[STUDIO SETUP & GLOBAL CONTROLS]
+${lightingPrompt}
+${environmentPrompt}
+${cameraPrompt}
 
 [TECHNICAL SPECIFICATIONS]
 - Aspect Ratio: ${settings.aspectRatio}
 - Constraint: Ensure the subject fits completely within the ${settings.aspectRatio} frame.
 
+[SUBJECT SPECIFICATIONS]
+- Identity: Match the face, hair, and ethnicity of the reference photo with forensic accuracy.
+- Skin Details: ${REALISM_TOKENS}
+- Anatomy: ${ANATOMY_TOKENS}
+
 [NEGATIVE CONSTRAINTS]
 ${QA_NEGATIVE_PROMPT}
-Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distorted face, bad hands, bad feet, cartoonish style, illustration style, low resolution, blurry, artifacts, watermark, text, signature, shoes (unless specified), socks (unless specified).`;
+Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distorted face, bad hands, bad feet, cartoonish style, illustration style, low resolution, blurry, artifacts, watermark, text, signature, shoes (unless specified), socks (unless specified), black borders, padding artifacts, letterboxing.`;
 
-    // Construct generation config
+    // Construct generation config - SAME as Nano Banana
     const generationConfig: any = {
         responseModalities: [Modality.IMAGE],
         safetySettings: SAFETY_SETTINGS,
     };
 
-    // Add image size if specified (Nano Banana Pro specific)
+    // Only add image size if explicitly specified by user (not a default)
+    // This allows the model to choose optimal resolution when not specified
     if (settings.imageSize) {
         generationConfig.imageConfig = {
             ...(generationConfig.imageConfig || {}),
@@ -264,35 +313,29 @@ Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distort
 };
 
 export const generateModelFromDescriptionPro = async (description: string, settings: GenerationSettings): Promise<string> => {
-    const promptSuffix = getGenerationPromptSuffix(settings);
+    // Use the EXACT same prompt construction as Nano Banana (geminiService.ts generateModelFromDescription)
+    // Conditionally apply Global Controls based on panel toggles
+    const lightingPrompt = settings.panelToggles.lighting
+        ? getLightingPrompt(settings.lightingRig, settings.accessoryPrompt)
+        : '';
+    const environmentPrompt = settings.panelToggles.environment
+        ? getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings)
+        : '';
+    const cameraPrompt = getGenerationPromptSuffix(settings, { exclude: ['lightingRig', 'studioEnvironment', 'floorSettings', 'shadowSculpting'] });
+
     const framingPrompt = getFramingPrompt(settings.shotFraming);
     const outfitRule = getOutfitPrompt(description);
-    const bodyTypePrompt = getGenderedBodyPrompt(description);
     const posePrompt = getPoseAndExpressionPrompt(settings);
 
-    // Check if environment is toggled. If NOT, force the high-end studio white background default.
-    let finalPromptSuffix = promptSuffix;
-    if (!settings.panelToggles.environment) {
-        finalPromptSuffix += " [DEFAULT ENVIRONMENT] Professional High-End Fashion Studio. Pure WHITE seamless background. Soft, evenly diffused studio lighting. No shadows on background. Clean, commercial look.";
-    }
-
+    // EXACT prompt structure from Nano Banana - no modifications
     const structuredPrompt = `[ROLE]
-You are a world-class professional fashion photographer and digital artist using a Phase One XF IQ4 150MP camera system.
+You are a world-class professional fashion photographer and digital artist, renowned for creating ultra-realistic, high-end studio portraits. You are using a Phase One XF IQ4 150MP camera system.
 
 [TASK]
-Generate a RAW, Hyper-Realistic Photo of a model based on the description.
-
-[SUBJECT SPECIFICATIONS - HIGHEST PRIORITY]
-- Appearance Description: ${description}
-- Aesthetic Instruction: Pay strict attention to all adjectives in the description (e.g., beautiful, gorgeous, fierce, elegant). Translate these qualities into the model's features, symmetry, and presence.
-- Body Type Hint: ${bodyTypePrompt}
-- Skin Details: ${REALISM_TOKENS}
-- Anatomy: ${ANATOMY_TOKENS}
-CRITICAL: The Subject Specifications take precedence over any default outfit or style rules if they conflict on body type or gender.
+Generate a RAW, Hyper-Realistic Photo of a model based on the description and the following strict technical specifications.
 
 [STRICT OUTFIT RULE]
 ${outfitRule}
-CRITICAL: The outfit MUST be the minimal base layer described above (Heather Grey). DO NOT generate fashion clothes (dresses, suits, coats) unless EXPLICITLY requested in the "Appearance" description below. If the description is just about the person (e.g. "blonde woman"), use the base outfit.
 
 [STRICT FRAMING RULE]
 ${framingPrompt}
@@ -300,24 +343,31 @@ ${framingPrompt}
 [DYNAMIC POSE & EXPRESSION]
 ${posePrompt}
 
-[GLOBAL CONTROLS & SETTINGS]
-${finalPromptSuffix}
+[STUDIO SETUP & GLOBAL CONTROLS]
+${lightingPrompt}
+${environmentPrompt}
+${cameraPrompt}
 
 [TECHNICAL SPECIFICATIONS]
 - Aspect Ratio: ${settings.aspectRatio}
 - Constraint: Ensure the subject fits completely within the ${settings.aspectRatio} frame.
 
+[SUBJECT SPECIFICATIONS]
+- Appearance: ${description}
+- Skin Details: ${REALISM_TOKENS}
+- Anatomy: ${ANATOMY_TOKENS}
+
 [NEGATIVE CONSTRAINTS]
 ${QA_NEGATIVE_PROMPT}
 Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distorted face, bad hands, bad feet, cartoonish style, illustration style, low resolution, blurry, artifacts, watermark, text, signature, shoes (unless specified), socks (unless specified).`;
 
-    // Construct generation config
+    // Construct generation config - SAME as Nano Banana
     const generationConfig: any = {
         responseModalities: [Modality.IMAGE],
         safetySettings: SAFETY_SETTINGS,
     };
 
-    // Add image size if specified (Nano Banana Pro specific)
+    // Only add image size if explicitly specified by user (not a default)
     if (settings.imageSize) {
         generationConfig.imageConfig = {
             ...(generationConfig.imageConfig || {}),
@@ -337,31 +387,296 @@ Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distort
 export const reviseGeneratedImagePro = async (
     baseImageUrl: string,
     revisionInstruction: string,
-    settings: GenerationSettings
+    settings: GenerationSettings,
+    outfitInstruction?: string
 ): Promise<string> => {
     const baseImagePart = await dataUrlToPart(baseImageUrl);
     const promptSuffix = getGenerationPromptSuffix(settings);
 
+    // Use the EXACT same prompt structure as Nano Banana (geminiService.ts reviseGeneratedImage)
+    const outfitRule = outfitInstruction || getOutfitPrompt(revisionInstruction);
+    const framingPrompt = getFramingPrompt(settings.shotFraming);
+
     const prompt = `[ROLE]
-You are a professional Retoucher and Fashion Editor.
+You are a specialized AI Fashion Editor & Retoucher.
 
 [TASK]
-Edit the provided image according to the User Instruction and Global Settings.
+Edit the provided image based on the User Request, while maintaining Hyper-Realistic quality.
 
-[USER INSTRUCTION]
+[USER REQUEST]
 "${revisionInstruction}"
 
-[GLOBAL SETTINGS & STYLE]
-${promptSuffix}
+[TECHNICAL SPECIFICATIONS]
+- Framing: ${framingPrompt}
+- Camera Position: ${getCameraPositionPrompt(settings.cameraPosition)}
 
-[CONSTRAINTS]
-1. IDENTITY PRESERVATION: Do NOT change the model's facial features or body shape unless explicitly asked.
-2. OUTFIT PRESERVATION: Do NOT change the distinctive base outfit (crop top/shorts or tank/briefs) unless explicitly asked.
-3. REALISM: Maintain photo-realistic texture and lighting.
-4. FRAMING: Maintain the same framing (e.g. full body).
+[SUBJECT SPECIFICATIONS]
+- Identity: Maintain the model's identity and professional style.
+- Skin Details: ${REALISM_TOKENS}
+- Anatomy: ${ANATOMY_TOKENS}
+
+[STRICT WARDROBE CONSTRAINTS]
+${outfitInstruction ? `- Rule: ${outfitInstruction}` : `- Item: Neutral, form-fitting boxer briefs or boy shorts.
+- Material: ${outfitRule}
+- Rule: DO NOT change the outfit unless the user's request is *explicitly* about changing the clothing itself.`}
+
+[STYLE & ENVIRONMENT]
+${promptSuffix}
 
 [NEGATIVE CONSTRAINTS]
 ${QA_NEGATIVE_PROMPT}`;
+
+    // Construct generation config - SAME as Nano Banana
+    const generationConfig: any = {
+        responseModalities: [Modality.IMAGE],
+        safetySettings: SAFETY_SETTINGS,
+    };
+
+    // Only add image size if explicitly specified by user (not a default)
+    if (settings.imageSize) {
+        generationConfig.imageConfig = {
+            ...(generationConfig.imageConfig || {}),
+            imageSize: settings.imageSize
+        };
+    }
+
+    const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: { parts: [baseImagePart, { text: prompt }] },
+        config: generationConfig,
+    });
+    return handleApiResponse(response);
+};
+
+// --- Virtual Try-On Functions for Gemini 3 Pro ---
+
+export const generateVirtualTryOnImagePro = async (
+    modelImageUrl: string,
+    garmentImage: File,
+    settings: GenerationSettings,
+    garmentAnalysis?: GarmentAnalysis
+): Promise<string> => {
+    const modelImagePart = await dataUrlToPart(modelImageUrl);
+    const garmentImagePart = await fileToPart(garmentImage);
+
+    const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any] });
+
+    // CRITICAL: Check if environment panel is enabled. If not, preserve original background.
+    let backgroundInstruction = '';
+    if (settings.panelToggles?.environment) {
+        backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
+    } else {
+        backgroundInstruction = " **Background Preservation:** The background MUST remain EXACTLY as it is in the Model Image. Do NOT replace, blur, or alter the background in any way. The subject should be integrated naturally into this existing environment.";
+    }
+
+    let prompt: string;
+
+    // Use enhanced prompt if enabled and analysis is provided
+    if (settings.useEnhancedTryOn !== false && garmentAnalysis) {
+        const garmentDescription = generateDetailedGarmentDescription(garmentAnalysis);
+        prompt = buildEnhancedTryOnPrompt(garmentDescription, settings, backgroundInstruction, promptSuffix);
+    } else {
+        // Fallback to basic prompt
+        prompt = buildBasicTryOnPrompt(settings, backgroundInstruction, promptSuffix);
+    }
+
+    // Construct generation config
+    const generationConfig: any = {
+        responseModalities: [Modality.IMAGE],
+        safetySettings: SAFETY_SETTINGS,
+    };
+
+    // Add image size if specified (Nano Banana Pro specific)
+    if (settings.imageSize) {
+        generationConfig.imageConfig = {
+            ...(generationConfig.imageConfig || {}),
+            imageSize: settings.imageSize
+        };
+    }
+
+    const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: { parts: [modelImagePart, garmentImagePart, { text: prompt }] },
+        config: generationConfig,
+    });
+    return handleApiResponse(response);
+};
+
+export const generateVirtualTryOnWithPoseReferencePro = async (
+    modelImageUrl: string,
+    garmentImage: File,
+    poseReferenceImage: File,
+    settings: GenerationSettings
+): Promise<string> => {
+    const modelImagePart = await dataUrlToPart(modelImageUrl);
+    const garmentImagePart = await fileToPart(garmentImage);
+    const poseReferenceImagePart = await fileToPart(poseReferenceImage);
+
+    const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any, 'posePrompt'] });
+
+    // CRITICAL: Check if environment panel is enabled. If not, preserve original background.
+    let backgroundInstruction = '';
+    if (settings.panelToggles?.environment) {
+        backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
+    } else {
+        backgroundInstruction = " **Background Preservation:** The background MUST remain EXACTLY as it is in the Model Image. Do NOT replace, blur, or alter the background in any way. The subject should be integrated naturally into this existing environment.";
+    }
+
+    const prompt = `You are a professional fashion AI.
+**Inputs:**
+1.  **Model Image:** (First image) Subject identity.
+2.  **Garment Image:** (Second image) Clothing to wear.
+3.  **Pose Reference:** (Third image) Target pose.
+
+**Task:** Generate a new image of the Model wearing the Garment in the Target Pose.
+
+**Technical Specifications:**
+- **Aspect Ratio:** ${settings.aspectRatio}
+- **Constraint:** Ensure the final image maintains the ${settings.aspectRatio} aspect ratio of the input model image. The subject must fit completely within this frame.
+
+**Directives:**
+1.  **Subject:** Use the Model's identity.
+2.  **Attire:** Wear the Garment.
+3.  **Pose:** Match the Pose Reference exactly.
+4.  **Setting:** ${backgroundInstruction}
+5.  **Safety:** Ensure the model is fully clothed.
+
+${promptSuffix}`;
+
+    // Construct generation config
+    const generationConfig: any = {
+        responseModalities: [Modality.IMAGE],
+        safetySettings: SAFETY_SETTINGS,
+    };
+
+    // Add image size if specified (Nano Banana Pro specific)
+    if (settings.imageSize) {
+        generationConfig.imageConfig = {
+            ...(generationConfig.imageConfig || {}),
+            imageSize: settings.imageSize
+        };
+    }
+
+    const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: { parts: [modelImagePart, garmentImagePart, poseReferenceImagePart, { text: prompt }] },
+        config: generationConfig,
+    });
+    return handleApiResponse(response);
+};
+
+export const generatePoseVariationPro = async (
+    tryOnImageUrl: string,
+    poseInstruction: string,
+    settings: GenerationSettings
+): Promise<string> => {
+    const tryOnImagePart = await dataUrlToPart(tryOnImageUrl);
+    const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any, 'posePrompt'] });
+
+    const backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
+
+    const prompt = `You are an expert fashion photographer AI.
+**Input:** A reference image of a model.
+**Task:** Regenerate this image with the model in a new pose.
+
+**New Pose:** "${poseInstruction}"
+
+**Instructions:**
+1.  **Consistency:** Keep the same model identity and the same clothing.
+2.  **Setting:** ${backgroundInstruction}
+3.  **Quality:** Photorealistic fashion shot.
+
+${promptSuffix}`;
+
+    // Construct generation config
+    const generationConfig: any = {
+        responseModalities: [Modality.IMAGE],
+        safetySettings: SAFETY_SETTINGS,
+    };
+
+    // Add image size if specified (Nano Banana Pro specific)
+    if (settings.imageSize) {
+        generationConfig.imageConfig = {
+            ...(generationConfig.imageConfig || {}),
+            imageSize: settings.imageSize
+        };
+    }
+
+    const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: { parts: [tryOnImagePart, { text: prompt }] },
+        config: generationConfig,
+    });
+    return handleApiResponse(response);
+};
+
+export const reviseMaskedImagePro = async (
+    baseImageUrl: string,
+    maskDataUrl: string,
+    revisionPrompt: string,
+    settings: GenerationSettings
+): Promise<string> => {
+    const baseImagePart = await dataUrlToPart(baseImageUrl);
+    const maskImagePart = await dataUrlToPart(maskDataUrl);
+
+    const prompt = `You are a specialized AI fashion editor performing a masked inpainting task.
+    **Inputs:**
+    1. **Base Image:** The source image to be edited.
+    2. **Mask Image:** A black and white image where the white area indicates the region to be modified.
+    
+    **User Request:** "${revisionPrompt}"
+
+    **Instructions:**
+    1.  Apply the user's request ONLY within the white area defined by the Mask Image.
+    2.  The rest of the image (the black area in the mask) MUST remain completely unchanged.
+    3.  Seamlessly blend the changes into the base image.
+    4.  **CRITICAL CLOTHING RULE:** Preserve the existing neutral, form-fitting athletic wear. DO NOT change the outfit unless the user's request is *explicitly* about changing the clothing itself.
+    5.  Maintain the model's overall identity and the professional style of the photograph.
+    6.  The output MUST remain a full-body shot. Do not crop.
+
+    Return ONLY the final, edited image.` + getOutfitPrompt(revisionPrompt);
+
+    // Construct generation config
+    const generationConfig: any = {
+        responseModalities: [Modality.IMAGE],
+        safetySettings: SAFETY_SETTINGS,
+    };
+
+    // Add image size if specified (Nano Banana Pro specific)
+    if (settings.imageSize) {
+        generationConfig.imageConfig = {
+            ...(generationConfig.imageConfig || {}),
+            imageSize: settings.imageSize
+        };
+    }
+
+    const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: { parts: [baseImagePart, maskImagePart, { text: prompt }] },
+        config: generationConfig,
+    });
+
+    return handleApiResponse(response);
+};
+
+export const regenerateFramePro = async (
+    baseImageUrl: string,
+    settings: GenerationSettings
+): Promise<string> => {
+    const baseImagePart = await dataUrlToPart(baseImageUrl);
+    const { aspectRatio } = settings;
+    const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['aspectRatio' as any, 'shotFraming'] });
+
+    const prompt = `You are an expert AI photo compositor.
+**Task:** Resize/Reframe the provided image to a strict **${aspectRatio}** aspect ratio.
+
+**Instructions:**
+1.  **Aspect Ratio:** The output MUST be ${aspectRatio}.
+2.  **Content:** Preserve the model, outfit, and background logic.
+3.  **Fill:** If expanding the frame, generate a seamless background extension that matches the original scene.
+4.  **Style:** ${promptSuffix}
+
+Return ONLY the final image.` + getOutfitPrompt("female");
 
     // Construct generation config
     const generationConfig: any = {

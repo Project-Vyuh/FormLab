@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloudIcon, CubeIcon, BookmarkIcon, CameraIcon, WandIcon, ChevronRightIcon, SunIcon, SlidersHorizontalIcon, ChevronDownIcon, Trash2Icon, PlusIcon, PersonStandingIcon, StarIcon, GitBranchIcon, ChevronUpIcon, Share2Icon, UserIcon, SparklesIcon, SettingsIcon, LayersIcon, DownloadIcon } from './icons';
 
 import { generateModelImage, generateModelFromDescription, reviseGeneratedImage, enhanceDescriptionPrompt, enhanceRevisionPrompt, upscaleImage, selectivelyEnhanceImage, reviseMaskedImage } from '../services/geminiService';
-import { generateModelImagePro, generateModelFromDescriptionPro, reviseGeneratedImagePro } from '../services/geminiProService';
+import { generateModelImagePro, generateModelFromDescriptionPro, reviseGeneratedImagePro, reviseMaskedImagePro } from '../services/geminiProService';
 import Spinner from './Spinner';
 import { getFriendlyErrorMessage, cn } from "../lib/utils";
 import { convertToSquare } from '../lib/imageProcessing';
@@ -775,11 +775,10 @@ const CreateModel: React.FC<CreateModelProps> = ({
       let result;
       if (modelInfo.id === 'gemini-3-pro-image-preview') {
         // Pro model revision
-        result = await reviseGeneratedImagePro(
-          generatedModelUrl,
-          revisionInstruction,
-          currentSettings
-        );
+        const isMasked = isMaskingMode && maskDataUrl;
+        result = isMasked
+          ? await reviseMaskedImagePro(generatedModelUrl, maskDataUrl!, revisionInstruction, currentSettings)
+          : await reviseGeneratedImagePro(generatedModelUrl, revisionInstruction, currentSettings);
       } else {
         const isMasked = isMaskingMode && maskDataUrl;
         result = isMasked

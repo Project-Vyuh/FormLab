@@ -29,7 +29,14 @@ import {
   reviseGeneratedImage,
   enhanceRevisionPrompt
 } from '../services/geminiService';
-import { reviseGeneratedImagePro } from '../services/geminiProService';
+import {
+  reviseGeneratedImagePro,
+  generateVirtualTryOnImagePro,
+  generateVirtualTryOnWithPoseReferencePro,
+  generatePoseVariationPro,
+  reviseMaskedImagePro,
+  regenerateFramePro
+} from '../services/geminiProService';
 import { getFriendlyErrorMessage } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } from '../services/storageService';
 import { convertToSquare } from '../lib/imageProcessing';
@@ -851,7 +858,15 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
         }
 
-        currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
+        // Choose Pro or regular function based on selected model
+        const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);
+        const usePro = modelInfo?.id === 'gemini-3-pro-image-preview';
+
+        if (usePro) {
+          currentImageUrl = await generateVirtualTryOnImagePro(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
+        } else {
+          currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
+        }
       }
 
       // Upload to Firebase Storage if user is logged in and result is base64
@@ -1465,7 +1480,15 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
               setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}...`);
             }
 
-            currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
+            // Choose Pro or regular function based on selected model
+            const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);
+            const usePro = modelInfo?.id === 'gemini-3-pro-image-preview';
+
+            if (usePro) {
+              currentImageUrl = await generateVirtualTryOnImagePro(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
+            } else {
+              currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
+            }
           }
           promptForHistory += `Applied ${visibleGarmentLayers.map(l => l.garment!.name).join(', ')}`;
         }

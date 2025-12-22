@@ -314,7 +314,7 @@ const getFloorPrompt = (settings: FloorSettings): string => {
     return prompt;
 };
 
-const getStudioEnvironmentPrompt = (environment: StudioEnvironment, sculpting: ShadowSculptingSettings, floor: FloorSettings): string => {
+export const getStudioEnvironmentPrompt = (environment: StudioEnvironment, sculpting: ShadowSculptingSettings, floor: FloorSettings): string => {
     let prompt = ' **Studio Environment:**';
 
     switch (environment.type) {
@@ -534,7 +534,7 @@ const getSensorSizePrompt = (sensorSize?: SensorSize): string => {
     return desc ? ` **Sensor Character:** ${desc}` : '';
 };
 
-const getCameraPositionPrompt = (settings: CameraPositionSettings): string => {
+export const getCameraPositionPrompt = (settings: CameraPositionSettings): string => {
     if (!settings) return '';
     const { height, tilt } = settings;
     let prompt = ' **Camera Position:**';
@@ -742,7 +742,7 @@ const getVirtualExifPrompt = (settings: GenerationSettings): string => {
 };
 
 
-const getLightingPrompt = (lightingRig: GenerationSettings['lightingRig'], accessoryPrompt?: string): string => {
+export const getLightingPrompt = (lightingRig: GenerationSettings['lightingRig'], accessoryPrompt?: string): string => {
     let lightingPrompt = ' The scene has a professional studio lighting setup.';
 
     const { hdri } = lightingRig;
@@ -1759,7 +1759,7 @@ export const generateDetailedGarmentDescription = (analysis: GarmentAnalysis): s
 };
 
 // Build enhanced try-on prompt with detailed garment analysis
-const buildEnhancedTryOnPrompt = (
+export const buildEnhancedTryOnPrompt = (
     garmentDescription: string,
     settings: GenerationSettings,
     backgroundInstruction: string,
@@ -1804,7 +1804,7 @@ ${backgroundInstruction}
 };
 
 // Build basic try-on prompt (legacy fallback)
-const buildBasicTryOnPrompt = (
+export const buildBasicTryOnPrompt = (
     settings: GenerationSettings,
     backgroundInstruction: string,
     promptSuffix: string
