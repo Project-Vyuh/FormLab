@@ -37,7 +37,7 @@ import {
   reviseMaskedImagePro,
   regenerateFramePro
 } from '../services/geminiProService';
-import { getFriendlyErrorMessage } from '../lib/utils';
+import { getFriendlyErrorMessage, cn } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } from '../services/storageService';
 import { convertToSquare } from '../lib/imageProcessing';
 import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem, deleteGlobalWardrobeItem, subscribeToGlobalWardrobe, checkWardrobeItemExists } from '../services/firestoreService';
@@ -840,9 +840,14 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
         const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
 
+        // Choose Pro or regular function based on selected model
+        const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);
+        const usePro = modelInfo?.id === 'gemini-3-pro-image-preview';
+
         // Enhanced Try-On: Use cached analysis if available, or analyze garment
+        // SKIP explicit analysis for Pro model (it has superior native visual reasoning)
         let garmentAnalysis: GarmentAnalysis | undefined;
-        if (generationSettings.useEnhancedTryOn !== false) {
+        if (generationSettings.useEnhancedTryOn !== false && !usePro) {
           const cacheKey = getCacheKey(layer.garment!.url);
           garmentAnalysis = garmentAnalysisCache.get(cacheKey);
 
@@ -858,12 +863,10 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
         }
 
-        // Choose Pro or regular function based on selected model
-        const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);
-        const usePro = modelInfo?.id === 'gemini-3-pro-image-preview';
-
         if (usePro) {
-          currentImageUrl = await generateVirtualTryOnImagePro(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
+          const res = await generateVirtualTryOnImagePro(currentImageUrl, garmentFile, generationSettings);
+          currentImageUrl = res.imageUrl;
+          if (res.thoughts) (window as any).__lastThoughts = res.thoughts;
         } else {
           currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
         }
@@ -899,7 +902,9 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         type: 'try-on',
         baseModelId: selectedStylingModel!.baseModelId,
         outfitGarmentIds: garmentIds,
+        thoughts: (window as any).__lastThoughts,
       };
+      delete (window as any).__lastThoughts;
       console.log('[ImageStudio] Saving outfit stack to history:', outfitStack);
       console.log('[ImageStudio] Saving garment IDs:', garmentIds);
 
@@ -1371,24 +1376,29 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       }
 
       let result;
-      if (selectedGenerationModel === 'gemini-3-pro-image-preview') {
+      const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);
+      const isProModel = modelInfo?.id === 'gemini-3-pro-image-preview';
+
+      if (isProModel) {
         // Pro model revision
         result = await reviseGeneratedImagePro(
           displayImageUrl,
-          revisionPrompt, // Use simple revision prompt for Pro, or construct a more complex one if needed
+          revisionPrompt,
           generationSettings
         );
       } else {
         // Standard model revision
-        result = await reviseGeneratedImage(displayImageUrl, revisionPrompt, generationSettings, 'gemini-2.5-flash-image', outfitInstruction);
+        result = {
+          imageUrl: await reviseGeneratedImage(displayImageUrl, revisionPrompt, generationSettings, 'gemini-2.5-flash-image', outfitInstruction)
+        };
       }
 
-      // Upload to Firebase Storage if user is logged in and result is base64
-      let finalImageUrl = result;
-      if (currentUser && isBase64Url(result)) {
+      // Upload to Firebase Storage if user is logged in and result.imageUrl is base64
+      let finalImageUrl = result.imageUrl;
+      if (currentUser && isBase64Url(result.imageUrl)) {
         try {
           finalImageUrl = await uploadBase64Image(
-            result,
+            result.imageUrl,
             currentUser.uid,
             'tryons',
             `revision_${Date.now()}.jpg`,
@@ -1408,11 +1418,12 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         imageUrl: finalImageUrl,
         prompt: revisionPrompt,
         settings: deepCopy(generationSettings),
-        modelName: "Nano Banana",
+        modelName: selectedGenerationModel, // Use the actual selected model name
         isStarred: false,
         type: 'try-on-revision',
         baseModelId: selectedStylingModel!.baseModelId,
         outfitGarmentIds: garmentIds,
+        thoughts: result.thoughts, // Store internal reasoning
       };
 
       setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
@@ -1485,7 +1496,11 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             const usePro = modelInfo?.id === 'gemini-3-pro-image-preview';
 
             if (usePro) {
-              currentImageUrl = await generateVirtualTryOnImagePro(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
+              const res = await generateVirtualTryOnImagePro(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
+              currentImageUrl = res.imageUrl;
+              // Thoughts are captured per-layer in Step 1, but we only really need them for the final result in Step 3 if we were careful
+              // However, since handleApplyChanges is sequential, we'll just use the last one's thoughts if any
+              if (res.thoughts) (window as any).__lastThoughts = res.thoughts;
             } else {
               currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
             }
@@ -1523,13 +1538,26 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           outfitInstruction = `PRESERVE the current outfit (${garmentNames}) exactly as it appears in the image. Do NOT revert to base underwear. The model is ALREADY wearing the correct clothing.`;
         }
 
-        currentImageUrl = await reviseGeneratedImage(
-          currentImageUrl,
-          revisionInstruction,
-          generationSettings,
-          'gemini-2.5-flash-image',
-          outfitInstruction
-        );
+        const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);
+        const usePro = modelInfo?.id === 'gemini-3-pro-image-preview';
+
+        if (usePro) {
+          const res = await reviseGeneratedImagePro(
+            currentImageUrl,
+            revisionInstruction,
+            generationSettings
+          );
+          currentImageUrl = res.imageUrl;
+          if (res.thoughts) (window as any).__lastThoughts = res.thoughts;
+        } else {
+          currentImageUrl = await reviseGeneratedImage(
+            currentImageUrl,
+            revisionInstruction,
+            generationSettings,
+            'gemini-2.5-flash-image',
+            outfitInstruction
+          );
+        }
       }
 
       // Upload to Firebase Storage if user is logged in and result is base64
@@ -1560,12 +1588,14 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         imageUrl: finalImageUrl,
         prompt: promptForHistory,
         settings: deepCopy(generationSettings),
-        modelName: "Nano Banana",
+        modelName: selectedGenerationModel,
         isStarred: false,
         type: 'try-on-revision',
         baseModelId: selectedStylingModel!.baseModelId,
         outfitGarmentIds: garmentIds,
+        thoughts: (window as any).__lastThoughts,
       };
+      delete (window as any).__lastThoughts;
       console.log('[ImageStudio] History item created:', newHistoryItem.id, 'outfitGarmentIds:', newHistoryItem.outfitGarmentIds);
 
       setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
@@ -1711,6 +1741,28 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                       <span className="hidden sm:inline">Start Over</span>
                     </button>
                   )}
+                  <div className="w-px h-6 bg-white/10 mx-2"></div>
+
+                  {/* Resolution Selector for Nano Banana Pro */}
+                  {generationModels.find(m => m.name === selectedGenerationModel)?.id === 'gemini-3-pro-image-preview' && (
+                    <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/5 mr-2">
+                      {(['1K', '2K', '4K'] as const).map((size) => (
+                        <button
+                          key={size}
+                          onClick={() => setGenerationSettings(gs => ({ ...gs, imageSize: size }))}
+                          className={cn(
+                            "px-2 py-1 text-[10px] font-bold rounded-md transition-all",
+                            generationSettings.imageSize === size
+                              ? "bg-blue-500 text-white shadow-sm"
+                              : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                          )}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="w-px h-6 bg-white/10 mx-2"></div>
 
                   {/* Upscale Menu */}

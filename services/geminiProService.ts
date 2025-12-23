@@ -24,6 +24,11 @@ import {
 // Re-export model-agnostic functions for convenience
 export { upscaleImage, selectivelyEnhanceImage, analyzeGarmentDetailed, generateDetailedGarmentDescription };
 
+export interface GenerationResult {
+    imageUrl: string;
+    thoughts?: string;
+}
+
 // Helper for file to part conversion (duplicated to avoid circular dependency issues if not exported)
 const fileToPart = async (file: File) => {
     const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -84,19 +89,77 @@ const dataUrlToPart = async (url: string) => {
     return { inlineData: { mimeType, data } };
 }
 
-const handleApiResponse = (response: GenerateContentResponse): string => {
+const applyProFeatures = (config: any, settings: GenerationSettings) => {
+    const tools: any[] = [];
+
+    console.log('[GeminiProService] Applying Pro Features:', {
+        googleSearchGrounding: settings.googleSearchGrounding,
+        thinkingMode: settings.thinkingMode,
+        imageSize: settings.imageSize
+    });
+
+    // Ensure responseModalities exists
+    if (!config.responseModalities) {
+        config.responseModalities = [Modality.IMAGE];
+    }
+
+    // Grounding with Google Search
+    if (settings.googleSearchGrounding) {
+        console.log('[GeminiProService] Enabling Google Search Grounding');
+        tools.push({ google_search: {} });
+        if (!config.responseModalities.includes(Modality.TEXT)) {
+            config.responseModalities.push(Modality.TEXT);
+        }
+    }
+
+    // Thinking Mode (Internal reasoning)
+    if (settings.thinkingMode) {
+        console.log('[GeminiProService] Enabling Thinking Mode (TEXT modality)');
+        if (!config.responseModalities.includes(Modality.TEXT)) {
+            config.responseModalities.push(Modality.TEXT);
+        }
+    }
+
+    // Image Size (Resolution) - Nano Banana Pro Specific
+    if (settings.imageSize) {
+        console.log(`[GeminiProService] Setting Resolution: ${settings.imageSize}`);
+        config.imageConfig = {
+            ...(config.imageConfig || {}),
+            imageSize: settings.imageSize
+        };
+    }
+
+    return tools.length > 0 ? tools : undefined;
+};
+
+const handleApiResponse = (response: GenerateContentResponse): GenerationResult => {
     if (response.promptFeedback?.blockReason) {
         const { blockReason, blockReasonMessage } = response.promptFeedback;
         const errorMessage = `Request was blocked. Reason: ${blockReason}. ${blockReasonMessage || ''}`;
         throw new Error(errorMessage);
     }
 
+    let imageUrl: string | undefined;
+    let thoughts: string | undefined;
+
     for (const candidate of response.candidates ?? []) {
+        // Capture thoughts (TEXT modality)
+        const textParts = candidate.content?.parts?.filter(part => part.text);
+        if (textParts && textParts.length > 0) {
+            thoughts = textParts.map(p => p.text).join('\n\n');
+            console.log('[GeminiProService] SUCCESS: Captured reasoning/thoughts (Length:', thoughts.length, ')');
+        }
+
+        // Capture image (IMAGE modality)
         const imagePart = candidate.content?.parts?.find(part => part.inlineData);
         if (imagePart?.inlineData) {
             const { mimeType, data } = imagePart.inlineData;
-            return `data:${mimeType};base64,${data}`;
+            imageUrl = `data:${mimeType};base64,${data}`;
         }
+    }
+
+    if (imageUrl) {
+        return { imageUrl, thoughts };
     }
 
     const finishReason = response.candidates?.[0]?.finishReason;
@@ -199,7 +262,7 @@ const getPoseAndExpressionPrompt = (settings: GenerationSettings): string => {
 
 // --- Main Generation Functions for Gemini 3 Pro ---
 
-export const generateModelImagePro = async (userImage: File, settings: GenerationSettings): Promise<string> => {
+export const generateModelImagePro = async (userImage: File, settings: GenerationSettings): Promise<GenerationResult> => {
     const userImagePart = await fileToPart(userImage);
 
     // Use the EXACT same prompt construction as Nano Banana (geminiService.ts generateModelImage)
@@ -295,24 +358,19 @@ Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distort
         safetySettings: SAFETY_SETTINGS,
     };
 
-    // Only add image size if explicitly specified by user (not a default)
-    // This allows the model to choose optimal resolution when not specified
-    if (settings.imageSize) {
-        generationConfig.imageConfig = {
-            ...(generationConfig.imageConfig || {}),
-            imageSize: settings.imageSize
-        };
-    }
+    const tools = applyProFeatures(generationConfig, settings);
 
+    console.log('[GeminiProService] Sending generateContent request (Pro)...');
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: { parts: [userImagePart, { text: prompt }] },
         config: generationConfig,
-    });
+        tools: tools,
+    } as any);
     return handleApiResponse(response);
 };
 
-export const generateModelFromDescriptionPro = async (description: string, settings: GenerationSettings): Promise<string> => {
+export const generateModelFromDescriptionPro = async (description: string, settings: GenerationSettings): Promise<GenerationResult> => {
     // Use the EXACT same prompt construction as Nano Banana (geminiService.ts generateModelFromDescription)
     // Conditionally apply Global Controls based on panel toggles
     const lightingPrompt = settings.panelToggles.lighting
@@ -368,18 +426,14 @@ Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distort
     };
 
     // Only add image size if explicitly specified by user (not a default)
-    if (settings.imageSize) {
-        generationConfig.imageConfig = {
-            ...(generationConfig.imageConfig || {}),
-            imageSize: settings.imageSize
-        };
-    }
+    const tools = applyProFeatures(generationConfig, settings);
 
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: { parts: [{ text: structuredPrompt }] },
         config: generationConfig,
-    });
+        tools: tools,
+    } as any);
 
     return handleApiResponse(response);
 };
@@ -389,7 +443,7 @@ export const reviseGeneratedImagePro = async (
     revisionInstruction: string,
     settings: GenerationSettings,
     outfitInstruction?: string
-): Promise<string> => {
+): Promise<GenerationResult> => {
     const baseImagePart = await dataUrlToPart(baseImageUrl);
     const promptSuffix = getGenerationPromptSuffix(settings);
 
@@ -433,18 +487,14 @@ ${QA_NEGATIVE_PROMPT}`;
     };
 
     // Only add image size if explicitly specified by user (not a default)
-    if (settings.imageSize) {
-        generationConfig.imageConfig = {
-            ...(generationConfig.imageConfig || {}),
-            imageSize: settings.imageSize
-        };
-    }
+    const tools = applyProFeatures(generationConfig, settings);
 
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: { parts: [baseImagePart, { text: prompt }] },
         config: generationConfig,
-    });
+        tools: tools,
+    } as any);
     return handleApiResponse(response);
 };
 
@@ -455,7 +505,7 @@ export const generateVirtualTryOnImagePro = async (
     garmentImage: File,
     settings: GenerationSettings,
     garmentAnalysis?: GarmentAnalysis
-): Promise<string> => {
+): Promise<GenerationResult> => {
     const modelImagePart = await dataUrlToPart(modelImageUrl);
     const garmentImagePart = await fileToPart(garmentImage);
 
@@ -476,8 +526,10 @@ export const generateVirtualTryOnImagePro = async (
         const garmentDescription = generateDetailedGarmentDescription(garmentAnalysis);
         prompt = buildEnhancedTryOnPrompt(garmentDescription, settings, backgroundInstruction, promptSuffix);
     } else {
-        // Fallback to basic prompt
-        prompt = buildBasicTryOnPrompt(settings, backgroundInstruction, promptSuffix);
+        // NATIVE PRO MODE (No external analysis)
+        // Gemini 3 Pro has superior visual reasoning. We instruct it to look at the garment image directly.
+        const garmentDescription = "The garment shown in the second image. PRESERVE its exact texture, material, construction, and details with forensic accuracy.";
+        prompt = buildEnhancedTryOnPrompt(garmentDescription, settings, backgroundInstruction, promptSuffix);
     }
 
     // Construct generation config
@@ -487,18 +539,14 @@ export const generateVirtualTryOnImagePro = async (
     };
 
     // Add image size if specified (Nano Banana Pro specific)
-    if (settings.imageSize) {
-        generationConfig.imageConfig = {
-            ...(generationConfig.imageConfig || {}),
-            imageSize: settings.imageSize
-        };
-    }
+    const tools = applyProFeatures(generationConfig, settings);
 
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: { parts: [modelImagePart, garmentImagePart, { text: prompt }] },
         config: generationConfig,
-    });
+        tools: tools,
+    } as any);
     return handleApiResponse(response);
 };
 
@@ -507,7 +555,7 @@ export const generateVirtualTryOnWithPoseReferencePro = async (
     garmentImage: File,
     poseReferenceImage: File,
     settings: GenerationSettings
-): Promise<string> => {
+): Promise<GenerationResult> => {
     const modelImagePart = await dataUrlToPart(modelImageUrl);
     const garmentImagePart = await fileToPart(garmentImage);
     const poseReferenceImagePart = await fileToPart(poseReferenceImage);
@@ -550,18 +598,14 @@ ${promptSuffix}`;
     };
 
     // Add image size if specified (Nano Banana Pro specific)
-    if (settings.imageSize) {
-        generationConfig.imageConfig = {
-            ...(generationConfig.imageConfig || {}),
-            imageSize: settings.imageSize
-        };
-    }
+    const tools = applyProFeatures(generationConfig, settings);
 
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: { parts: [modelImagePart, garmentImagePart, poseReferenceImagePart, { text: prompt }] },
         config: generationConfig,
-    });
+        tools: tools,
+    } as any);
     return handleApiResponse(response);
 };
 
@@ -569,7 +613,7 @@ export const generatePoseVariationPro = async (
     tryOnImageUrl: string,
     poseInstruction: string,
     settings: GenerationSettings
-): Promise<string> => {
+): Promise<GenerationResult> => {
     const tryOnImagePart = await dataUrlToPart(tryOnImageUrl);
     const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any, 'posePrompt'] });
 
@@ -595,18 +639,14 @@ ${promptSuffix}`;
     };
 
     // Add image size if specified (Nano Banana Pro specific)
-    if (settings.imageSize) {
-        generationConfig.imageConfig = {
-            ...(generationConfig.imageConfig || {}),
-            imageSize: settings.imageSize
-        };
-    }
+    const tools = applyProFeatures(generationConfig, settings);
 
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: { parts: [tryOnImagePart, { text: prompt }] },
         config: generationConfig,
-    });
+        tools: tools,
+    } as any);
     return handleApiResponse(response);
 };
 
@@ -615,7 +655,7 @@ export const reviseMaskedImagePro = async (
     maskDataUrl: string,
     revisionPrompt: string,
     settings: GenerationSettings
-): Promise<string> => {
+): Promise<GenerationResult> => {
     const baseImagePart = await dataUrlToPart(baseImageUrl);
     const maskImagePart = await dataUrlToPart(maskDataUrl);
 
@@ -643,18 +683,14 @@ export const reviseMaskedImagePro = async (
     };
 
     // Add image size if specified (Nano Banana Pro specific)
-    if (settings.imageSize) {
-        generationConfig.imageConfig = {
-            ...(generationConfig.imageConfig || {}),
-            imageSize: settings.imageSize
-        };
-    }
+    const tools = applyProFeatures(generationConfig, settings);
 
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: { parts: [baseImagePart, maskImagePart, { text: prompt }] },
         config: generationConfig,
-    });
+        tools: tools,
+    } as any);
 
     return handleApiResponse(response);
 };
@@ -662,7 +698,7 @@ export const reviseMaskedImagePro = async (
 export const regenerateFramePro = async (
     baseImageUrl: string,
     settings: GenerationSettings
-): Promise<string> => {
+): Promise<GenerationResult> => {
     const baseImagePart = await dataUrlToPart(baseImageUrl);
     const { aspectRatio } = settings;
     const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['aspectRatio' as any, 'shotFraming'] });
@@ -684,18 +720,13 @@ Return ONLY the final image.` + getOutfitPrompt("female");
         safetySettings: SAFETY_SETTINGS,
     };
 
-    // Add image size if specified (Nano Banana Pro specific)
-    if (settings.imageSize) {
-        generationConfig.imageConfig = {
-            ...(generationConfig.imageConfig || {}),
-            imageSize: settings.imageSize
-        };
-    }
+    const tools = applyProFeatures(generationConfig, settings);
 
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: { parts: [baseImagePart, { text: prompt }] },
         config: generationConfig,
-    });
+        tools: tools,
+    } as any);
     return handleApiResponse(response);
 };

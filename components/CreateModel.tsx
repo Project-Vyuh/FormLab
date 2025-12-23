@@ -566,7 +566,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
     }
   }, [toastMessage]);
 
-  const addHistoryItem = useCallback(async (newItem: Omit<HistoryItem, 'id' | 'parentId' | 'isStarred' | 'imageUrl' | 'type' | 'baseModelId'>, imageUrl: string) => {
+  const addHistoryItem = useCallback(async (newItem: Omit<HistoryItem, 'id' | 'parentId' | 'isStarred' | 'imageUrl' | 'type' | 'baseModelId'>, imageUrl: string, thoughts?: string) => {
     const newId = `rev-${Date.now()}`;
 
     // Upload to Firebase Storage if user is logged in and imageUrl is base64
@@ -608,6 +608,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
       isStarred: false,
       type: historyType,
       baseModelId: baseModelId,
+      thoughts: thoughts,
     };
     setGeneratedModelHistory(prev => [...prev, fullHistoryItem]);
     setCurrentHistoryItemId(newId);
@@ -731,7 +732,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
           ? await generateModelImage(processedFile, generationSettings, 'gemini-2.5-flash-image')
           : await generateModelFromDescription(modelDescription, generationSettings, 'gemini-2.5-flash-image');
       }
-      await addHistoryItem({ prompt, settings: generationSettings, modelName: selectedModelName }, result);
+      const imageUrl = typeof result === 'string' ? result : result.imageUrl;
+      const thoughts = typeof result === 'string' ? undefined : result.thoughts;
+      await addHistoryItem({ prompt, settings: generationSettings, modelName: selectedModelName }, imageUrl, thoughts);
     } catch (err) {
       setToastMessage(getFriendlyErrorMessage(err, 'Failed to create model'));
     } finally {
@@ -786,7 +789,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
           : await reviseGeneratedImage(generatedModelUrl, revisionInstruction, currentSettings, 'gemini-2.5-flash-image');
       }
 
-      await addHistoryItem({ prompt: promptForHistory, settings: currentSettings, modelName: selectedModelName }, result);
+      const imageUrl = typeof result === 'string' ? result : result.imageUrl;
+      const thoughts = typeof result === 'string' ? undefined : result.thoughts;
+      await addHistoryItem({ prompt: promptForHistory, settings: currentSettings, modelName: selectedModelName }, imageUrl, thoughts);
       setRevisionPrompt('');
       if (isMaskingMode) {
         setIsMaskingMode(false);

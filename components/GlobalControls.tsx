@@ -759,6 +759,47 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                         </p>
                     </div>
 
+                    <div className="pt-2 border-t border-white/5 space-y-3">
+                        <h4 className="text-xs font-semibold text-gray-300">Nano Banana Pro Suite</h4>
+                        <div className="space-y-1.5">
+                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={!!generationSettings.googleSearchGrounding}
+                                    onChange={(e) => onSettingsChange(gs => ({
+                                        ...gs,
+                                        googleSearchGrounding: e.target.checked
+                                    }))}
+                                    className="h-4 w-4 rounded bg-black/30 border-gray-600 text-blue-500 focus:ring-blue-500"
+                                    disabled={isGenerating}
+                                />
+                                <span>Live Grounding</span>
+                            </label>
+                            <p className="text-[10px] text-gray-500 ml-6">
+                                Improve accuracy using Google Search to clarify complex styling requests.
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={!!generationSettings.thinkingMode}
+                                    onChange={(e) => onSettingsChange(gs => ({
+                                        ...gs,
+                                        thinkingMode: e.target.checked
+                                    }))}
+                                    className="h-4 w-4 rounded bg-black/30 border-gray-600 text-blue-500 focus:ring-blue-500"
+                                    disabled={isGenerating}
+                                />
+                                <span>Thinking Mode</span>
+                            </label>
+                            <p className="text-[10px] text-gray-500 ml-6">
+                                Enable model reasoning for higher forensic accuracy in output (Internal optimization).
+                            </p>
+                        </div>
+                    </div>
+
                     <div className="space-y-1.5">
                         <label className="text-[11px] text-gray-400">Negative Prompt</label>
                         <textarea value={generationSettings.negativePrompt} onChange={(e) => onSettingsChange(gs => ({ ...gs, negativePrompt: e.target.value }))} placeholder="e.g. blurry, text, watermark" rows={2} className="w-full p-3 bg-black/20 text-gray-200 border border-white/10 rounded-lg text-xs placeholder-gray-600 focus:border-white/20 focus:bg-black/30 focus:ring-0 outline-none transition-all resize-none" />
