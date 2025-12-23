@@ -92,10 +92,15 @@ const dataUrlToPart = async (url: string) => {
 const applyProFeatures = (config: any, settings: GenerationSettings) => {
     const tools: any[] = [];
 
+    // Nano Banana Pro features should be ENABLED by default if not explicitly set
+    const googleSearchGrounding = settings.googleSearchGrounding ?? true;
+    const thinkingMode = settings.thinkingMode ?? true;
+    const imageSize = settings.imageSize || '1K';
+
     console.log('[GeminiProService] Applying Pro Features:', {
-        googleSearchGrounding: settings.googleSearchGrounding,
-        thinkingMode: settings.thinkingMode,
-        imageSize: settings.imageSize
+        googleSearchGrounding,
+        thinkingMode,
+        imageSize
     });
 
     // Ensure responseModalities exists
@@ -104,7 +109,7 @@ const applyProFeatures = (config: any, settings: GenerationSettings) => {
     }
 
     // Grounding with Google Search
-    if (settings.googleSearchGrounding) {
+    if (googleSearchGrounding) {
         console.log('[GeminiProService] Enabling Google Search Grounding');
         tools.push({ google_search: {} });
         if (!config.responseModalities.includes(Modality.TEXT)) {
@@ -113,20 +118,28 @@ const applyProFeatures = (config: any, settings: GenerationSettings) => {
     }
 
     // Thinking Mode (Internal reasoning)
-    if (settings.thinkingMode) {
+    if (thinkingMode) {
         console.log('[GeminiProService] Enabling Thinking Mode (TEXT modality)');
         if (!config.responseModalities.includes(Modality.TEXT)) {
             config.responseModalities.push(Modality.TEXT);
         }
     }
 
-    // Image Size (Resolution) - Nano Banana Pro Specific
-    if (settings.imageSize) {
-        console.log(`[GeminiProService] Setting Resolution: ${settings.imageSize}`);
-        config.imageConfig = {
-            ...(config.imageConfig || {}),
-            imageSize: settings.imageSize
-        };
+    // Image Size (Resolution) and Aspect Ratio - Nano Banana Pro Specific
+    const imageConfig: any = { ...(config.imageConfig || {}) };
+
+    if (imageSize) {
+        console.log(`[GeminiProService] Setting Resolution: ${imageSize}`);
+        imageConfig.imageSize = imageSize;
+    }
+
+    if (settings.aspectRatio) {
+        console.log(`[GeminiProService] Setting Aspect Ratio: ${settings.aspectRatio}`);
+        imageConfig.aspectRatio = settings.aspectRatio;
+    }
+
+    if (Object.keys(imageConfig).length > 0) {
+        config.imageConfig = imageConfig;
     }
 
     return tools.length > 0 ? tools : undefined;
@@ -262,8 +275,8 @@ const getPoseAndExpressionPrompt = (settings: GenerationSettings): string => {
 
 // --- Main Generation Functions for Gemini 3 Pro ---
 
-export const generateModelImagePro = async (userImage: File, settings: GenerationSettings): Promise<GenerationResult> => {
-    const userImagePart = await fileToPart(userImage);
+export const generateModelImagePro = async (userImages: File[], settings: GenerationSettings): Promise<GenerationResult> => {
+    const imageParts = await Promise.all(userImages.map(fileToPart));
 
     // Use the EXACT same prompt construction as Nano Banana (geminiService.ts generateModelImage)
     // Conditionally apply Global Controls based on panel toggles
@@ -279,12 +292,12 @@ export const generateModelImagePro = async (userImage: File, settings: Generatio
     const outfitRule = getOutfitPrompt("female"); // Default to female if no description provided for image upload
     const posePrompt = getPoseAndExpressionPrompt(settings);
 
-    // EXACT prompt structure from Nano Banana - no modifications
+    // ENHANCED prompt structure for MULTI-IMAGE identity preservation
     const prompt = `[ROLE]
 You are a world-class professional fashion photographer and digital artist, renowned for creating ultra-realistic, high-end studio portraits. You are using a Phase One XF IQ4 150MP camera system.
 
 [TASK]
-Generate a RAW, Hyper-Realistic Photo of a model based on the reference image and the following strict technical specifications.
+Generate a RAW, Hyper-Realistic Photo of a model based on the ${imageParts.length} provided reference images and the following strict technical specifications.
 
 [STRICT OUTFIT RULE]
 ${outfitRule}
@@ -292,44 +305,39 @@ ${outfitRule}
 [STRICT FRAMING RULE]
 ${framingPrompt}
 
-[CRITICAL: REFERENCE IMAGE PREPROCESSING & BACKGROUND HANDLING]
-The reference image has been preprocessed with padding to create a 1:1 aspect ratio.
+[CRITICAL: MULTI-IMAGE IDENTITY PRESERVATION (HIGHEST PRIORITY)]
+You have been provided with ${imageParts.length} reference images of the same subject. 
 **IMPORTANT INSTRUCTIONS**:
 
-1. SUBJECT EXTRACTION:
-   - The actual person/model is centered in the reference image
-   - Padding areas around the subject match the studio background color specified below
-   - Focus ONLY on the human subject - preserve their exact facial features, body proportions, and pose
+1. INTEGRATED IDENTITY ANALYSIS:
+   - Carefully analyze ALL provided reference images to build a comprehensive 3D understanding of the subject's identity.
+   - Cross-reference features across different angles, lighting conditions, and expressions to ensure 100% forensic accuracy.
+   - If there are variations in the user's appearance across images, prioritize the most consistent features to maintain a coherent identity.
 
-2. BACKGROUND RENDERING:
-   - The ENTIRE output must use the studio background specified in [STUDIO SETUP & GLOBAL CONTROLS]
-   - Extend the background seamlessly to all edges of the output frame
-   - NO black, white, or gray bars/borders should appear unless explicitly part of the studio background
-   - The background should look natural and continuous, not layered or composited
+2. SUBJECT EXTRACTION & POSITIONING:
+   - The actual person/model is the subject. Preserve their exact facial features, body proportions, and build.
+   - Frame the subject according to the shot type specified in [STRICT FRAMING RULE].
+   - The subject should appear as if photographed directly in the studio environment.
 
-3. SUBJECT POSITIONING:
-   - Frame the subject according to the shot type specified in [STRICT FRAMING RULE]
-   - The subject should appear as if photographed directly in the studio environment
-   - Maintain the subject's natural position and pose from the reference image
+3. BACKGROUND RENDERING:
+   - The ENTIRE output must use the studio background specified in [STUDIO SETUP & GLOBAL CONTROLS].
+   - Extend the background seamlessly to all edges of the output frame.
+   - NO padding artifacts, black/white bars, or borders should appear.
 
-4. FACIAL & BODY ACCURACY (HIGHEST PRIORITY):
-   - Match the reference photo's facial features with EXTREME precision:
-     * Exact eye shape, color, spacing, and expression
-     * Precise nose structure, bridge width, and nostril shape
-     * Accurate mouth shape, lip fullness, and natural expression
-     * Identical face shape, jawline, and chin structure
-     * Same cheekbone prominence and facial proportions
-     * Exact skin tone, complexion, and any visible features (freckles, moles, etc.)
-   - Preserve exact body proportions and build from reference:
-     * Same height-to-width ratio
-     * Identical shoulder width and posture
-     * Matching limb proportions and body type
+4. FORENSIC FACIAL & BODY ACCURACY:
+   - Match the subject's facial features with EXTREME precision based on the set of images:
+     * Exact eye shape, color, spacing, and habitual expression.
+     * Precise nose structure (bridge, tip, nostrils) from multiple angles.
+     * Accurate mouth shape, lip fullness, and natural resting state.
+     * Identical face shape, jawline, and unique facial architecture.
+     * Exact skin tone, texture, and permanent features (freckles, moles, scars).
+   - Preserve exact body proportions and build:
+     * Same height-to-width ratio, shoulder width, and posture.
+     * Matching limb proportions and athleticism.
    - Maintain the same hair:
-     * Exact color, including highlights or variations
-     * Same style, length, and texture
-     * Identical hairline and volume
+     * Exact color, texture, volume, and hairline.
 
-CRITICAL: The output must show a seamless studio photograph with no visible padding or borders. The subject's identity must be perfectly preserved.
+CRITICAL: The output must show a seamless studio photograph. The subject's identity must be indistinguishable from the person in the reference images.
 
 [DYNAMIC POSE & EXPRESSION]
 ${posePrompt}
@@ -344,13 +352,13 @@ ${cameraPrompt}
 - Constraint: Ensure the subject fits completely within the ${settings.aspectRatio} frame.
 
 [SUBJECT SPECIFICATIONS]
-- Identity: Match the face, hair, and ethnicity of the reference photo with forensic accuracy.
+- Identity: Match the subject across all ${imageParts.length} reference photos with forensic accuracy.
 - Skin Details: ${REALISM_TOKENS}
 - Anatomy: ${ANATOMY_TOKENS}
 
 [NEGATIVE CONSTRAINTS]
 ${QA_NEGATIVE_PROMPT}
-Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distorted face, bad hands, bad feet, cartoonish style, illustration style, low resolution, blurry, artifacts, watermark, text, signature, shoes (unless specified), socks (unless specified), black borders, padding artifacts, letterboxing.`;
+Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distorted face, bad hands, bad feet, cartoonish style, illustration style, low resolution, blurry, artifacts, watermark, text, signature, shoes (unless specified), socks (unless specified), black borders, identity mismatch.`;
 
     // Construct generation config - SAME as Nano Banana
     const generationConfig: any = {
@@ -360,10 +368,10 @@ Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distort
 
     const tools = applyProFeatures(generationConfig, settings);
 
-    console.log('[GeminiProService] Sending generateContent request (Pro)...');
+    console.log(`[GeminiProService] Sending generateContent request with ${imageParts.length} reference images (Pro)...`);
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
-        contents: { parts: [userImagePart, { text: prompt }] },
+        contents: { parts: [...imageParts, { text: prompt }] },
         config: generationConfig,
         tools: tools,
     } as any);

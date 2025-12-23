@@ -13,12 +13,12 @@ import ConfirmationModal from './ConfirmationModal';
 import {
   Share2Icon, ChevronRightIcon, UndoIcon, RedoIcon, ZapIcon, DownloadIcon,
   LayoutIcon, CameraIcon, SunIcon, LayersIcon, WandIcon, SlidersHorizontalIcon,
-  Trash2Icon, PlusIcon, UserIcon, PenLineIcon, CubeIcon, RotateCcwIcon
+  Trash2Icon, PlusIcon, UserIcon, PenLineIcon, CubeIcon, RotateCcwIcon, ChevronDownIcon
 } from './icons';
 import WardrobeLibrary from './WardrobeLibrary';
 import VersionHistoryPanel from './VersionHistoryPanel';
 import ProductDetailsModal from './ProductDetailsModal';
-import { Model, WardrobeItem, OutfitLayer, GenerationSettings, HistoryItem, WardrobeCategory, BrandStyle, GarmentAnalysis, Light, LightRole, SceneAtmosphere, ImageProcessingSettings, ShutterSettings, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, PanelToggles, LightingRig, ApertureSettings, CameraPositionSettings, FocusPlaneSettings, Project, User, SelectedStylingModel } from '../types';
+import { Model, WardrobeItem, OutfitLayer, GenerationSettings, HistoryItem, WardrobeCategory, BrandStyle, GarmentAnalysis, Light, LightRole, SceneAtmosphere, ImageProcessingSettings, ShutterSettings, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, PanelToggles, LightingRig, ApertureSettings, CameraPositionSettings, FocusPlaneSettings, Project, User, SelectedStylingModel, AspectRatio } from '../types';
 import {
   generateVirtualTryOnImage,
   generatePoseVariation,
@@ -263,6 +263,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     finishing: false,
     advanced: false
   });
+  const [activeThoughts, setActiveThoughts] = useState<string | undefined>(undefined);
 
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
 
@@ -282,8 +283,10 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   // NEW: Revision Prompt State
   const [revisionPrompt, setRevisionPrompt] = useState('');
   const [isUpscaleMenuOpen, setIsUpscaleMenuOpen] = useState(false);
+  const [isAspectRatioMenuOpen, setIsAspectRatioMenuOpen] = useState(false);
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const upscaleMenuRef = useRef<HTMLDivElement>(null);
+  const aspectRatioMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
 
   // Canvas Zoom State
@@ -351,6 +354,9 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     const handleClickOutside = (event: MouseEvent) => {
       if (upscaleMenuRef.current && !upscaleMenuRef.current.contains(event.target as Node)) {
         setIsUpscaleMenuOpen(false);
+      }
+      if (aspectRatioMenuRef.current && !aspectRatioMenuRef.current.contains(event.target as Node)) {
+        setIsAspectRatioMenuOpen(false);
       }
       if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) {
         setIsDownloadMenuOpen(false);
@@ -840,12 +846,9 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
         const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
 
-        // Choose Pro or regular function based on selected model
         const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);
         const usePro = modelInfo?.id === 'gemini-3-pro-image-preview';
 
-        // Enhanced Try-On: Use cached analysis if available, or analyze garment
-        // SKIP explicit analysis for Pro model (it has superior native visual reasoning)
         let garmentAnalysis: GarmentAnalysis | undefined;
         if (generationSettings.useEnhancedTryOn !== false && !usePro) {
           const cacheKey = getCacheKey(layer.garment!.url);
@@ -854,25 +857,23 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           if (!garmentAnalysis) {
             setLoadingMessage(`Analyzing garment details: ${layer.garment!.name}...`);
             garmentAnalysis = await analyzeGarmentDetailed(garmentFile);
-            // Cache for reuse
             setGarmentAnalysisCache(prev => new Map(prev).set(cacheKey, garmentAnalysis!));
-            console.log(`✓ Analyzed and cached: ${layer.garment!.name}`);
-          } else {
-            console.log(`✓ Using cached analysis: ${layer.garment!.name}`);
           }
-          setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
         }
 
         if (usePro) {
+          setLoadingMessage('Optimizing for Nano Banana Pro (Direct Visualization)...');
           const res = await generateVirtualTryOnImagePro(currentImageUrl, garmentFile, generationSettings);
-          currentImageUrl = res.imageUrl;
-          if (res.thoughts) (window as any).__lastThoughts = res.thoughts;
+          currentImageUrl = typeof res === 'string' ? res : res.imageUrl;
+          if (typeof res !== 'string' && res.thoughts) {
+            setActiveThoughts(res.thoughts);
+            (window as any).__lastThoughts = res.thoughts;
+          }
         } else {
           currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
         }
       }
 
-      // Upload to Firebase Storage if user is logged in and result is base64
       let finalImageUrl = currentImageUrl;
       if (currentUser && isBase64Url(currentImageUrl)) {
         try {
@@ -883,10 +884,8 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             `tryon_${Date.now()}.jpg`,
             currentProjectId || undefined
           );
-          console.log('Try-on image uploaded to Firebase Storage:', finalImageUrl);
         } catch (error) {
-          console.error('Failed to upload try-on image to Firebase Storage, using base64:', error);
-          // Fallback to base64 if upload fails
+          console.error('Failed to upload try-on image to Firebase Storage:', error);
         }
       }
 
@@ -897,7 +896,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         imageUrl: finalImageUrl,
         prompt: "Applied " + visibleGarmentLayers.map(l => l.garment!.name).join(', '),
         settings: deepCopy(generationSettings),
-        modelName: "Nano Banana",
+        modelName: selectedGenerationModel,
         isStarred: false,
         type: 'try-on',
         baseModelId: selectedStylingModel!.baseModelId,
@@ -905,8 +904,6 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         thoughts: (window as any).__lastThoughts,
       };
       delete (window as any).__lastThoughts;
-      console.log('[ImageStudio] Saving outfit stack to history:', outfitStack);
-      console.log('[ImageStudio] Saving garment IDs:', garmentIds);
 
       setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
       setCurrentHistoryItemId(newHistoryItem.id);
@@ -919,7 +916,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [isLoading, hasPendingStackChanges, modelImageUrl, outfitStack, generationSettings, currentHistoryItemId]);
+  }, [isLoading, hasPendingStackChanges, modelImageUrl, outfitStack, generationSettings, currentHistoryItemId, selectedGenerationModel, currentUser, currentProjectId, selectedStylingModel, garmentAnalysisCache]);
 
   const handleStartOver = useCallback(() => {
     if (!modelImageUrl) return;
@@ -1007,6 +1004,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     }
 
     setCurrentHistoryItemId(id);
+    setActiveThoughts(item.thoughts);
     setGenerationSettings(item.settings);
 
     // Restore outfit stack from garment IDs
@@ -1497,10 +1495,11 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
             if (usePro) {
               const res = await generateVirtualTryOnImagePro(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
-              currentImageUrl = res.imageUrl;
-              // Thoughts are captured per-layer in Step 1, but we only really need them for the final result in Step 3 if we were careful
-              // However, since handleApplyChanges is sequential, we'll just use the last one's thoughts if any
-              if (res.thoughts) (window as any).__lastThoughts = res.thoughts;
+              currentImageUrl = typeof res === 'string' ? res : res.imageUrl;
+              if (typeof res !== 'string' && res.thoughts) {
+                setActiveThoughts(res.thoughts);
+                (window as any).__lastThoughts = res.thoughts;
+              }
             } else {
               currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
             }
@@ -1702,6 +1701,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                   generationModels={generationModels}
                   selectedGenerationModel={selectedGenerationModel}
                   onSelectGenerationModel={setSelectedGenerationModel}
+                  thoughts={activeThoughts}
                   projectList={projectList}
                   currentProjectId={currentProjectId}
                   onProjectChange={onProjectChange}
@@ -1743,23 +1743,66 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                   )}
                   <div className="w-px h-6 bg-white/10 mx-2"></div>
 
-                  {/* Resolution Selector for Nano Banana Pro */}
+                  {/* Resolution & Aspect Ratio for Nano Banana Pro */}
                   {generationModels.find(m => m.name === selectedGenerationModel)?.id === 'gemini-3-pro-image-preview' && (
-                    <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/5 mr-2">
-                      {(['1K', '2K', '4K'] as const).map((size) => (
+                    <div className="flex items-center gap-2 mr-2">
+                      <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/5">
+                        {(['1K', '2K', '4K'] as const).map((size) => (
+                          <button
+                            key={size}
+                            onClick={() => setGenerationSettings(gs => ({ ...gs, imageSize: size }))}
+                            className={cn(
+                              "px-2 py-1 text-[10px] font-bold rounded-md transition-all",
+                              generationSettings.imageSize === size
+                                ? "bg-blue-500 text-white shadow-sm"
+                                : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                            )}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div ref={aspectRatioMenuRef} className="relative">
                         <button
-                          key={size}
-                          onClick={() => setGenerationSettings(gs => ({ ...gs, imageSize: size }))}
-                          className={cn(
-                            "px-2 py-1 text-[10px] font-bold rounded-md transition-all",
-                            generationSettings.imageSize === size
-                              ? "bg-blue-500 text-white shadow-sm"
-                              : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
-                          )}
+                          onClick={() => setIsAspectRatioMenuOpen(p => !p)}
+                          disabled={isLoading}
+                          className="h-8 px-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-[10px] font-medium text-gray-400 hover:text-white disabled:opacity-30 transition-colors focus:outline-none border border-transparent hover:border-white/10"
+                          title="Aspect Ratio"
                         >
-                          {size}
+                          <span className="text-blue-400">{generationSettings.aspectRatio || '1:1'}</span>
+                          <ChevronDownIcon className="w-3 h-3 opacity-50" />
                         </button>
-                      ))}
+                        {isAspectRatioMenuOpen && (
+                          <div className="absolute top-full left-0 mt-2 w-32 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden py-1">
+                            <div className="px-3 py-1.5 text-[9px] uppercase tracking-wider text-gray-500 font-semibold border-b border-white/5 mb-1">Aspect Ratio</div>
+                            {[
+                              { id: '1:1', label: '1:1 (Square)' },
+                              { id: '4:5', label: '4:5' },
+                              { id: '3:4', label: '3:4' },
+                              { id: '2:3', label: '2:3' },
+                              { id: '9:16', label: '9:16 (Portrait)' },
+                              { id: '5:4', label: '5:4' },
+                              { id: '4:3', label: '4:3' },
+                              { id: '3:2', label: '3:2' },
+                              { id: '16:9', label: '16:9 (Widescreen)' },
+                              { id: '21:9', label: '21:9' }
+                            ].map((ratio) => (
+                              <button
+                                key={ratio.id}
+                                onClick={() => {
+                                  setGenerationSettings(gs => ({ ...gs, aspectRatio: ratio.id as AspectRatio }));
+                                  setIsAspectRatioMenuOpen(false);
+                                }}
+                                className={`w-full text-left px-3 py-1.5 text-[10px] font-medium hover:bg-white/5 transition-colors flex items-center gap-2 ${generationSettings.aspectRatio === ratio.id ? 'text-white bg-white/5' : 'text-gray-400'}`}
+                              >
+                                {ratio.label}
+                                {generationSettings.aspectRatio === ratio.id && <span className="w-1 h-1 rounded-full bg-blue-500 ml-auto"></span>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 

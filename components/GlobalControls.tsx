@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
     GenerationSettings, PhotoStyle, ShotFraming, AspectRatio, LensProfile, CameraProfile,
     Light, LightRole, HdriMap, SceneAtmosphere, ImageProcessingSettings, BokehShape,
@@ -16,12 +16,24 @@ import CollapsibleSection from './shared/CollapsibleSection';
 import OptionButton from './shared/OptionButton';
 import {
     LayoutIcon, CameraIcon, SunIcon, LayersIcon, WandIcon, SlidersHorizontalIcon,
-    Trash2Icon
+    Trash2Icon, SparklesIcon, ChevronDownIcon
 } from './icons';
+import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const shotFramingOptions: { id: ShotFraming, label: string }[] = [{ id: 'full', label: 'Full Body' }, { id: 'medium', label: 'Medium' }, { id: 'closeup', label: 'Close-Up' }];
-const aspectRatioOptions: { id: AspectRatio, label: string }[] = [{ id: '2:3', label: '2:3' }, { id: '1:1', label: '1:1' }, { id: '4:5', label: '4:5' }, { id: '9:16', label: '9:16' }, { id: '16:9', label: '16:9' }];
+const aspectRatioOptions: { id: AspectRatio, label: string }[] = [
+    { id: '1:1', label: '1:1' },
+    { id: '4:5', label: '4:5' },
+    { id: '3:4', label: '3:4' },
+    { id: '2:3', label: '2:3' },
+    { id: '9:16', label: '9:16' },
+    { id: '5:4', label: '5:4' },
+    { id: '4:3', label: '4:3' },
+    { id: '3:2', label: '3:2' },
+    { id: '16:9', label: '16:9' },
+    { id: '21:9', label: '21:9' }
+];
 const lensProfileOptions: { id: LensProfile, label: string }[] = [
     { id: '24mm', label: '24mm' }, { id: '35mm', label: '35mm' }, { id: '50mm', label: '50mm' }, { id: '85mm', label: '85mm' }, { id: '135mm', label: '135mm' },
 ];
@@ -104,13 +116,17 @@ interface GlobalControlsProps {
     onPanelToggle: (panel: keyof PanelToggles) => void;
     isRevisionMode?: boolean;
     selectedModelName?: string;
+    thoughts?: string;
 }
 
 const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
     const {
         generationSettings, onSettingsChange, isGenerating, openSections, onToggleSection,
-        selectedLightId, onSelectLightId, onAddLight, onUpdateLight, onRemoveLight, onPanelToggle, isRevisionMode, selectedModelName
+        selectedLightId, onSelectLightId, onAddLight, onUpdateLight, onRemoveLight, onPanelToggle,
+        isRevisionMode, selectedModelName, thoughts
     } = props;
+
+    const [isThoughtsExpanded, setIsThoughtsExpanded] = useState(false);
 
     const activePresetLabel = useMemo(() => {
         const currentRig = generationSettings.lightingRig;
@@ -213,7 +229,7 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                     <div>
                         <label className="text-[11px] font-medium text-gray-400">Aspect Ratio</label>
                         <div className="grid grid-cols-5 gap-1.5 mt-0.5">
-                            {aspectRatioOptions.map(option => <OptionButton key={option.id} onClick={() => onSettingsChange(gs => ({ ...gs, aspectRatio: option.id }))} isActive={generationSettings.aspectRatio === option.id} disabled={isGenerating || isRevisionMode || selectedModelName === 'Nano Banana'}>{option.label}</OptionButton>)}
+                            {aspectRatioOptions.map(option => <OptionButton key={option.id} onClick={() => onSettingsChange(gs => ({ ...gs, aspectRatio: option.id }))} isActive={generationSettings.aspectRatio === option.id} disabled={isGenerating || isRevisionMode || (selectedModelName === 'Nano Banana' && !['1:1', '4:5', '3:4', '2:3', '9:16', '16:9', '4:3', '3:2', '21:9', '5:4'].includes(option.id))}>{option.label}</OptionButton>)}
                         </div>
                         {isRevisionMode && <p className="text-[10px] text-gray-500 mt-1">Aspect ratio cannot be changed during revision.</p>}
                         {!isRevisionMode && selectedModelName === 'Nano Banana' && <p className="text-[10px] text-gray-500 mt-1">Aspect ratio selection is not supported by Nano Banana.</p>}
@@ -760,47 +776,57 @@ const GlobalControls: React.FC<GlobalControlsProps> = (props) => {
                     </div>
 
                     <div className="pt-2 border-t border-white/5 space-y-3">
-                        <h4 className="text-xs font-semibold text-gray-300">Nano Banana Pro Suite</h4>
+                        <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                            Nano Banana Pro Features
+                        </h4>
+
                         <div className="space-y-1.5">
-                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+                            <label className={cn(
+                                "flex items-center gap-2 text-[11px] cursor-pointer",
+                                selectedModelName === 'Nano Banana Pro' ? "text-gray-300 opacity-80 cursor-default" : "text-gray-400"
+                            )}>
                                 <input
                                     type="checkbox"
-                                    checked={!!generationSettings.googleSearchGrounding}
+                                    checked={selectedModelName === 'Nano Banana Pro' ? true : !!generationSettings.googleSearchGrounding}
                                     onChange={(e) => onSettingsChange(gs => ({
                                         ...gs,
                                         googleSearchGrounding: e.target.checked
                                     }))}
                                     className="h-4 w-4 rounded bg-black/30 border-gray-600 text-blue-500 focus:ring-blue-500"
-                                    disabled={isGenerating}
+                                    disabled={isGenerating || selectedModelName === 'Nano Banana Pro'}
                                 />
                                 <span>Live Grounding</span>
                             </label>
-                            <p className="text-[10px] text-gray-500 ml-6">
-                                Improve accuracy using Google Search to clarify complex styling requests.
-                            </p>
                         </div>
 
                         <div className="space-y-1.5">
-                            <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
+                            <label className={cn(
+                                "flex items-center gap-2 text-[11px] cursor-pointer",
+                                selectedModelName === 'Nano Banana Pro' ? "text-gray-300 opacity-80 cursor-default" : "text-gray-400"
+                            )}>
                                 <input
                                     type="checkbox"
-                                    checked={!!generationSettings.thinkingMode}
+                                    checked={selectedModelName === 'Nano Banana Pro' ? true : !!generationSettings.thinkingMode}
                                     onChange={(e) => onSettingsChange(gs => ({
                                         ...gs,
                                         thinkingMode: e.target.checked
                                     }))}
                                     className="h-4 w-4 rounded bg-black/30 border-gray-600 text-blue-500 focus:ring-blue-500"
-                                    disabled={isGenerating}
+                                    disabled={isGenerating || selectedModelName === 'Nano Banana Pro'}
                                 />
+                                {isGenerating && (
+                                    <div className="flex items-center gap-1 ml-1" title="Nano Banana Pro is thinking...">
+                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.6)] [animation-delay:0.2s]" />
+                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.6)] [animation-delay:0.4s]" />
+                                    </div>
+                                )}
                                 <span>Thinking Mode</span>
                             </label>
-                            <p className="text-[10px] text-gray-500 ml-6">
-                                Enable model reasoning for higher forensic accuracy in output (Internal optimization).
-                            </p>
                         </div>
                     </div>
 
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 pt-2 border-t border-white/5">
                         <label className="text-[11px] text-gray-400">Negative Prompt</label>
                         <textarea value={generationSettings.negativePrompt} onChange={(e) => onSettingsChange(gs => ({ ...gs, negativePrompt: e.target.value }))} placeholder="e.g. blurry, text, watermark" rows={2} className="w-full p-3 bg-black/20 text-gray-200 border border-white/10 rounded-lg text-xs placeholder-gray-600 focus:border-white/20 focus:bg-black/30 focus:ring-0 outline-none transition-all resize-none" />
                     </div>

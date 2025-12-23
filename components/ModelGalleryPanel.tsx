@@ -45,6 +45,7 @@ interface ModelGalleryPanelProps {
   generationModels: { name: string; id: any; disabled?: boolean; title?: string }[];
   selectedGenerationModel: string;
   onSelectGenerationModel: (modelName: string) => void;
+  thoughts?: string;
   // Project Props
   projectList: Project[];
   currentProjectId: string | null;
@@ -69,8 +70,12 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
     generationSettings, onSettingsChange, openSections, onToggleSection, onPanelToggle, isGenerating,
     selectedLightId, onSelectLightId, onAddLight, onUpdateLight, onRemoveLight,
     categories, onCreateCategory, onRenameCategory, onDeleteCategory, onDeleteProduct,
-    generationModels, selectedGenerationModel, onSelectGenerationModel,
-    projectList, currentProjectId, onProjectChange, onOpenProjectModal,
+    generationModels,
+    selectedGenerationModel,
+    onSelectGenerationModel,
+    thoughts,
+    projectList,
+    currentProjectId, onProjectChange, onOpenProjectModal,
     revisionPrompt, onRevisionPromptChange, onEnhanceRevisionPrompt, onApplyRevision, isEnhancingPrompt,
     hasSettingsChanged, hasOutfitChanged, applyButtonLabel, canApply
   } = props;
@@ -202,6 +207,8 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
             onUpdateLight={onUpdateLight}
             onRemoveLight={onRemoveLight}
             onPanelToggle={onPanelToggle}
+            selectedModelName={selectedGenerationModel}
+            thoughts={thoughts}
           />
         </div>
       </div>

@@ -35,6 +35,7 @@ import SwitchProjectModal from './SwitchProjectModal';
 import PromptPanel from './PromptPanel';
 import ContextMenu from './ContextMenu';
 import UserModelsModal from './UserModelsModal';
+import { ReferenceUploadModal } from './ReferenceUploadModal';
 import { loadPredefinedModels, saveGlobalModel, checkModelExists, subscribeToGlobalModels } from '../services/firestoreService';
 
 
@@ -297,6 +298,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
   const [isUpscaleMenuOpen, setIsUpscaleMenuOpen] = useState(false);
   const upscaleMenuRef = useRef<HTMLDivElement>(null);
+  const [isAspectRatioMenuOpen, setIsAspectRatioMenuOpen] = useState(false);
+  const aspectRatioMenuRef = useRef<HTMLDivElement>(null);
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
 
@@ -305,6 +308,8 @@ const CreateModel: React.FC<CreateModelProps> = ({
   const [isSwitchProjectModalOpen, setIsSwitchProjectModalOpen] = useState(false);
   const [pendingModelSwitch, setPendingModelSwitch] = useState<string | null>(null);
   const [hasSavedInstance, setHasSavedInstance] = useState(false);
+  const [isReferenceUploadModalOpen, setIsReferenceUploadModalOpen] = useState(false);
+  const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
 
   // Layout State
   const [leftPanelWidth, setLeftPanelWidth] = useState(384);
@@ -553,9 +558,13 @@ const CreateModel: React.FC<CreateModelProps> = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (upscaleMenuRef.current && !upscaleMenuRef.current.contains(event.target as Node)) setIsUpscaleMenuOpen(false);
-      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) setIsDownloadMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
+      if (aspectRatioMenuRef.current && !aspectRatioMenuRef.current.contains(event.target as Node)) {
+        setIsAspectRatioMenuOpen(false);
+      }
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) {
+        setIsDownloadMenuOpen(false);
+      }
+    }; document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
@@ -685,51 +694,55 @@ const CreateModel: React.FC<CreateModelProps> = ({
     setToastMessage('Started over - all changes cleared');
   }, []);
 
-  const handleGenerate = async (file?: File) => {
-    if (!file && !modelDescription.trim()) {
+  const handleGenerate = async (fileOrFiles?: File | File[]) => {
+    const files = Array.isArray(fileOrFiles) ? fileOrFiles : (fileOrFiles ? [fileOrFiles] : []);
+    const hasFiles = files.length > 0;
+
+    if (!hasFiles && !modelDescription.trim()) {
       setToastMessage('Please enter a description or upload a photo.');
       return;
     }
 
     setIsGenerating(true);
-    setLoadingMessage(file ? 'Preparing reference photo...' : 'Generating model from description...');
+    setLoadingMessage(hasFiles ? 'Preparing reference photo(s)...' : 'Generating model from description...');
     if (isResultView) {
       setGeneratedModelHistory([]);
       setCurrentHistoryItemId(null);
     }
 
     try {
-      // Convert reference photo to 1:1 aspect ratio with background matching studio environment
-      let processedFile = file;
-      if (file) {
+      // Convert reference photo(s) to 1:1 aspect ratio with background matching studio environment
+      let processedFiles: File[] = [];
+      if (hasFiles) {
         try {
-          setLoadingMessage('Normalizing reference photo to 1:1 aspect ratio...');
+          setLoadingMessage(files.length > 1 ? `Normalizing ${files.length} photos...` : 'Normalizing reference photo...');
           // Extract background color from settings to ensure padding matches studio environment
           const backgroundColor = getBackgroundColorFromSettings(generationSettings);
-          processedFile = await convertToSquare(file, backgroundColor);
-          console.log(`✓ Converted reference photo to 1:1 with background: ${backgroundColor}`);
+
+          processedFiles = await Promise.all(files.map(f => convertToSquare(f, backgroundColor)));
+          console.log(`✓ Converted ${processedFiles.length} photo(s) to 1:1 with background: ${backgroundColor}`);
         } catch (error) {
-          console.error('Failed to convert reference photo, using original:', error);
-          processedFile = file; // Fallback to original file
+          console.error('Failed to convert reference photo(s), using original(s):', error);
+          processedFiles = files; // Fallback to original files
         }
       }
 
-      const prompt = file ? "Model generated from uploaded photo" : modelDescription;
+      const prompt = hasFiles ? (files.length > 1 ? `Model generated from ${files.length} uploaded photos` : "Model generated from uploaded photo") : modelDescription;
       const modelInfo = generationModels.find(m => m.name === selectedModelName);
       if (!modelInfo || !modelInfo.id) throw new Error("Invalid model selected.");
 
-      setLoadingMessage(file ? 'Generating model from photo...' : 'Generating model from description...');
+      setLoadingMessage(hasFiles ? 'Generating model from photo(s)...' : 'Generating model from description...');
 
       let result;
       if (modelInfo.id === 'gemini-3-pro-image-preview') {
         // Pro model generation
-        result = processedFile
-          ? await generateModelImagePro(processedFile, generationSettings)
+        result = hasFiles
+          ? await generateModelImagePro(processedFiles, generationSettings)
           : await generateModelFromDescriptionPro(modelDescription, generationSettings);
       } else {
-        // Standard model generation
-        result = processedFile
-          ? await generateModelImage(processedFile, generationSettings, 'gemini-2.5-flash-image')
+        // Standard model generation (uses only the first file if multiple provided)
+        result = hasFiles
+          ? await generateModelImage(processedFiles[0], generationSettings, 'gemini-2.5-flash-image')
           : await generateModelFromDescription(modelDescription, generationSettings, 'gemini-2.5-flash-image');
       }
       const imageUrl = typeof result === 'string' ? result : result.imageUrl;
@@ -1652,6 +1665,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
             enhanceButtonText={isResultView ? (revisionPrompt.trim() ? 'Enhance Revision Description' : 'Suggest Revision Description') : 'Enhance Prompt Description'}
             showUploadButton={!isResultView}
             onFileUpload={(file) => handleGenerate(file)}
+            onUploadClick={() => setIsReferenceUploadModalOpen(true)}
             uploadDisabled={isUploadDisabled}
             uploadDisabledTooltip={isUploadDisabled ? 'Image upload is only supported by Nano Banana.' : 'Upload a reference photo'}
           />
@@ -1844,33 +1858,65 @@ const CreateModel: React.FC<CreateModelProps> = ({
               <div ref={upscaleMenuRef} className="relative">
                 {selectedModelName === 'Nano Banana Pro' ? (
                   <>
-                    <button
-                      onClick={() => setIsUpscaleMenuOpen(p => !p)}
-                      disabled={isGenerating}
-                      className="h-8 px-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-[10px] font-medium text-gray-400 hover:text-white disabled:opacity-30 transition-colors focus:outline-none border border-transparent hover:border-white/10"
-                      title="Output Resolution"
-                    >
-                      <span className={generationSettings.imageSize ? "text-[#318CE7]" : ""}>{generationSettings.imageSize || '1K'}</span>
-                      <ChevronDownIcon className="w-3 h-3 opacity-50" />
-                    </button>
-                    {isUpscaleMenuOpen && (
-                      <div className="absolute top-full left-0 mt-2 w-24 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden py-1" style={{ cursor: 'default' }} onMouseMove={(e) => e.stopPropagation()} onMouseEnter={(e) => e.stopPropagation()}>
-                        <div className="px-3 py-1.5 text-[9px] uppercase tracking-wider text-gray-500 font-semibold border-b border-white/5 mb-1">Resolution</div>
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 flex items-center gap-1 bg-black/40 px-1 py-0.5 rounded-lg border border-white/5">
                         {(['1K', '2K', '4K'] as const).map((size) => (
                           <button
                             key={size}
-                            onClick={() => {
-                              setGenerationSettings(prev => ({ ...prev, imageSize: size }));
-                              setIsUpscaleMenuOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-1.5 text-[10px] font-medium hover:bg-white/5 transition-colors flex items-center gap-2 ${generationSettings.imageSize === size ? 'text-white bg-white/5' : 'text-gray-400'}`}
+                            onClick={() => setGenerationSettings(prev => ({ ...prev, imageSize: size }))}
+                            className={cn(
+                              "px-2 py-1 text-[10px] font-bold rounded-md transition-all",
+                              generationSettings.imageSize === size
+                                ? "bg-blue-500 text-white shadow-sm"
+                                : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                            )}
                           >
                             {size}
-                            {generationSettings.imageSize === size && <span className="w-1 h-1 rounded-full bg-[#318CE7] ml-auto"></span>}
                           </button>
                         ))}
                       </div>
-                    )}
+
+                      <div ref={aspectRatioMenuRef} className="relative">
+                        <button
+                          onClick={() => setIsAspectRatioMenuOpen(p => !p)}
+                          disabled={isGenerating}
+                          className="h-8 px-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-[10px] font-medium text-gray-400 hover:text-white disabled:opacity-30 transition-colors focus:outline-none border border-transparent hover:border-white/10"
+                          title="Aspect Ratio"
+                        >
+                          <span className="text-[#318CE7]">{generationSettings.aspectRatio || '1:1'}</span>
+                          <ChevronDownIcon className="w-3 h-3 opacity-50" />
+                        </button>
+                        {isAspectRatioMenuOpen && (
+                          <div className="absolute top-full left-0 mt-2 w-32 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden py-1">
+                            <div className="px-3 py-1.5 text-[9px] uppercase tracking-wider text-gray-500 font-semibold border-b border-white/5 mb-1">Aspect Ratio</div>
+                            {[
+                              { id: '1:1', label: '1:1 (Square)' },
+                              { id: '4:5', label: '4:5' },
+                              { id: '3:4', label: '3:4' },
+                              { id: '2:3', label: '2:3' },
+                              { id: '9:16', label: '9:16 (Portrait)' },
+                              { id: '5:4', label: '5:4' },
+                              { id: '4:3', label: '4:3' },
+                              { id: '3:2', label: '3:2' },
+                              { id: '16:9', label: '16:9 (Widescreen)' },
+                              { id: '21:9', label: '21:9' }
+                            ].map((ratio) => (
+                              <button
+                                key={ratio.id}
+                                onClick={() => {
+                                  setGenerationSettings(prev => ({ ...prev, aspectRatio: ratio.id as AspectRatio }));
+                                  setIsAspectRatioMenuOpen(false);
+                                }}
+                                className={`w-full text-left px-3 py-1.5 text-[10px] font-medium hover:bg-white/5 transition-colors flex items-center gap-2 ${generationSettings.aspectRatio === ratio.id ? 'text-white bg-white/5' : 'text-gray-400'}`}
+                              >
+                                {ratio.label}
+                                {generationSettings.aspectRatio === ratio.id && <span className="w-1 h-1 rounded-full bg-[#318CE7] ml-auto"></span>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <>
@@ -2122,6 +2168,23 @@ const CreateModel: React.FC<CreateModelProps> = ({
           onModelDeleted(model);
           setIsUserModelsModalOpen(false);
         }}
+      />
+
+      <ReferenceUploadModal
+        isOpen={isReferenceUploadModalOpen}
+        onClose={() => setIsReferenceUploadModalOpen(false)}
+        onGenerate={() => {
+          handleGenerate(referenceFiles);
+          setIsReferenceUploadModalOpen(false);
+          setReferenceFiles([]);
+        }}
+        isGenerating={isGenerating}
+        selectedResolution={generationSettings.imageSize || '1K'}
+        onResolutionChange={(res) => setGenerationSettings(gs => ({ ...gs, imageSize: res as any }))}
+        selectedAspectRatio={generationSettings.aspectRatio || '1:1'}
+        onAspectRatioChange={(ratio) => setGenerationSettings(gs => ({ ...gs, aspectRatio: ratio }))}
+        files={referenceFiles}
+        setFiles={setReferenceFiles}
       />
 
     </div >

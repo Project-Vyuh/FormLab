@@ -22,6 +22,8 @@ interface PromptPanelProps {
     onFileUpload?: (file: File) => void;
     uploadDisabled?: boolean;
     uploadDisabledTooltip?: string;
+    onUploadClick?: (e: React.MouseEvent) => void;
+    children?: React.ReactNode;
 }
 
 const PromptPanel: React.FC<PromptPanelProps> = ({
@@ -37,7 +39,9 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     showUploadButton,
     onFileUpload,
     uploadDisabled = false,
-    uploadDisabledTooltip = ''
+    uploadDisabledTooltip = '',
+    onUploadClick,
+    children
 }) => {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,15 +74,22 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                 )}
                 {showUploadButton &&
                     <label
+                        onClick={(e) => {
+                            if (onUploadClick) {
+                                e.preventDefault();
+                                onUploadClick(e);
+                            }
+                        }}
                         className={`flex items-center gap-1.5 px-2.5 py-1.5 border border-dashed border-white/10 rounded-md text-[10px] font-medium text-gray-400 bg-white/5 transition-colors ${uploadDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-white/20 hover:bg-white/10 hover:text-gray-300 cursor-pointer'}`}
                         title={uploadDisabledTooltip}
                     >
                         <UploadCloudIcon className="w-3 h-3" />
                         <span>Upload Photo</span>
-                        <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={uploadDisabled || isGenerating} />
+                        {!onUploadClick && <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={uploadDisabled || isGenerating} />}
                     </label>
                 }
             </div>
+            {children}
         </div>
     );
 };

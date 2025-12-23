@@ -63,7 +63,7 @@ export type ImageQuality = 'standard' | 'hd' | 'fast';
 
 export type PhotoStyle = 'none' | 'vintage' | 'modern' | 'dreamy';
 export type ShotFraming = 'full' | 'medium' | 'closeup';
-export type AspectRatio = '2:3' | '1:1' | '4:5' | '9:16' | '16:9';
+export type AspectRatio = '1:1' | '3:2' | '2:3' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '21:9';
 export type LensProfile = '24mm' | '35mm' | '50mm' | '85mm' | '135mm';
 export type SensorSize = 'full-frame' | 'medium-format';
 
