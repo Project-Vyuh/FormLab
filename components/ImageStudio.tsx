@@ -165,7 +165,8 @@ const initialGenerationSettings: GenerationSettings = {
   cameraProfile: 'none',
   noiseAndGrain: initialNoiseAndGrain,
   panelToggles: initialPanelToggles,
-  useEnhancedTryOn: true, // Enhanced garment detail preservation enabled by default
+  useEnhancedTryOn: true,
+  imageSize: '1K', // Default resolution for Pro model
 };
 
 interface ImageStudioProps {
@@ -512,6 +513,14 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             setCurrentHistoryItemId(selectedItem.id);
             setGenerationSettings(selectedItem.settings);
             setInitialSettings(selectedItem.settings);
+
+            // SPECIAL: If model from Create Model had 4K/2K resolution, translate that to Image Studio settings
+            if (selectedItem.prompt?.includes('Upscaled to 4K') || selectedItem.settings.imageSize === '4K') {
+              setGenerationSettings(gs => ({ ...gs, imageSize: '4K' }));
+              console.log('[ImageStudio] Inherited 4K Resolution from Model History');
+            } else if (selectedItem.prompt?.includes('Upscaled to 2K') || selectedItem.settings.imageSize === '2K') {
+              setGenerationSettings(gs => ({ ...gs, imageSize: '2K' }));
+            }
           } else {
             // Fallback: Find the last try-on item, or the last item overall
             const lastTryonItem = [...unifiedHistory]
@@ -528,6 +537,12 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
               setCurrentHistoryItemId(lastItem.id);
               setGenerationSettings(lastItem.settings);
               setInitialSettings(lastItem.settings);
+
+              // Auto-inherit 4K/2K from the last generated item if applicable
+              if (lastItem.prompt?.includes('Upscaled to 4K') || lastItem.settings.imageSize === '4K') {
+                setGenerationSettings(gs => ({ ...gs, imageSize: '4K' }));
+                console.log('[ImageStudio] Inherited 4K Resolution from latest model item');
+              }
             }
           }
         }
@@ -841,35 +856,40 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
       let currentImageUrl = resolvedBaseImage;
 
-      for (let i = 0; i < visibleGarmentLayers.length; i++) {
-        const layer = visibleGarmentLayers[i];
-        setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
-        const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
+      const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);
+      const usePro = modelInfo?.id === 'gemini-3-pro-image-preview';
 
-        const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);
-        const usePro = modelInfo?.id === 'gemini-3-pro-image-preview';
+      if (usePro) {
+        setLoadingMessage(visibleGarmentLayers.length > 1 ? 'Rendering layered outfit...' : 'Rendering Outfit...');
+        const garmentFiles = await Promise.all(
+          visibleGarmentLayers.map(l => urlToFile(l.garment!.url, l.garment!.name))
+        );
 
-        let garmentAnalysis: GarmentAnalysis | undefined;
-        if (generationSettings.useEnhancedTryOn !== false && !usePro) {
-          const cacheKey = getCacheKey(layer.garment!.url);
-          garmentAnalysis = garmentAnalysisCache.get(cacheKey);
+        const res = await generateVirtualTryOnImagePro(currentImageUrl, garmentFiles, generationSettings);
+        currentImageUrl = typeof res === 'string' ? res : res.imageUrl;
 
-          if (!garmentAnalysis) {
-            setLoadingMessage(`Analyzing garment details: ${layer.garment!.name}...`);
-            garmentAnalysis = await analyzeGarmentDetailed(garmentFile);
-            setGarmentAnalysisCache(prev => new Map(prev).set(cacheKey, garmentAnalysis!));
-          }
+        if (typeof res !== 'string' && res.thoughts) {
+          setActiveThoughts(res.thoughts);
+          (window as any).__lastThoughts = res.thoughts;
         }
+      } else {
+        for (let i = 0; i < visibleGarmentLayers.length; i++) {
+          const layer = visibleGarmentLayers[i];
+          setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
+          const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
 
-        if (usePro) {
-          setLoadingMessage('Optimizing for Nano Banana Pro (Direct Visualization)...');
-          const res = await generateVirtualTryOnImagePro(currentImageUrl, garmentFile, generationSettings);
-          currentImageUrl = typeof res === 'string' ? res : res.imageUrl;
-          if (typeof res !== 'string' && res.thoughts) {
-            setActiveThoughts(res.thoughts);
-            (window as any).__lastThoughts = res.thoughts;
+          let garmentAnalysis: GarmentAnalysis | undefined;
+          if (generationSettings.useEnhancedTryOn !== false) {
+            const cacheKey = getCacheKey(layer.garment!.url);
+            garmentAnalysis = garmentAnalysisCache.get(cacheKey);
+
+            if (!garmentAnalysis) {
+              setLoadingMessage(`Analyzing garment details: ${layer.garment!.name}...`);
+              garmentAnalysis = await analyzeGarmentDetailed(garmentFile);
+              setGarmentAnalysisCache(prev => new Map(prev).set(cacheKey, garmentAnalysis!));
+            }
           }
-        } else {
+
           currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
         }
       }
@@ -1466,41 +1486,45 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         const visibleGarmentLayers = outfitStack.filter(l => l.isVisible && l.garment);
 
         if (visibleGarmentLayers.length > 0) {
-          for (let i = 0; i < visibleGarmentLayers.length; i++) {
-            const layer = visibleGarmentLayers[i];
-            setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}...`);
-            const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
+          const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);
+          const usePro = modelInfo?.id === 'gemini-3-pro-image-preview';
 
-            // Enhanced Try-On: Use cached analysis if available, or analyze garment
-            let garmentAnalysis: GarmentAnalysis | undefined;
-            if (generationSettings.useEnhancedTryOn !== false) {
-              const cacheKey = getCacheKey(layer.garment!.url);
-              garmentAnalysis = garmentAnalysisCache.get(cacheKey);
+          if (usePro) {
+            setLoadingMessage(visibleGarmentLayers.length > 1 ? 'Rendering layered outfit...' : 'Rendering Outfit...');
+            const garmentFiles = await Promise.all(
+              visibleGarmentLayers.map(l => urlToFile(l.garment!.url, l.garment!.name))
+            );
 
-              if (!garmentAnalysis) {
-                setLoadingMessage(`Analyzing garment details: ${layer.garment!.name}...`);
-                garmentAnalysis = await analyzeGarmentDetailed(garmentFile);
-                // Cache for reuse
-                setGarmentAnalysisCache(prev => new Map(prev).set(cacheKey, garmentAnalysis!));
-                console.log(`✓ Analyzed and cached: ${layer.garment!.name}`);
-              } else {
-                console.log(`✓ Using cached analysis: ${layer.garment!.name}`);
-              }
-              setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}...`);
+            const res = await generateVirtualTryOnImagePro(currentImageUrl, garmentFiles, generationSettings);
+            currentImageUrl = typeof res === 'string' ? res : res.imageUrl;
+
+            if (typeof res !== 'string' && res.thoughts) {
+              setActiveThoughts(res.thoughts);
+              (window as any).__lastThoughts = res.thoughts;
             }
+          } else {
+            for (let i = 0; i < visibleGarmentLayers.length; i++) {
+              const layer = visibleGarmentLayers[i];
+              setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}...`);
+              const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
 
-            // Choose Pro or regular function based on selected model
-            const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);
-            const usePro = modelInfo?.id === 'gemini-3-pro-image-preview';
+              // Enhanced Try-On: Use cached analysis if available, or analyze garment
+              let garmentAnalysis: GarmentAnalysis | undefined;
+              if (generationSettings.useEnhancedTryOn !== false) {
+                const cacheKey = getCacheKey(layer.garment!.url);
+                garmentAnalysis = garmentAnalysisCache.get(cacheKey);
 
-            if (usePro) {
-              const res = await generateVirtualTryOnImagePro(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
-              currentImageUrl = typeof res === 'string' ? res : res.imageUrl;
-              if (typeof res !== 'string' && res.thoughts) {
-                setActiveThoughts(res.thoughts);
-                (window as any).__lastThoughts = res.thoughts;
+                if (!garmentAnalysis) {
+                  setLoadingMessage(`Analyzing garment details: ${layer.garment!.name}...`);
+                  garmentAnalysis = await analyzeGarmentDetailed(garmentFile);
+                  // Cache for reuse
+                  setGarmentAnalysisCache(prev => new Map(prev).set(cacheKey, garmentAnalysis!));
+                  console.log(`✓ Analyzed and cached: ${layer.garment!.name}`);
+                } else {
+                  console.log(`✓ Using cached analysis: ${layer.garment!.name}`);
+                }
               }
-            } else {
+
               currentImageUrl = await generateVirtualTryOnImage(currentImageUrl, garmentFile, generationSettings, garmentAnalysis);
             }
           }

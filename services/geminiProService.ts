@@ -126,20 +126,23 @@ const applyProFeatures = (config: any, settings: GenerationSettings) => {
     }
 
     // Image Size (Resolution) and Aspect Ratio - Nano Banana Pro Specific
-    const imageConfig: any = { ...(config.imageConfig || {}) };
+    const imageConfig: any = { ...(config.imageConfig || {}), ...(config.image_config || {}) };
 
     if (imageSize) {
         console.log(`[GeminiProService] Setting Resolution: ${imageSize}`);
         imageConfig.imageSize = imageSize;
+        imageConfig.image_size = imageSize; // Snake case fallback
     }
 
     if (settings.aspectRatio) {
         console.log(`[GeminiProService] Setting Aspect Ratio: ${settings.aspectRatio}`);
         imageConfig.aspectRatio = settings.aspectRatio;
+        imageConfig.aspect_ratio = settings.aspectRatio; // Snake case fallback
     }
 
     if (Object.keys(imageConfig).length > 0) {
         config.imageConfig = imageConfig;
+        config.image_config = imageConfig; // API-level compatibility
     }
 
     return tools.length > 0 ? tools : undefined;
@@ -510,12 +513,11 @@ ${QA_NEGATIVE_PROMPT}`;
 
 export const generateVirtualTryOnImagePro = async (
     modelImageUrl: string,
-    garmentImage: File,
-    settings: GenerationSettings,
-    garmentAnalysis?: GarmentAnalysis
+    garmentImages: File[],
+    settings: GenerationSettings
 ): Promise<GenerationResult> => {
     const modelImagePart = await dataUrlToPart(modelImageUrl);
-    const garmentImagePart = await fileToPart(garmentImage);
+    const garmentImageParts = await Promise.all(garmentImages.map(fileToPart));
 
     const promptSuffix = getGenerationPromptSuffix(settings, { exclude: ['studioEnvironment' as any] });
 
@@ -524,20 +526,54 @@ export const generateVirtualTryOnImagePro = async (
     if (settings.panelToggles?.environment) {
         backgroundInstruction = getStudioEnvironmentPrompt(settings.studioEnvironment, settings.shadowSculpting, settings.floorSettings);
     } else {
-        backgroundInstruction = " **Background Preservation:** The background MUST remain EXACTLY as it is in the Model Image. Do NOT replace, blur, or alter the background in any way. The subject should be integrated naturally into this existing environment.";
+        backgroundInstruction = " **Background Preservation:** The background MUST remain EXACTLY as it is in the Model Image (Image 1). Do NOT replace, blur, or alter the background in any way. Modify ONLY the subject's clothing region while freezing every pixel of the environmental context.";
     }
 
     let prompt: string;
+    const isMultiGarment = garmentImages.length > 1;
 
-    // Use enhanced prompt if enabled and analysis is provided
-    if (settings.useEnhancedTryOn !== false && garmentAnalysis) {
-        const garmentDescription = generateDetailedGarmentDescription(garmentAnalysis);
-        prompt = buildEnhancedTryOnPrompt(garmentDescription, settings, backgroundInstruction, promptSuffix);
+    if (isMultiGarment) {
+        // LAYERED MULTI-GARMENT PROMPT
+        const garmentReferences = garmentImages.map((_, i) => `Image ${i + 2}`).join(', ');
+        prompt = `[ROLE]
+You are an expert AI Fashion Stylist & Digital Compositor.
+
+[TASK]
+Dress the subject in Image 1 using a high-fidelity layered approach with the ${garmentImages.length} garments provided in the subsequent images (${garmentReferences}).
+
+[LAYERED OUTFIT SPECIFICATIONS]
+- Image 1: The BASE SUBJECT (Identity & Environment to preserve).
+${garmentImages.map((_, i) => `- Image ${i + 2}: Garment ${i + 1} to be applied to the subject.`).join('\n')}
+
+[DIRECTIVES]
+1. **Layering Logic**: Intelligently layer the garments on the subject. Ensure natural overlaps (e.g., jackets over tops, tucked or untucked shirts as appropriate).
+2. **Forensic Fidelity**: Preserve the exact textures, material weights, hardware, and construction details of each garment with pixel-perfect accuracy.
+3. **Anatomical Integrity**: Correct the garments' drape and fit to perfectly match the subject's body contours in Image 1.
+4. **Environment Integrity**: ${backgroundInstruction}
+
+[STYLE]
+${promptSuffix}
+
+[NEGATIVE CONSTRAINTS]
+${QA_NEGATIVE_PROMPT}`;
     } else {
-        // NATIVE PRO MODE (No external analysis)
-        // Gemini 3 Pro has superior visual reasoning. We instruct it to look at the garment image directly.
-        const garmentDescription = "The garment shown in the second image. PRESERVE its exact texture, material, construction, and details with forensic accuracy.";
-        prompt = buildEnhancedTryOnPrompt(garmentDescription, settings, backgroundInstruction, promptSuffix);
+        // NATIVE SINGLE-GARMENT PROMPT (Bypassing external analysis)
+        prompt = `[ROLE]
+You are an expert AI Fashion Stylist & Digital Compositor.
+
+[TASK]
+Apply the garment shown in Image 2 onto the subject in Image 1.
+
+[DIRECTIVES]
+1. **Visual Fidelity**: Mirror the garment from Image 2 EXACTLY. Maintain forensic fidelity to its material texture, surface finish, stitching, and hardware.
+2. **Physique Mapping**: Map the garment to the subject's body in Image 1 with perfect anatomical logic and natural fabric drape.
+3. **Environment Integrity**: ${backgroundInstruction}
+
+[STYLE]
+${promptSuffix}
+
+[NEGATIVE CONSTRAINTS]
+${QA_NEGATIVE_PROMPT}`;
     }
 
     // Construct generation config
@@ -546,12 +582,12 @@ export const generateVirtualTryOnImagePro = async (
         safetySettings: SAFETY_SETTINGS,
     };
 
-    // Add image size if specified (Nano Banana Pro specific)
+    // Add image size if specified
     const tools = applyProFeatures(generationConfig, settings);
 
     const response = await ai.models.generateContent({
         model: MODEL_NAME,
-        contents: { parts: [modelImagePart, garmentImagePart, { text: prompt }] },
+        contents: { parts: [modelImagePart, ...garmentImageParts, { text: prompt }] },
         config: generationConfig,
         tools: tools,
     } as any);
