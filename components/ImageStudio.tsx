@@ -18,7 +18,7 @@ import {
 import WardrobeLibrary from './WardrobeLibrary';
 import VersionHistoryPanel from './VersionHistoryPanel';
 import ProductDetailsModal from './ProductDetailsModal';
-import { Model, WardrobeItem, OutfitLayer, GenerationSettings, HistoryItem, WardrobeCategory, BrandStyle, GarmentAnalysis, Light, LightRole, SceneAtmosphere, ImageProcessingSettings, ShutterSettings, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, PanelToggles, LightingRig, ApertureSettings, CameraPositionSettings, FocusPlaneSettings, Project, User, SelectedStylingModel, AspectRatio } from '../types';
+import { Model, WardrobeItem, OutfitLayer, GenerationSettings, HistoryItem, WardrobeCategory, BrandStyle, GarmentAnalysis, Light, LightRole, SceneAtmosphere, ImageProcessingSettings, ShutterSettings, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, PanelToggles, LightingRig, ApertureSettings, CameraPositionSettings, FocusPlaneSettings, Project, User, SelectedStylingModel, AspectRatio, CompositeSubject } from '../types';
 import {
   generateVirtualTryOnImage,
   generatePoseVariation,
@@ -35,7 +35,8 @@ import {
   generateVirtualTryOnWithPoseReferencePro,
   generatePoseVariationPro,
   reviseMaskedImagePro,
-  regenerateFramePro
+  regenerateFramePro,
+  generateCompositeImagePro
 } from '../services/geminiProService';
 import { getFriendlyErrorMessage, cn } from '../lib/utils';
 import { uploadFile, uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } from '../services/storageService';
@@ -44,7 +45,7 @@ import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem,
 import { deleteHistoryItemFromFirestore, subscribeToStylingHistory, loadHistoryItems } from '../services/firestoreSync';
 import { createUpscaleRequest, listenToUpscaleRequest, UpscaleRequest } from '../services/firestoreService';
 import { auth } from '../services/firebase';
-import { loadUnifiedHistory, saveStylingHistory } from '../services/dbService';
+import { loadUnifiedHistory, saveStylingHistory, saveCompositeState, loadCompositeState } from '../services/dbService';
 import { getCurrentUserId } from '../services/authService';
 
 
@@ -250,6 +251,13 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // --- Composites State ---
+  const [isCompositeMode, setIsCompositeMode] = useState(false);
+  const [compositeSubjects, setCompositeSubjects] = useState<CompositeSubject[]>([]);
+  const [compositePrompt, setCompositePrompt] = useState('');
+  const [compositeHistory, setCompositeHistory] = useState<HistoryItem[]>([]);
+  const [currentCompositeHistoryId, setCurrentCompositeHistoryId] = useState<string | null>(null);
+
   // Layout State
   const [leftPanelWidth, setLeftPanelWidth] = useState(320);
   const [rightPanelWidth, setRightPanelWidth] = useState(320); // Increased width for new panel
@@ -286,6 +294,10 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   const [isUpscaleMenuOpen, setIsUpscaleMenuOpen] = useState(false);
   const [isAspectRatioMenuOpen, setIsAspectRatioMenuOpen] = useState(false);
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
+  const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
+
+
+
   const upscaleMenuRef = useRef<HTMLDivElement>(null);
   const aspectRatioMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
@@ -297,8 +309,79 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   const [initialSettings, setInitialSettings] = useState<GenerationSettings>(initialGenerationSettings);
 
   // Calculate current history item and display URL (must be before handlers that use it)
-  const currentHistoryItem = useMemo(() => generatedModelHistory.find(item => item.id === currentHistoryItemId), [generatedModelHistory, currentHistoryItemId]);
-  const displayImageUrl = useMemo(() => currentHistoryItem?.imageUrl || modelImageUrl, [currentHistoryItem, modelImageUrl]);
+  const activeHistory = isCompositeMode ? compositeHistory : generatedModelHistory;
+  const activeHistoryId = isCompositeMode ? currentCompositeHistoryId : currentHistoryItemId;
+
+  const currentHistoryItem = useMemo(() => {
+    return activeHistory.find(item => item.id === activeHistoryId);
+  }, [activeHistory, activeHistoryId]);
+
+  const displayImageUrl = useMemo(() => {
+    // Explicit logic for Composite Mode to ensure reliability
+    if (isCompositeMode) {
+      if (!currentCompositeHistoryId) return null;
+      const item = compositeHistory.find(i => i.id === currentCompositeHistoryId);
+      return item ? item.imageUrl : null;
+    }
+
+    // Standard Mode Logic
+    if (activeHistoryId) {
+      const item = activeHistory.find(i => i.id === activeHistoryId);
+      if (item) return item.imageUrl;
+    }
+    return modelImageUrl;
+  }, [isCompositeMode, currentCompositeHistoryId, compositeHistory, activeHistoryId, activeHistory, modelImageUrl]);
+
+  // --- Composite Handlers ---
+  const handleCompositeModeToggle = useCallback((mode: boolean) => {
+    setIsCompositeMode(mode);
+    if (mode) {
+      // When enabling composite mode, start fresh (empty workspace)
+      setCurrentCompositeHistoryId(null);
+    }
+  }, []);
+
+  const handleAddCompositeSubject = useCallback((subject: CompositeSubject) => {
+    setCompositeSubjects(prev => {
+      if (prev.find(s => s.id === subject.id)) return prev;
+      if (prev.length >= 4) return prev;
+      return [...prev, subject];
+    });
+  }, []);
+
+  const handleRemoveCompositeSubject = useCallback((id: string) => {
+    setCompositeSubjects(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  const handleCompositePromptChange = useCallback((prompt: string) => {
+    setCompositePrompt(prompt);
+  }, []);
+
+  const handleUploadCompositeSubject = useCallback(async (file: File) => {
+    if (!currentUser) {
+      setToastMessage("Please login to upload images.");
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingMessage('Uploading subject...');
+    try {
+      const url = await uploadFile(file, currentUser.uid, 'models');
+      const subject: CompositeSubject = {
+        id: `sub-${Date.now()}`,
+        url: url,
+        name: file.name
+      };
+      handleAddCompositeSubject(subject);
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Failed to upload subject'));
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
+  }, [currentUser, handleAddCompositeSubject]);
+
+
 
   // Detect settings changes by deep comparison
   const hasSettingsChanged = useMemo(() => {
@@ -487,7 +570,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   const canRedo = redoStack.length > 0;
   const hasPendingChanges = hasPendingStackChanges;
 
-  const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
+
 
   // --- Initialize State ---
   useEffect(() => {
@@ -586,6 +669,21 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           console.warn('[ImageStudio] Failed to directly fetch styling history:', err);
         }
 
+        // LOAD COMPOSITE STATE
+        try {
+          const compState = await loadCompositeState(currentProjectId);
+          if (compState) {
+            setCompositeSubjects(compState.compositeSubjects || []);
+            setCompositePrompt(compState.compositePrompt || '');
+            setCompositeHistory(compState.compositeHistory || []);
+            if (compState.compositeHistory && compState.compositeHistory.length > 0) {
+              setCurrentCompositeHistoryId(compState.compositeHistory[compState.compositeHistory.length - 1].id);
+            }
+          }
+        } catch (err) {
+          console.warn('[ImageStudio] Failed to load composite state:', err);
+        }
+
         if (generatedModelHistory.length === 0 && (!unifiedHistory || unifiedHistory.length === 0)) {
           // No history exists yet - Create new root history item for this model
           // This happens when first entering Image Studio from a newly created model
@@ -640,6 +738,22 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     const timeoutId = setTimeout(autoSave, 1000);
     return () => clearTimeout(timeoutId);
   }, [generatedModelHistory, selectedStylingModel, currentProjectId, onSaveStylingHistory]);
+
+  // --- Auto-save multi-model composite state ---
+  useEffect(() => {
+    const autoSaveComposite = async () => {
+      if (currentProjectId && (compositeSubjects.length > 0 || compositePrompt || compositeHistory.length > 0)) {
+        await saveCompositeState(currentProjectId, {
+          compositeSubjects,
+          compositePrompt,
+          compositeHistory
+        });
+      }
+    };
+
+    const timeoutId = setTimeout(autoSaveComposite, 1500);
+    return () => clearTimeout(timeoutId);
+  }, [currentProjectId, compositeSubjects, compositePrompt, compositeHistory]);
 
   // --- Real-time Styling History Sync (Enterprise Sync) ---
   useEffect(() => {
@@ -1012,7 +1126,8 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   }, []);
 
   const restoreHistoryItem = useCallback((id: string, source: 'ui' | 'undo' | 'redo') => {
-    const item = generatedModelHistory.find(h => h.id === id);
+    const list = isCompositeMode ? compositeHistory : generatedModelHistory;
+    const item = list.find(h => h.id === id);
     if (!item) return;
 
     if (source === 'undo' && currentHistoryItem) {
@@ -1023,7 +1138,12 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       setRedoStack([]);
     }
 
-    setCurrentHistoryItemId(id);
+    if (isCompositeMode) {
+      setCurrentCompositeHistoryId(id);
+    } else {
+      setCurrentHistoryItemId(id);
+    }
+
     setActiveThoughts(item.thoughts);
     setGenerationSettings(item.settings);
 
@@ -1067,15 +1187,26 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   }
 
   const handleToggleStar = (id: string) => {
-    setGeneratedModelHistory(prev => prev.map(item => item.id === id ? { ...item, isStarred: !item.isStarred } : item));
+    const update = (prev: HistoryItem[]) => prev.map(item => item.id === id ? { ...item, isStarred: !item.isStarred } : item);
+    if (isCompositeMode) {
+      setCompositeHistory(update);
+    } else {
+      setGeneratedModelHistory(update);
+    }
   };
 
   const handleRename = (id: string, name: string) => {
-    setGeneratedModelHistory(prev => prev.map(item => item.id === id ? { ...item, name } : item));
+    const update = (prev: HistoryItem[]) => prev.map(item => item.id === id ? { ...item, name } : item);
+    if (isCompositeMode) {
+      setCompositeHistory(update);
+    } else {
+      setGeneratedModelHistory(update);
+    }
   };
 
   const handleDeleteVersion = async (id: string) => {
-    const itemToDelete = generatedModelHistory.find(i => i.id === id);
+    const list = isCompositeMode ? compositeHistory : generatedModelHistory;
+    const itemToDelete = list.find(i => i.id === id);
     if (!itemToDelete) return;
 
     try {
@@ -1095,8 +1226,13 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       if (currentUser && currentProjectId) {
         try {
           // Determine collection path based on item type
-          let collectionPath: string;
-          if (itemToDelete.type === 'try-on' || itemToDelete.type === 'try-on-revision') {
+          let collectionPath: string = '';
+          if (itemToDelete.type === 'composite-generation') {
+            collectionPath = 'compositeState/compositeHistory'; // This might not work with the current syncHistoryItems subcollection logic if it's not a top-level subcollection.
+            // Actually, currently compositeHistory is just a field in the project document.
+            // But we can delete it from local state and it will sync.
+            collectionPath = 'compositeHistory';
+          } else if (itemToDelete.type === 'try-on' || itemToDelete.type === 'try-on-revision') {
             // Styling history - need baseModelId
             const baseModelId = itemToDelete.baseModelId || selectedStylingModel?.baseModelId;
             if (baseModelId) {
@@ -1110,31 +1246,33 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             collectionPath = 'generatedModelHistory';
           }
 
-          await deleteHistoryItemFromFirestore(currentProjectId, collectionPath, id);
+          // In our current firestoreSync, only generatedModelHistory, stylingHistory/{id}, and wardrobe are subcollections.
+          // compositeHistory is likely not a subcollection yet. 
+          // If it's a field, we don't need deleteHistoryItemFromFirestore.
+          // Let's check if it should be a subcollection.
+          if (collectionPath !== 'compositeHistory') {
+            await deleteHistoryItemFromFirestore(currentProjectId, collectionPath, id);
+          }
           console.log('[ImageStudio] Deleted from Firestore:', id);
         } catch (error) {
           console.warn('[ImageStudio] Firestore deletion failed:', error);
-          // Continue with state update even if Firestore fails
         }
       }
 
-      // 3. Update local state (triggers IndexedDB save via useEffect)
-      const parentId = itemToDelete.parentId;
+      // 3. Update local state
+      const parentId = itemToDelete.parentId || null;
 
-      if (id === currentHistoryItemId) {
-        setCurrentHistoryItemId(parentId);
+      if (isCompositeMode) {
+        setCompositeHistory(prev => prev.filter(i => i.id !== id));
+        if (currentCompositeHistoryId === id) {
+          setCurrentCompositeHistoryId(parentId);
+        }
+      } else {
+        setGeneratedModelHistory(prev => prev.filter(i => i.id !== id));
+        if (currentHistoryItemId === id) {
+          setCurrentHistoryItemId(parentId);
+        }
       }
-
-      setGeneratedModelHistory(prev =>
-        prev
-          .filter(i => i.id !== id)
-          .map(i => {
-            if (i.parentId === id) {
-              return { ...i, parentId: parentId };
-            }
-            return i;
-          })
-      );
 
       console.log('[ImageStudio] Model version deleted successfully:', id);
     } catch (error) {
@@ -1361,7 +1499,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
   const lastAppliedGarment = outfitStack.length > 1 ? outfitStack[outfitStack.length - 1].garment : null;
 
-  const handleEnhancePosePrompt = useCallback(async () => {
+  const handleEnhanceRevisionPrompt = useCallback(async () => {
     if (!displayImageUrl) return;
     setIsEnhancingPrompt(true);
     try {
@@ -1460,13 +1598,110 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
   // Unified handler that intelligently applies changes based on what the user has modified
   const handleApplyChanges = useCallback(async () => {
+    // 1. Composite Generation Logic
+    if (isCompositeMode) {
+      // Logic for initial composite or revision
+      const isRevision = !!currentCompositeHistoryId && compositePrompt.trim().length > 0;
+      const isSettingsUpdate = !!currentCompositeHistoryId && compositePrompt.trim().length === 0;
+
+      if (!isRevision && !isSettingsUpdate && compositeSubjects.length < 2) {
+        setToastMessage("Please add at least 2 models for composite generation.");
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+      setLoadingMessage(isRevision ? 'Generating composite revision...' : 'Generating group composite...');
+
+      try {
+        let res;
+        if (isRevision) {
+          // Re-use revision service but with composite context
+          const currentItem = compositeHistory.find(h => h.id === currentCompositeHistoryId);
+          if (!currentItem) throw new Error("Parent composite not found");
+
+          res = await reviseGeneratedImagePro(
+            currentItem.imageUrl,
+            compositePrompt,
+            generationSettings
+          );
+        } else if (currentCompositeHistoryId && compositePrompt.trim().length === 0) {
+          // Case: Settings Update / Upscale without text revision
+          // Use regenerateFramePro (or similar) to preserve content while updating settings
+          const currentItem = compositeHistory.find(h => h.id === currentCompositeHistoryId);
+          if (!currentItem) throw new Error("Parent composite not found");
+
+          // If it's just a resolution/aspect ratio change, regenerateFramePro is ideal.
+          // If other settings changed (lighting), we might need a specific "re-render" call,
+          // but generic regenerateFramePro with prompt suffix usually handles "Global Controls" updates too if implemented right.
+          setLoadingMessage('Updating composite settings...');
+          res = await regenerateFramePro(
+            currentItem.imageUrl,
+            generationSettings
+          );
+        } else {
+          res = await generateCompositeImagePro(
+            compositeSubjects.map(s => ({ storageUrl: s.url, name: s.name })),
+            compositePrompt,
+            generationSettings
+          );
+        }
+
+        let finalImageUrl = res.imageUrl;
+        if (currentUser && isBase64Url(res.imageUrl)) {
+          setLoadingMessage('Saving composite...');
+          finalImageUrl = await uploadBase64Image(
+            res.imageUrl,
+            currentUser.uid,
+            'tryons',
+            `composite_${Date.now()}.jpg`,
+            currentProjectId || undefined
+          );
+        }
+
+        // Ensure composite state is saved in settings
+        const settingsToSave = deepCopy(generationSettings);
+        settingsToSave.compositeSubjects = compositeSubjects.map(s => ({ id: s.id, storageUrl: s.url, name: s.name }));
+        settingsToSave.compositePrompt = compositePrompt;
+
+        const newHistoryItem: HistoryItem = {
+          id: `comp-${Date.now()}`,
+          parentId: isRevision ? currentCompositeHistoryId : null,
+          imageUrl: finalImageUrl,
+          prompt: compositePrompt || (isRevision ? "Composite Revision" : (isSettingsUpdate ? "Settings Update" : "Group composite")),
+          settings: settingsToSave,
+          modelName: 'gemini-3-pro-image-preview',
+          isStarred: false,
+          type: 'composite-generation',
+          thoughts: res.thoughts,
+          baseModelId: 'composite',
+          projectId: currentProjectId || undefined,
+        };
+
+        setCompositeHistory(prev => [...prev, newHistoryItem]);
+        setCurrentCompositeHistoryId(newHistoryItem.id);
+
+        // ALWAYS clear prompt after successful generation (initial or revision)
+        // This ensures the input is ready for the "Revision" phase with a clean slate
+        setCompositePrompt('');
+
+        setToastMessage(isRevision ? "Revision applied successfully!" : "Composite generated successfully!");
+      } catch (err) {
+        setError(getFriendlyErrorMessage(err, isRevision ? 'Failed to apply revision' : 'Failed to generate composite'));
+      } finally {
+        setIsLoading(false);
+        setLoadingMessage('');
+      }
+      return;
+    }
+
+    // 2. Standard Single-Model Generation Logic
     if (!displayImageUrl || isLoading) return;
 
     const hasRevision = revisionPrompt.trim().length > 0;
     const hasSettings = hasSettingsChanged;
     const hasOutfit = hasOutfitChanged;
 
-    // Must have at least one type of change
     if (!hasRevision && !hasSettings && !hasOutfit) {
       setToastMessage("No changes to apply.");
       return;
@@ -1495,20 +1730,19 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
               visibleGarmentLayers.map(l => urlToFile(l.garment!.url, l.garment!.name))
             );
 
-            const res = await generateVirtualTryOnImagePro(currentImageUrl, garmentFiles, generationSettings);
-            currentImageUrl = typeof res === 'string' ? res : res.imageUrl;
+            const res = await generateVirtualTryOnImagePro(resolvedBaseImage, garmentFiles, generationSettings);
+            currentImageUrl = res.imageUrl;
 
-            if (typeof res !== 'string' && res.thoughts) {
+            if (res.thoughts) {
               setActiveThoughts(res.thoughts);
               (window as any).__lastThoughts = res.thoughts;
             }
           } else {
             for (let i = 0; i < visibleGarmentLayers.length; i++) {
               const layer = visibleGarmentLayers[i];
-              setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}...`);
+              setLoadingMessage(`Applying layer ${i + 1} of ${visibleGarmentLayers.length}: ${layer.garment!.name}`);
               const garmentFile = await urlToFile(layer.garment!.url, layer.garment!.name);
 
-              // Enhanced Try-On: Use cached analysis if available, or analyze garment
               let garmentAnalysis: GarmentAnalysis | undefined;
               if (generationSettings.useEnhancedTryOn !== false) {
                 const cacheKey = getCacheKey(layer.garment!.url);
@@ -1517,11 +1751,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                 if (!garmentAnalysis) {
                   setLoadingMessage(`Analyzing garment details: ${layer.garment!.name}...`);
                   garmentAnalysis = await analyzeGarmentDetailed(garmentFile);
-                  // Cache for reuse
                   setGarmentAnalysisCache(prev => new Map(prev).set(cacheKey, garmentAnalysis!));
-                  console.log(`✓ Analyzed and cached: ${layer.garment!.name}`);
-                } else {
-                  console.log(`✓ Using cached analysis: ${layer.garment!.name}`);
                 }
               }
 
@@ -1533,9 +1763,6 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       }
 
       // Step 2: Apply revision and/or settings changes
-      // OPTIMIZATION: If we just applied an outfit, the settings were ALREADY applied in Step 1 (generateVirtualTryOnImage takes settings).
-      // We only need to run Step 2 if there is an explicit text revision, or if we didn't apply an outfit (settings-only change).
-
       if (hasRevision || (hasSettings && !hasOutfit)) {
         let revisionInstruction: string;
 
@@ -1544,18 +1771,13 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           revisionInstruction = revisionPrompt;
           promptForHistory = hasOutfit ? `${promptForHistory} + ${revisionPrompt}` : revisionPrompt;
         } else {
-          // Settings-only change (no outfit change happened in Step 1)
           setLoadingMessage('Applying creative settings...');
           revisionInstruction = "RE-RENDER this image with the updated technical and creative specifications provided in the prompt. Apply ALL lighting changes (key light, fill light, rim light, HDRI), ALL camera settings (lens, aperture, sensor, position), ALL environment settings (background, floor, atmosphere), and ALL post-processing settings (color grading, contrast, film grain, retouching). Maintain the subject's exact identity, facial features, body proportions, pose, and outfit - ONLY update the lighting, camera perspective, depth of field, background, and post-processing/grading. Do NOT change what the model looks like or what they're wearing - ONLY change how the scene is photographed and processed.";
           promptForHistory = 'Applied creative settings';
         }
 
-        // Apply revision/settings to current image (which may already have outfit applied)
-
-        // Construct dynamic outfit instruction based on stack
         let outfitInstruction: string | undefined;
         const visibleGarments = outfitStack.filter(l => l.isVisible && l.garment);
-
         if (visibleGarments.length > 0) {
           const garmentNames = visibleGarments.map(l => l.garment!.name).join(', ');
           outfitInstruction = `PRESERVE the current outfit (${garmentNames}) exactly as it appears in the image. Do NOT revert to base underwear. The model is ALREADY wearing the correct clothing.`;
@@ -1568,7 +1790,8 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
           const res = await reviseGeneratedImagePro(
             currentImageUrl,
             revisionInstruction,
-            generationSettings
+            generationSettings,
+            outfitInstruction // Pass outfit preservation instruction to Pro
           );
           currentImageUrl = res.imageUrl;
           if (res.thoughts) (window as any).__lastThoughts = res.thoughts;
@@ -1583,7 +1806,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         }
       }
 
-      // Upload to Firebase Storage if user is logged in and result is base64
+      // Upload to Firebase Storage
       let finalImageUrl = currentImageUrl;
       if (currentUser && isBase64Url(currentImageUrl)) {
         try {
@@ -1595,16 +1818,13 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             `combined_${Date.now()}.jpg`,
             currentProjectId || undefined
           );
-          console.log('Combined changes image uploaded to Firebase Storage:', finalImageUrl);
         } catch (error) {
-          console.error('Failed to upload to Firebase Storage, using base64:', error);
+          console.error('Failed to upload to Firebase Storage:', error);
         }
       }
 
       // Create history item
       const garmentIds = outfitStack.filter(l => l.isVisible && l.garment).map(l => l.garment!.id);
-      console.log('[ImageStudio] Creating history item with outfit stack:', outfitStack);
-      console.log('[ImageStudio] Saving garment IDs:', garmentIds);
       const newHistoryItem: HistoryItem = {
         id: `hist-${Date.now()}`,
         parentId: currentHistoryItemId,
@@ -1619,7 +1839,6 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         thoughts: (window as any).__lastThoughts,
       };
       delete (window as any).__lastThoughts;
-      console.log('[ImageStudio] History item created:', newHistoryItem.id, 'outfitGarmentIds:', newHistoryItem.outfitGarmentIds);
 
       setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
       setCurrentHistoryItemId(newHistoryItem.id);
@@ -1628,10 +1847,6 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       // Reset change tracking
       setRevisionPrompt('');
       setInitialSettings(generationSettings);
-
-      // CRITICAL: Do NOT reset the outfit stack here.
-      // We want to preserve the stack so subsequent revisions know what the model is wearing.
-      // We only reset the pending flag so the "Apply" button knows the current stack is "saved" in the image.
       setHasPendingStackChanges(false);
 
       setToastMessage("Changes applied successfully!");
@@ -1642,7 +1857,26 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [displayImageUrl, isLoading, revisionPrompt, hasSettingsChanged, hasOutfitChanged, outfitStack, modelImageUrl, generationSettings, currentUser, currentProjectId, currentHistoryItemId, selectedStylingModel]);
+  }, [
+    displayImageUrl,
+    isLoading,
+    revisionPrompt,
+    hasSettingsChanged,
+    hasOutfitChanged,
+    outfitStack,
+    modelImageUrl,
+    generationSettings,
+    currentUser,
+    currentProjectId,
+    currentHistoryItemId,
+    selectedStylingModel,
+    isCompositeMode,
+    compositeSubjects,
+    compositePrompt,
+    selectedGenerationModel,
+    garmentAnalysisCache,
+    generationModels
+  ]);
 
   if (!selectedStylingModel) {
     return (
@@ -1732,13 +1966,14 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                   onOpenProjectModal={onOpenProjectModal}
                   revisionPrompt={revisionPrompt}
                   onRevisionPromptChange={setRevisionPrompt}
-                  onEnhanceRevisionPrompt={handleEnhancePosePrompt}
+                  onEnhanceRevisionPrompt={handleEnhanceRevisionPrompt}
                   onApplyRevision={handleApplyChanges}
                   isEnhancingPrompt={isEnhancingPrompt}
                   hasSettingsChanged={hasSettingsChanged}
                   hasOutfitChanged={hasOutfitChanged}
                   applyButtonLabel={applyButtonLabel}
                   canApply={canApply}
+                  isCompositeMode={isCompositeMode}
                 />
               </div>
               <ResizeHandle onMouseDown={handleLeftDrag} />
@@ -1832,25 +2067,27 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
                   <div className="w-px h-6 bg-white/10 mx-2"></div>
 
-                  {/* Upscale Menu */}
-                  <div ref={upscaleMenuRef} className="relative">
-                    <button onClick={() => setIsUpscaleMenuOpen(p => !p)} disabled={!displayImageUrl} className="p-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-sm text-gray-400 hover:text-white disabled:opacity-30 transition-colors focus:outline-none" title="Enhance & Upscale"><ZapIcon className="w-4 h-4 text-[#318CE7] group-hover:text-[#318CE7]/80 transition-colors" /></button>
-                    {isUpscaleMenuOpen && (
-                      <div className="absolute top-full left-0 mt-2 w-48 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden py-1" style={{ cursor: 'default' }} onMouseMove={(e) => e.stopPropagation()} onMouseEnter={(e) => e.stopPropagation()}>
-                        <button onClick={() => handleUpscale('2k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span> Upscale to 2K
-                        </button>
-                        <button onClick={() => handleUpscale('4k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500/50"></span> Upscale to 4K
-                        </button>
-                        <div className="h-px bg-white/5 my-1 mx-2"></div>
-                        <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Enhance Details</div>
-                        <button onClick={() => handleSelectiveEnhance('face')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Face & Skin</button>
-                        <button onClick={() => handleSelectiveEnhance('fabric')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Fabric & Texture</button>
-                        <button onClick={() => handleSelectiveEnhance('accessories')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Accessories</button>
-                      </div>
-                    )}
-                  </div>
+                  {/* Upscale Menu - Only for non-Pro models */}
+                  {selectedGenerationModel !== 'Nano Banana Pro' && (
+                    <div ref={upscaleMenuRef} className="relative">
+                      <button onClick={() => setIsUpscaleMenuOpen(p => !p)} disabled={!displayImageUrl} className="p-2 rounded-md hover:bg-white/5 flex items-center gap-2 text-sm text-gray-400 hover:text-white disabled:opacity-30 transition-colors focus:outline-none" title="Enhance & Upscale"><ZapIcon className="w-4 h-4 text-[#318CE7] group-hover:text-[#318CE7]/80 transition-colors" /></button>
+                      {isUpscaleMenuOpen && (
+                        <div className="absolute top-full left-0 mt-2 w-48 bg-[#1a1a1a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden py-1" style={{ cursor: 'default' }} onMouseMove={(e) => e.stopPropagation()} onMouseEnter={(e) => e.stopPropagation()}>
+                          <button onClick={() => handleUpscale('2k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span> Upscale to 2K
+                          </button>
+                          <button onClick={() => handleUpscale('4k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500/50"></span> Upscale to 4K
+                          </button>
+                          <div className="h-px bg-white/5 my-1 mx-2"></div>
+                          <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Enhance Details</div>
+                          <button onClick={() => handleSelectiveEnhance('face')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Face & Skin</button>
+                          <button onClick={() => handleSelectiveEnhance('fabric')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Fabric & Texture</button>
+                          <button onClick={() => handleSelectiveEnhance('accessories')} className="w-full text-left px-3 py-1.5 text-[11px] text-gray-400 hover:bg-white/5 hover:text-white transition-colors pl-6" style={{ cursor: 'pointer' }}>Accessories</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Download Menu */}
                   <div ref={downloadMenuRef} className="relative">
@@ -1887,13 +2124,44 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                   loadingMessage={loadingMessage} onSelectPose={handlePoseSelect}
                   poseInstructions={POSE_INSTRUCTIONS} currentPoseIndex={currentPoseIndex} availablePoseKeys={[]}
                   aspectRatio={generationSettings.aspectRatio ?? '2:3'}
-                  isStudioEmpty={!modelImageUrl} zoom={zoom} setZoom={setZoom}
+                  isStudioEmpty={
+                    isCompositeMode
+                      ? !currentCompositeHistoryId // In composite mode, if no history item is selected, it's empty (regardless of subjects)
+                      : (!modelImageUrl && !displayImageUrl && compositeSubjects.length === 0)
+                  }
+                  zoom={zoom} setZoom={setZoom}
+                  emptyStateConfig={
+                    isCompositeMode ? {
+                      title: "Composites View",
+                      subtitle: "Choose from All Composites or Create one from scratch",
+                      style: 'clean',
+                      icon: <UserIcon className="w-8 h-8 mx-auto text-gray-600 dark:text-gray-500 mb-2" />
+                    } : undefined
+                  }
                 />
               </div>
-              {generatedModelHistory.length > 0 && !isMobileView && (
+              {(isCompositeMode ? compositeHistory.length > 0 : generatedModelHistory.length > 0) && !isMobileView && (
                 <VersionHistoryPanel
-                  history={generatedModelHistory}
-                  currentHistoryItemId={currentHistoryItemId}
+                  history={
+                    isCompositeMode
+                      ? (currentCompositeHistoryId ? compositeHistory.filter(item => {
+                        const findRoot = (id: string): string => {
+                          const current = compositeHistory.find(h => h.id === id);
+                          if (!current || !current.parentId) return id;
+                          return findRoot(current.parentId);
+                        };
+                        const currentRootId = findRoot(currentCompositeHistoryId);
+                        const isDescendant = (itemId: string, rootId: string): boolean => {
+                          if (itemId === rootId) return true;
+                          const item = compositeHistory.find(h => h.id === itemId);
+                          if (!item || !item.parentId) return false;
+                          return isDescendant(item.parentId, rootId);
+                        };
+                        return isDescendant(item.id, currentRootId);
+                      }) : [])
+                      : generatedModelHistory
+                  }
+                  currentHistoryItemId={isCompositeMode ? currentCompositeHistoryId : currentHistoryItemId}
                   onSelectVersion={(id) => restoreHistoryItem(id, 'ui')}
                   onDeleteVersion={handleDeleteVersion}
                   onToggleStar={handleToggleStar}
@@ -1920,11 +2188,55 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                   modelImageUrl={displayImageUrl}
                   baseModelName={displayModel?.name}
                   isLoading={isLoading}
-                  onGenerate={handleGenerate}
-                  hasPendingChanges={hasPendingChanges}
+                  onGenerate={handleApplyChanges} // Use handleApplyChanges which now has composite logic
+                  hasPendingChanges={canApply}
                   onDownloadImage={handleDownloadImage}
                   onUseAsVideoReference={handleUseAsVideoReference}
                   onCopySettings={handleCopySettings}
+                  isCompositeMode={isCompositeMode}
+                  onCompositeModeToggle={handleCompositeModeToggle}
+                  compositeSubjects={compositeSubjects}
+                  onAddCompositeSubject={handleAddCompositeSubject}
+                  onRemoveCompositeSubject={handleRemoveCompositeSubject}
+                  compositePrompt={compositePrompt}
+                  onCompositePromptChange={handleCompositePromptChange}
+                  history={isCompositeMode ? compositeHistory : generatedModelHistory}
+                  selectedGenerationModel={selectedGenerationModel}
+                  onUploadCompositeSubject={handleUploadCompositeSubject}
+                  isCompositeRevision={!!currentCompositeHistoryId}
+                  currentProjectId={currentProjectId || undefined}
+                  currentCompositeHistoryId={currentCompositeHistoryId}
+                  onDeleteComposite={handleDeleteVersion} // Pass the existing delete handler
+                  onSelectCompositeHistoryItem={(id) => {
+                    if (id === null) {
+                      // Reset to "New" state
+                      setCurrentCompositeHistoryId(null);
+                      setCompositePrompt('');
+                      setCompositeSubjects([]); // Ensure subjects are cleared
+                    } else {
+                      // Restore selected composite state
+                      setCurrentCompositeHistoryId(id);
+                      const item = compositeHistory.find(i => i.id === id);
+                      if (item) {
+                        // Restore prompt
+                        if (item.settings?.compositePrompt) {
+                          setCompositePrompt(item.settings.compositePrompt);
+                        } else {
+                          setCompositePrompt(item.prompt || '');
+                        }
+
+                        // Restore subjects
+                        if (item.settings?.compositeSubjects) {
+                          setCompositeSubjects(item.settings.compositeSubjects.map(s => ({
+                            id: s.id || `subj-${Date.now()}-${Math.random()}`,
+                            url: s.storageUrl,
+                            name: s.name
+                          })));
+                        }
+                      }
+                    }
+                  }}
+
                 />
               </div>
             </>
@@ -1940,11 +2252,25 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             modelImageUrl={displayImageUrl}
             baseModelName={displayModel?.name}
             isLoading={isLoading}
-            onGenerate={handleGenerate}
-            hasPendingChanges={hasPendingChanges}
+            onGenerate={handleApplyChanges}
+            hasPendingChanges={canApply}
             onDownloadImage={handleDownloadImage}
             onUseAsVideoReference={handleUseAsVideoReference}
             onCopySettings={handleCopySettings}
+            isCompositeMode={isCompositeMode}
+            onCompositeModeToggle={handleCompositeModeToggle}
+            compositeSubjects={compositeSubjects}
+            onAddCompositeSubject={handleAddCompositeSubject}
+            onRemoveCompositeSubject={handleRemoveCompositeSubject}
+            compositePrompt={compositePrompt}
+            onCompositePromptChange={handleCompositePromptChange}
+            history={generatedModelHistory}
+            selectedGenerationModel={selectedGenerationModel}
+            onUploadCompositeSubject={handleUploadCompositeSubject}
+            isCompositeRevision={!!currentCompositeHistoryId}
+            currentProjectId={currentProjectId || undefined}
+            currentCompositeHistoryId={currentCompositeHistoryId}
+            onSelectCompositeHistoryItem={setCurrentCompositeHistoryId}
           />
         )}
       </motion.div>

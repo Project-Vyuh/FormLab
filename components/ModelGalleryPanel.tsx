@@ -62,6 +62,8 @@ interface ModelGalleryPanelProps {
   hasOutfitChanged: boolean;
   applyButtonLabel: string;
   canApply: boolean;
+  isCompositeMode?: boolean;
+  isRevision?: boolean;
 }
 
 const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
@@ -77,7 +79,7 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
     projectList,
     currentProjectId, onProjectChange, onOpenProjectModal,
     revisionPrompt, onRevisionPromptChange, onEnhanceRevisionPrompt, onApplyRevision, isEnhancingPrompt,
-    hasSettingsChanged, hasOutfitChanged, applyButtonLabel, canApply
+    hasSettingsChanged, hasOutfitChanged, applyButtonLabel, canApply, isCompositeMode, isRevision
   } = props;
 
   return (
@@ -95,7 +97,7 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
       {/* --- SCROLLABLE MIDDLE: All Content Sections --- */}
       <div className="flex-grow min-h-0 overflow-y-auto p-4 space-y-6">
         {/* Your Selected Model */}
-        <div className="space-y-3">
+        <div className={`space-y-3 transition-opacity ${isCompositeMode ? 'opacity-30 pointer-events-none grayscale' : 'opacity-100'}`}>
           <h2 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
             <UserIcon className="w-3.5 h-3.5" />
             Your Selected Model
@@ -150,7 +152,7 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
         </div>
 
         {/* Create Model Revision */}
-        <div className="space-y-3 pt-4 border-t border-white/5">
+        <div className={`space-y-3 pt-4 border-t border-white/5 transition-opacity ${isCompositeMode ? 'opacity-30 pointer-events-none grayscale' : 'opacity-100'}`}>
           <h2 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
             <PenLineIcon className="w-3.5 h-3.5" />
             Create Model Revision
@@ -170,7 +172,7 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
         </div>
 
         {/* Wardrobe Library */}
-        <div className="space-y-3 pt-4 border-t border-white/5">
+        <div className={`space-y-3 pt-4 border-t border-white/5 transition-opacity ${isCompositeMode ? 'opacity-30 pointer-events-none grayscale' : 'opacity-100'}`}>
           <WardrobeLibrary
             wardrobe={props.wardrobe}
             onSelectItem={props.onWardrobeItemSelect}
@@ -237,10 +239,12 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
         </div>
         <button
           onClick={onApplyRevision}
-          disabled={isLoading || !canApply}
+          disabled={isLoading || (!canApply && !isCompositeMode)}
           className="w-full py-2 text-xs font-semibold text-black bg-white hover:bg-gray-200 rounded-lg shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-all disabled:opacity-50 disabled:shadow-none mt-3"
         >
-          {applyButtonLabel}
+          {isCompositeMode
+            ? (isRevision ? 'GENERATE REVISION' : 'GENERATE COMPOSITE')
+            : applyButtonLabel}
         </button>
       </div>
     </aside>

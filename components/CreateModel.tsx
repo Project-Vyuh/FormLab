@@ -1211,14 +1211,10 @@ const CreateModel: React.FC<CreateModelProps> = ({
   }, [deleteConfirmModal.model, currentProjectId, generatedModelHistory, currentHistoryItemId, onModelDeleted]);
 
   const handleModelSelect = useCallback((newModelName: string) => {
-    if (generatedModelUrl && !hasSavedInstance) {
-      setPendingModelSwitch(newModelName);
-      setIsSwitchModelModalOpen(true);
-      return;
-    }
+    // Seamless model switching - just change the model, next generation uses it
     setSelectedModelName(newModelName);
-    reset();
-  }, [generatedModelUrl, hasSavedInstance, reset]);
+    // Don't reset - keep current work, just change the model for future generations
+  }, []);
 
   const handleConfirmSwitch = useCallback(() => {
     if (pendingModelSwitch) {

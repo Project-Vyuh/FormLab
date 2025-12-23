@@ -18,6 +18,12 @@ export interface Model {
   sourceTemplateId?: string; // ID of the template this model was created from
 }
 
+export interface CompositeSubject {
+  id: string;
+  url: string;
+  name: string;
+}
+
 export type WardrobeCategory = string;
 
 export interface WardrobeItem {
@@ -316,9 +322,12 @@ export interface GenerationSettings {
   imageSize?: '1K' | '2K' | '4K'; // Gemini 3 Pro specific resolution setting
   googleSearchGrounding?: boolean; // Grounding with Google Search
   thinkingMode?: boolean; // Enable deep reasoning (internal optimization)
+  isCompositeMode?: boolean; // Multi-model composite generation mode
+  compositeSubjects?: { id: string; storageUrl: string; name: string }[]; // Reference models for composites
+  compositePrompt?: string; // Specific prompt for the multi-model composition
 }
 
-export type HistoryItemType = 'model-generation' | 'model-revision' | 'try-on' | 'try-on-revision';
+export type HistoryItemType = 'model-generation' | 'model-revision' | 'try-on' | 'try-on-revision' | 'composite-generation';
 
 export interface HistoryItem {
   id: string;
@@ -334,6 +343,7 @@ export interface HistoryItem {
   sourceTemplateId?: string; // ID of the template this history item was created from
   outfitGarmentIds?: string[]; // IDs of garments in the outfit stack (for Image Studio) - simplified for Firestore serialization
   thoughts?: string; // Model's thinking process (internal)
+  projectId?: string; // Associated project ID for filtering
 }
 
 export interface GarmentAnalysis {

@@ -42,7 +42,7 @@ function base64ToBlob(base64Data: string): Blob {
  */
 function generateFilePath(
     userId: string,
-    category: 'models' | 'wardrobe' | 'tryons' | 'videos' | 'products',
+    category: 'models' | 'wardrobe' | 'tryons' | 'videos' | 'products' | 'composites',
     fileName: string,
     projectId?: string
 ): string {
@@ -68,7 +68,7 @@ function generateFilePath(
 export async function uploadBase64Image(
     base64Data: string,
     userId: string,
-    category: 'models' | 'wardrobe' | 'tryons' | 'products',
+    category: 'models' | 'wardrobe' | 'tryons' | 'products' | 'composites',
     fileName: string = 'image.jpg',
     projectId?: string
 ): Promise<string> {
@@ -117,7 +117,7 @@ export async function uploadBase64Image(
 export async function uploadFile(
     file: File,
     userId: string,
-    category: 'models' | 'wardrobe' | 'tryons' | 'products',
+    category: 'models' | 'wardrobe' | 'tryons' | 'products' | 'composites',
     projectId?: string
 ): Promise<string> {
     try {
@@ -282,7 +282,7 @@ export async function getFileUrl(filePath: string): Promise<string> {
  */
 export function isStorageUrl(url: string): boolean {
     return url.includes('firebasestorage.googleapis.com') ||
-           url.startsWith('gs://');
+        url.startsWith('gs://');
 }
 
 /**

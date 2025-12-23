@@ -524,6 +524,61 @@ export const deleteStylingHistory = async (
 };
 
 /**
+ * Save multi-model composite state for a project
+ */
+export const saveCompositeState = async (
+    projectId: string,
+    state: {
+        compositeSubjects: any[];
+        compositePrompt: string;
+        compositeHistory: any[];
+    }
+): Promise<void> => {
+    if (!projectId.trim()) return;
+    if (!db) await initDB();
+
+    try {
+        const projectState = await loadProjectState(projectId);
+        if (!projectState) {
+            console.error(`Project ${projectId} not found`);
+            return;
+        }
+
+        projectState.compositeState = state;
+        await saveProjectState(projectId, projectState);
+        console.log('[dbService] Composite state saved successfully');
+    } catch (error) {
+        console.error('Error saving composite state:', error);
+    }
+};
+
+/**
+ * Load multi-model composite state for a project
+ */
+export const loadCompositeState = async (
+    projectId: string
+): Promise<{
+    compositeSubjects: any[];
+    compositePrompt: string;
+    compositeHistory: any[];
+} | null> => {
+    if (!projectId.trim()) return null;
+    if (!db) await initDB();
+
+    try {
+        const projectState = await loadProjectState(projectId);
+        if (!projectState || !projectState.compositeState) {
+            return null;
+        }
+
+        return projectState.compositeState;
+    } catch (error) {
+        console.error('Error loading composite state:', error);
+        return null;
+    }
+};
+
+/**
  * Migration: Migrate all existing IndexedDB projects to Firestore
  * This should be run once when user logs in for the first time
  * Only syncs projects that don't already exist in Firestore

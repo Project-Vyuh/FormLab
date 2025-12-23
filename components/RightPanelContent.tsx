@@ -1,17 +1,8 @@
-
-
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
-*/
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import OutfitStack from './OutfitStack';
-import { OutfitLayer } from '../types';
-import { ChevronDownIcon, ChevronUpIcon, WandIcon, Share2Icon, DownloadIcon, VideoIcon, ClipboardIcon } from './icons';
-
-// Note: Most of the logic from the old RightPanelContent has been moved into ImageStudio.tsx
-// This component is now simpler and focuses on layout.
+import { OutfitLayer, CompositeSubject, HistoryItem } from '../types';
+import { ChevronDownIcon, ChevronUpIcon, WandIcon, Share2Icon, DownloadIcon, VideoIcon, ClipboardIcon, PlusIcon, Trash2Icon, UserIcon, ZapIcon } from './icons';
 
 interface RightPanelContentProps {
   error: string | null;
@@ -27,13 +18,30 @@ interface RightPanelContentProps {
   baseModelName?: string;
 
   isLoading: boolean;
-
   onGenerate: () => void;
   hasPendingChanges: boolean;
 
   onDownloadImage: () => void;
   onUseAsVideoReference: () => void;
   onCopySettings: () => void;
+
+  // Composite Mode Props
+  isCompositeMode: boolean;
+  onCompositeModeToggle: (mode: boolean) => void;
+  compositeSubjects: CompositeSubject[];
+  onAddCompositeSubject: (subject: CompositeSubject) => void;
+  onRemoveCompositeSubject: (id: string) => void;
+  compositePrompt: string;
+  onCompositePromptChange: (prompt: string) => void;
+  history: HistoryItem[];
+  selectedGenerationModel: string;
+  onUploadCompositeSubject: (file: File) => void;
+  // Props for Composite Selection
+  isCompositeRevision?: boolean;
+  currentProjectId?: string;
+  currentCompositeHistoryId?: string | null;
+  onSelectCompositeHistoryItem?: (id: string | null) => void;
+  onDeleteComposite?: (id: string) => void;
 
   // For mobile sheet view
   isSheet?: boolean;
@@ -42,28 +50,62 @@ interface RightPanelContentProps {
 }
 
 
+import CompositesSection from './CompositesSection';
+
 const PanelMainContent: React.FC<Omit<RightPanelContentProps, 'isSheet' | 'isSheetCollapsed' | 'onToggleSheet'>> = (props) => {
+  const isProModel = props.selectedGenerationModel === 'Nano Banana Pro';
+
   return (
-    <>
+    <div className="flex flex-col gap-6 h-full">
       {props.error && (
-        <div className="bg-red-500/10 border-l-4 border-red-500 text-red-400 p-3 rounded-md mb-4" role="alert">
+        <div className="bg-red-500/10 border-l-4 border-red-500 text-red-400 p-3 rounded-md" role="alert">
           <p className="font-bold text-sm">Error</p>
           <p className="text-xs">{props.error}</p>
         </div>
       )}
-      <OutfitStack
-        layers={props.outfitStack}
-        onMoveLayerUp={props.onMoveLayerUp}
-        onMoveLayerDown={props.onMoveLayerDown}
-        onToggleVisibility={props.onToggleVisibility}
-        onRemove={props.onRemoveLayer}
-        onSelect={props.onSelectLayer}
-        selectedLayerId={props.selectedLayerId}
-        onQuickReplace={props.onQuickReplace}
-        modelImageUrl={props.modelImageUrl}
-        baseModelName={props.baseModelName}
+
+      {/* Standard Features (disabled in composite mode) */}
+      <div className={props.isCompositeMode ? "opacity-30 pointer-events-none grayscale transition-all" : "transition-all"}>
+        <OutfitStack
+          layers={props.outfitStack}
+          onMoveLayerUp={props.onMoveLayerUp}
+          onMoveLayerDown={props.onMoveLayerDown}
+          onToggleVisibility={props.onToggleVisibility}
+          onRemove={props.onRemoveLayer}
+          onSelect={props.onSelectLayer}
+          selectedLayerId={props.selectedLayerId}
+          onQuickReplace={props.onQuickReplace}
+          modelImageUrl={props.modelImageUrl}
+          baseModelName={props.baseModelName}
+        />
+      </div>
+
+      {/* Composites Section */}
+      <CompositesSection
+        isCompositeMode={props.isCompositeMode}
+        onCompositeModeToggle={props.onCompositeModeToggle}
+        compositeSubjects={props.compositeSubjects}
+        onAddCompositeSubject={props.onAddCompositeSubject}
+        onRemoveCompositeSubject={props.onRemoveCompositeSubject}
+        compositePrompt={props.compositePrompt}
+        onCompositePromptChange={props.onCompositePromptChange}
+        onGenerate={props.onGenerate}
+        isLoading={props.isLoading}
+        isProModel={isProModel}
+        history={props.history}
+        onUploadCompositeSubject={props.onUploadCompositeSubject}
+        isCompositeRevision={props.isCompositeRevision}
+        currentProjectId={props.currentProjectId}
+        currentCompositeHistoryId={props.currentCompositeHistoryId}
+        onSelectCompositeHistoryItem={props.onSelectCompositeHistoryItem}
+        onDeleteComposite={props.onDeleteComposite}
       />
-    </>
+
+      {!props.isCompositeMode && (
+        <div className="flex flex-col gap-3 mt-auto pt-6 border-t border-white/5">
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -72,10 +114,7 @@ const RightPanelContent: React.FC<RightPanelContentProps> = (props) => {
   const {
     isSheet = false,
     isSheetCollapsed = false,
-    onToggleSheet,
-    isLoading,
-    onGenerate,
-    hasPendingChanges
+    onToggleSheet
   } = props;
 
 
@@ -92,7 +131,7 @@ const RightPanelContent: React.FC<RightPanelContentProps> = (props) => {
         >
           {isSheetCollapsed ? <ChevronUpIcon className="w-6 h-6 text-gray-400" /> : <ChevronDownIcon className="w-6 h-6 text-gray-400" />}
         </button>
-        <div className="p-4 md:p-6 overflow-y-auto flex-grow flex flex-col gap-6">
+        <div className="p-4 md:p-6 overflow-y-auto flex-grow flex flex-col">
           <PanelMainContent {...props} />
         </div>
       </aside>
@@ -102,7 +141,7 @@ const RightPanelContent: React.FC<RightPanelContentProps> = (props) => {
   // Desktop view
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 overflow-y-auto flex-grow flex flex-col gap-4">
+      <div className="p-4 overflow-y-auto flex-grow flex flex-col">
         <PanelMainContent {...props} />
       </div>
     </div>

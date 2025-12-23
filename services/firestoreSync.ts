@@ -85,6 +85,11 @@ export interface ProjectState {
     hasSavedInstance?: boolean;
     stylingHistory?: { [baseModelId: string]: HistoryItem[] };
     wardrobe?: any[];
+    compositeState?: {
+        compositeSubjects: any[];
+        compositePrompt: string;
+        compositeHistory: any[];
+    };
     updatedAt?: number;
     syncVersion?: number;
 }
@@ -262,6 +267,7 @@ export const syncProjectToFirestore = async (
             currentHistoryItemId: projectState.currentHistoryItemId || null,
             hasSavedInstance: projectState.hasSavedInstance || false,
             generationSettings: projectState.generationSettings || {},
+            compositeState: projectState.compositeState || null,
 
             createdAt: serverTimestamp(), // Required by Firestore rules
             updatedAt: serverTimestamp(), // Required by Firestore rules
@@ -439,6 +445,7 @@ export const loadProjectFromFirestore = async (
             generatedModelHistory,
             stylingHistory: Object.keys(stylingHistory).length > 0 ? stylingHistory : undefined,
             wardrobe: wardrobe.length > 0 ? wardrobe : undefined,
+            compositeState: projectData.compositeState,
             updatedAt: timestampToMs(projectData.updatedAt),
             syncVersion: projectData.syncVersion || 0,
         };
@@ -536,7 +543,7 @@ export const syncHistoryItems = async (
             }
 
             // Validate type is one of allowed values
-            const allowedTypes = ['model-generation', 'model-revision', 'try-on', 'try-on-revision'];
+            const allowedTypes = ['model-generation', 'model-revision', 'try-on', 'try-on-revision', 'composite-generation'];
             if (!allowedTypes.includes(item.type)) {
                 console.warn(`[firestoreSync] Skipping history item ${item.id} - invalid type: ${item.type}`);
                 skippedCount++;

@@ -6,8 +6,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { XIcon, UploadCloudIcon, CheckCircleIcon, AlertCircleIcon } from './icons';
+import { XIcon, UploadCloudIcon, CheckCircleIcon, AlertCircleIcon, ScissorsIcon } from './icons';
 import { WardrobeCategory } from '../types';
+import { cn } from '../lib/utils';
 
 interface GarmentExtractorModalProps {
     isOpen: boolean;
@@ -66,6 +67,17 @@ const GarmentExtractorModal: React.FC<GarmentExtractorModalProps> = ({ isOpen, o
     useEffect(() => {
         setCategory(getInitialCategory());
     }, [categories, getInitialCategory]);
+
+    // Keyboard interaction: Escape key
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        if (isOpen) {
+            window.addEventListener('keydown', handleKeyDown);
+        }
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
 
     const handleFileChange = (files: FileList | null) => {
         if (files && files[0]) {
@@ -168,42 +180,39 @@ const GarmentExtractorModal: React.FC<GarmentExtractorModalProps> = ({ isOpen, o
                     className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
                 >
                     <motion.div
-                        initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                        animate={{ scale: 1, opacity: 1, y: 0 }}
-                        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                        initial={{ scale: 0.98, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.98, opacity: 0 }}
                         onClick={(e) => e.stopPropagation()}
-                        className="relative w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a] shadow-2xl flex flex-col"
-                        style={{
-                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                        }}
+                        className="bg-[#1a1a1a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl w-full max-w-3xl overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.6)] flex flex-col max-h-[85vh]"
                     >
-                        {/* Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5">
-                            <div>
-                                <h2 className="text-lg font-semibold text-white tracking-tight">Extract Garment</h2>
-                                <p className="text-xs text-gray-400 mt-0.5">Upload a product image to automatically extract the garment</p>
+                        {/* Sleek Header */}
+                        <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between bg-white/[0.02] flex-shrink-0">
+                            <div className="flex items-center gap-2">
+                                <ScissorsIcon className="w-4 h-4 text-white/40" />
+                                <span className="text-[12px] font-medium text-white/70">Extract Garment</span>
                             </div>
                             <button
                                 onClick={onClose}
-                                className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                                className="p-1 hover:bg-white/10 rounded-lg transition-all text-gray-500 hover:text-white"
                             >
-                                <XIcon className="h-5 w-5" />
+                                <XIcon className="w-5 h-5" />
                             </button>
                         </div>
 
-                        {/* Two-Panel Layout */}
-                        <div className="grid grid-cols-2 gap-0 border-b border-white/5">
-                            {/* Left Panel: Upload & Configure */}
-                            <div className="p-6 border-r border-white/5 bg-[#1a1a1a]">
-                                <div className="space-y-6">
-                                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Configuration</h3>
-
-                                    {/* Upload Area */}
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-300 mb-2 block">Product Image</label>
+                        {/* Content */}
+                        <div className="flex-grow overflow-y-auto custom-scrollbar">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
+                                {/* Left Panel: Upload & Configure */}
+                                <div className="p-5 border-b md:border-b-0 md:border-r border-white/5">
+                                    <div className="space-y-4">
+                                        {/* Upload Area */}
                                         <label
                                             htmlFor="garment-image-upload"
-                                            className={`relative w-full aspect-square border-2 border-dashed rounded-xl flex flex-col items-center justify-center text-gray-400 transition-all cursor-pointer group ${uploadedImageUrl ? 'border-white/20 bg-black/40' : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-black/30'}`}
+                                            className={cn(
+                                                "relative w-full aspect-[4/3] border border-dashed rounded-xl flex flex-col items-center justify-center text-gray-400 transition-all cursor-pointer group",
+                                                uploadedImageUrl ? 'border-white/20 bg-black/40' : 'border-white/10 hover:border-white/20 hover:bg-white/[0.02]'
+                                            )}
                                             onDrop={onDrop}
                                             onDragOver={onDragOver}
                                         >
@@ -211,19 +220,17 @@ const GarmentExtractorModal: React.FC<GarmentExtractorModalProps> = ({ isOpen, o
                                                 <img src={uploadedImageUrl} alt="Uploaded garment" className="w-full h-full object-contain p-2" />
                                             ) : (
                                                 <>
-                                                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                                                        <UploadCloudIcon className="w-6 h-6 text-gray-400" />
-                                                    </div>
-                                                    <span className="text-sm font-medium text-gray-300">Click to upload</span>
-                                                    <span className="text-xs text-gray-500 mt-1">or drag and drop</span>
+                                                    <UploadCloudIcon className="w-5 h-5 text-white/40 group-hover:text-white/80 transition-colors" />
+                                                    <p className="text-[12px] font-medium text-white/70 mt-2">Upload Product Image</p>
+                                                    <p className="text-[10px] text-gray-500 mt-0.5">or drag and drop</p>
                                                 </>
                                             )}
                                             {/* Hover overlay for replacing image */}
                                             {uploadedImageUrl && (
                                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
-                                                    <span className="text-sm font-medium text-white flex items-center gap-2">
-                                                        <UploadCloudIcon className="w-4 h-4" />
-                                                        Replace Image
+                                                    <span className="text-[11px] font-medium text-white flex items-center gap-2">
+                                                        <UploadCloudIcon className="w-3.5 h-3.5" />
+                                                        Replace
                                                     </span>
                                                 </div>
                                             )}
@@ -235,162 +242,157 @@ const GarmentExtractorModal: React.FC<GarmentExtractorModalProps> = ({ isOpen, o
                                             accept="image/png, image/jpeg, image/webp"
                                             onChange={(e) => handleFileChange(e.target.files)}
                                         />
-                                    </div>
 
-                                    {/* Form Fields */}
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <label htmlFor="product-name" className="text-sm font-medium text-gray-300">
-                                                Product Name <span className="text-red-400">*</span>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                id="product-name"
-                                                value={name}
-                                                onChange={(e) => setName(e.target.value)}
-                                                className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
-                                                placeholder="e.g. Summer Floral Dress"
-                                            />
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label htmlFor="product-sku" className="text-sm font-medium text-gray-300">
-                                                    SKU <span className="text-gray-600 text-xs">(Optional)</span>
+                                        {/* Form Fields */}
+                                        <div className="space-y-3">
+                                            <div className="space-y-1.5">
+                                                <label htmlFor="product-name" className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                                    Product Name <span className="text-red-400">*</span>
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    id="product-sku"
-                                                    value={sku}
-                                                    onChange={(e) => setSku(e.target.value)}
-                                                    className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
-                                                    placeholder="SKU-123"
+                                                    id="product-name"
+                                                    value={name}
+                                                    onChange={(e) => setName(e.target.value)}
+                                                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-[11px] text-white placeholder-gray-600 focus:border-white/20 focus:outline-none transition-all"
+                                                    placeholder="e.g. Summer Floral Dress"
                                                 />
                                             </div>
 
-                                            <div className="space-y-2">
-                                                <label htmlFor="product-category" className="text-sm font-medium text-gray-300">
-                                                    Category
-                                                </label>
-                                                <div className="relative">
-                                                    <select
-                                                        id="product-category"
-                                                        value={category}
-                                                        onChange={(e) => setCategory(e.target.value as WardrobeCategory)}
-                                                        className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all appearance-none cursor-pointer"
-                                                    >
-                                                        {categories.map(cat => <option key={cat} value={cat} className="bg-gray-900">{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>)}
-                                                    </select>
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="space-y-1.5">
+                                                    <label htmlFor="product-sku" className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                                        SKU <span className="text-gray-600 text-[9px]">(Optional)</span>
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        id="product-sku"
+                                                        value={sku}
+                                                        onChange={(e) => setSku(e.target.value)}
+                                                        className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-[11px] text-white placeholder-gray-600 focus:border-white/20 focus:outline-none transition-all"
+                                                        placeholder="SKU-123"
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <label htmlFor="product-category" className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                                        Category
+                                                    </label>
+                                                    <div className="relative">
+                                                        <select
+                                                            id="product-category"
+                                                            value={category}
+                                                            onChange={(e) => setCategory(e.target.value as WardrobeCategory)}
+                                                            className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-[11px] text-white focus:border-white/20 focus:outline-none transition-all appearance-none cursor-pointer"
+                                                        >
+                                                            {categories.map(cat => <option key={cat} value={cat} className="bg-gray-900">{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>)}
+                                                        </select>
+                                                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                            <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Right Panel: Extraction Preview */}
-                            <div className="p-6 bg-[#151515] flex flex-col">
-                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-6">Extraction Preview</h3>
-
-                                <div className="flex-1 flex flex-col h-full">
-                                    <div className="relative flex-1 w-full border border-white/10 rounded-xl bg-[#151515] flex items-center justify-center overflow-hidden">
+                                {/* Right Panel: Extraction Preview */}
+                                <div className="p-5 bg-black/20 flex flex-col">
+                                    <div className="relative flex-1 w-full border border-white/10 rounded-xl bg-[#151515] flex items-center justify-center overflow-hidden min-h-[180px]">
                                         {/* Checkerboard background overlay */}
-                                        <div className="absolute inset-0 opacity-20 bg-[linear-gradient(45deg,#222_25%,transparent_25%,transparent_75%,#222_75%,#222),linear-gradient(45deg,#222_25%,transparent_25%,transparent_75%,#222_75%,#222)] bg-[length:20px_20px] bg-[position:0_0,10px_10px]"></div>
+                                        <div className="absolute inset-0 opacity-20 bg-[linear-gradient(45deg,#222_25%,transparent_25%,transparent_75%,#222_75%,#222),linear-gradient(45deg,#222_25%,transparent_25%,transparent_75%,#222_75%,#222)] bg-[length:16px_16px] bg-[position:0_0,8px_8px]"></div>
 
                                         {extractionStatus === 'idle' && (
-                                            <div className="relative z-10 text-center p-6 max-w-sm">
-                                                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
-                                                    <UploadCloudIcon className="w-8 h-8 text-gray-600" />
-                                                </div>
-                                                <p className="text-sm text-gray-400">Your extracted garment will appear here.</p>
-                                                <p className="text-xs text-gray-500 mt-1">Upload an image and click "Extract Garment" to begin.</p>
+                                            <div className="relative z-10 text-center p-4">
+                                                <UploadCloudIcon className="w-6 h-6 mx-auto mb-2 text-gray-600" />
+                                                <p className="text-[11px] text-gray-400">Extracted garment preview</p>
                                             </div>
                                         )}
 
                                         {extractionStatus === 'extracting' && (
-                                            <div className="relative z-10 text-center p-6">
-                                                <div className="w-16 h-16 mx-auto mb-4">
-                                                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500"></div>
+                                            <div className="relative z-10 text-center p-4">
+                                                <div className="w-8 h-8 mx-auto mb-2">
+                                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                                                 </div>
-                                                <p className="text-sm text-gray-300 font-medium">Analyzing & Extracting...</p>
-                                                <p className="text-xs text-gray-500 mt-2">AI is processing your image. First run may take longer.</p>
+                                                <p className="text-[11px] text-gray-300 font-medium">Extracting...</p>
                                             </div>
                                         )}
 
                                         {extractionStatus === 'success' && extractedImageUrl && (
-                                            <img src={extractedImageUrl} alt="Extracted garment" className="relative z-10 max-h-full max-w-full object-contain p-4" />
+                                            <img src={extractedImageUrl} alt="Extracted garment" className="relative z-10 max-h-full max-w-full object-contain p-3" />
                                         )}
 
                                         {extractionStatus === 'error' && (
-                                            <div className="relative z-10 text-center p-6">
-                                                <AlertCircleIcon className="w-16 h-16 mx-auto mb-4 text-red-400" />
-                                                <p className="text-sm text-red-400 font-medium">Extraction failed</p>
-                                                <p className="text-xs text-gray-500 mt-2">Please try again</p>
+                                            <div className="relative z-10 text-center p-4">
+                                                <AlertCircleIcon className="w-8 h-8 mx-auto mb-2 text-red-400" />
+                                                <p className="text-[11px] text-red-400 font-medium">Failed</p>
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Extraction Metrics */}
-                                    <div className="mt-4 h-[72px]">
-                                        {extractionStatus === 'success' && extractionData ? (
-                                            <div className="grid grid-cols-2 gap-4 h-full">
-                                                <div className="p-3 rounded-lg bg-black/20 border border-white/5 flex flex-col justify-center">
-                                                    <span className="text-xs text-gray-500 mb-1">Confidence</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <CheckCircleIcon className="w-4 h-4 text-green-500" />
-                                                        <span className="text-lg font-semibold text-white tracking-tight">{extractionData.confidence}%</span>
-                                                    </div>
-                                                </div>
-                                                <div className="p-3 rounded-lg bg-black/20 border border-white/5 flex flex-col justify-center">
-                                                    <span className="text-xs text-gray-500 mb-1">Detected Type</span>
-                                                    <span className="text-lg font-semibold text-white tracking-tight">{extractionData.garmentType}</span>
+                                    {extractionStatus === 'success' && extractionData && (
+                                        <div className="mt-3 grid grid-cols-2 gap-2">
+                                            <div className="p-2.5 rounded-lg bg-black/30 border border-white/5">
+                                                <span className="text-[9px] text-gray-500 uppercase tracking-wider">Confidence</span>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <CheckCircleIcon className="w-3 h-3 text-green-500" />
+                                                    <span className="text-sm font-semibold text-white">{extractionData.confidence}%</span>
                                                 </div>
                                             </div>
-                                        ) : (
-                                            <div className="h-full border border-dashed border-white/5 rounded-lg bg-black/10 flex items-center justify-center text-xs text-gray-600">
-                                                metrics will appear here
+                                            <div className="p-2.5 rounded-lg bg-black/30 border border-white/5">
+                                                <span className="text-[9px] text-gray-500 uppercase tracking-wider">Detected Type</span>
+                                                <span className="text-sm font-semibold text-white block mt-0.5">{extractionData.garmentType}</span>
                                             </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
 
                         {/* Error Message */}
                         {error && (
-                            <div className="px-6 py-3 bg-red-500/10 border-t border-red-500/20">
-                                <p className="text-red-400 text-sm flex items-center gap-2">
-                                    <AlertCircleIcon className="w-4 h-4" />
+                            <div className="px-5 py-2.5 bg-red-500/10 border-t border-red-500/20 flex-shrink-0">
+                                <p className="text-red-400 text-[11px] flex items-center gap-2">
+                                    <AlertCircleIcon className="w-3.5 h-3.5" />
                                     {error}
                                 </p>
                             </div>
                         )}
 
-                        {/* Actions */}
-                        <div className="px-6 py-4 bg-white/5 border-t border-white/5 flex gap-3 justify-end items-center">
+                        {/* Sleek Footer */}
+                        <div className="px-5 py-3 bg-white/[0.02] border-t border-white/5 flex items-center justify-between gap-4 flex-shrink-0">
                             <button
                                 onClick={onClose}
-                                className="px-6 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                                className="text-[10px] font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-[0.15em]"
                             >
                                 Cancel
                             </button>
-                            <div className="flex gap-3">
+                            <div className="flex gap-2">
                                 <button
                                     onClick={handleExtractGarment}
                                     disabled={!canExtract}
-                                    className={`px-6 py-2.5 text-sm font-semibold text-white rounded-lg shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none ${canExtract ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20' : 'bg-gray-700'}`}
+                                    className={cn(
+                                        "px-4 py-2 rounded-md font-bold text-[10px] transition-all flex items-center gap-1.5",
+                                        canExtract
+                                            ? 'bg-blue-600 text-white hover:bg-blue-500 active:scale-[0.98]'
+                                            : 'bg-white/5 text-gray-500 cursor-not-allowed border border-white/5'
+                                    )}
                                 >
-                                    {extractionStatus === 'extracting' ? 'Extracting...' : 'Extract Garment'}
+                                    {extractionStatus === 'extracting' ? 'Extracting...' : 'Extract'}
                                 </button>
                                 <button
                                     onClick={handleAddToWardrobe}
                                     disabled={!canAddToWardrobe}
-                                    className={`px-6 py-2.5 text-sm font-semibold text-white rounded-lg shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2 ${canAddToWardrobe ? 'bg-green-600 hover:bg-green-500 shadow-green-500/20' : 'bg-gray-700'}`}
+                                    className={cn(
+                                        "px-4 py-2 rounded-md font-bold text-[10px] transition-all flex items-center gap-1.5",
+                                        canAddToWardrobe
+                                            ? 'bg-white text-black hover:bg-white/90 active:scale-[0.98]'
+                                            : 'bg-white/5 text-gray-500 cursor-not-allowed border border-white/5'
+                                    )}
                                 >
-                                    <CheckCircleIcon className="w-4 h-4" />
+                                    <CheckCircleIcon className="w-3 h-3" />
                                     Add to Wardrobe
                                 </button>
                             </div>

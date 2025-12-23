@@ -6,7 +6,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { HistoryItem, HistoryItemType } from '../types';
-import { StarIcon, ChevronUpIcon, GitBranchIcon, PenLineIcon, ChevronRightIcon, Trash2Icon, UserIcon, WandIcon, ShirtIcon } from './icons';
+import { StarIcon, ChevronUpIcon, GitBranchIcon, PenLineIcon, ChevronRightIcon, Trash2Icon, UserIcon, WandIcon, ShirtIcon, LayersIcon } from './icons';
 
 // Helper function to get icon and color for history item type
 const getTypeInfo = (type: HistoryItemType) => {
@@ -19,6 +19,8 @@ const getTypeInfo = (type: HistoryItemType) => {
       return { icon: ShirtIcon, color: 'bg-green-500/20 text-green-400 border-green-500/30', label: 'Try-On' };
     case 'try-on-revision':
       return { icon: PenLineIcon, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', label: 'Try-On Revision' };
+    case 'composite-generation':
+      return { icon: LayersIcon, color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', label: 'Composite' };
     default:
       return { icon: GitBranchIcon, color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', label: 'Unknown' };
   }

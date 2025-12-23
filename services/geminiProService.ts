@@ -772,5 +772,60 @@ Return ONLY the final image.` + getOutfitPrompt("female");
         config: generationConfig,
         tools: tools,
     } as any);
+
+    return handleApiResponse(response);
+};
+
+/**
+ * Generate a multi-model composite image based on several reference models and a composition prompt.
+ * Optimized for "Candid Group Interaction" for clothing brand banners.
+ */
+export const generateCompositeImagePro = async (
+    subjects: { storageUrl: string; name: string }[],
+    compositionPrompt: string,
+    settings: GenerationSettings
+): Promise<GenerationResult> => {
+    const promptSuffix = getGenerationPromptSuffix(settings);
+
+    // Convert subject images to parts
+    const subjectParts = await Promise.all(
+        subjects.map(s => dataUrlToPart(s.storageUrl))
+    );
+
+    const prompt = `You are a world-class fashion photographer and digital compositor.
+**Task:** Generate a high-end clothing brand banner showing a group of models interacting naturally.
+
+**Subjects:**
+${subjects.map((s, i) => `Model ${i + 1}: ${s.name}`).join('\n')}
+
+**Interaction Context:**
+${compositionPrompt || "The models are sharing a lively moment together as friends, laughing and smiling. This is a candid, high-end lifestyle photoshoot for a clothing brand."}
+
+**Strict Instructions:**
+1.  **Identity Preservation:** The models in the generated image MUST strictly resemble the reference subjects provided.
+2.  **Outfit Fidelity:** Each model should wear the outfit they are wearing in their respective reference image.
+3.  **Composition:** Arrange the models in a balanced, cinematic group composition. They should be interacting (e.g., walking together, sitting and talking, or sharing a joke).
+4.  **Aesthetic:** The lighting, color grade, and environment must match the following technical specifications:
+    ${promptSuffix}
+
+5.  **Quality:** Generate a single, coherent image that looks like a high-budget commercial campaign. No weird blending or anatomical errors.
+
+Return ONLY the final image.`;
+
+    // Construct generation config
+    const generationConfig: any = {
+        responseModalities: [Modality.IMAGE],
+        safetySettings: SAFETY_SETTINGS,
+    };
+
+    const tools = applyProFeatures(generationConfig, settings);
+
+    const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: { parts: [...subjectParts, { text: prompt }] },
+        config: generationConfig,
+        tools: tools,
+    } as any);
+
     return handleApiResponse(response);
 };
