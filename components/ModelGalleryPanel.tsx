@@ -4,11 +4,15 @@
 */
 import React, { useState, useEffect, useRef } from 'react';
 import { Model, GenerationSettings, Light, LightRole, PanelToggles, WardrobeItem, Project, SelectedStylingModel } from '../types';
-import { UploadCloudIcon, UserIcon, CubeIcon, PenLineIcon } from './icons';
+import { UploadCloudIcon, UserIcon, CubeIcon, PenLineIcon, BookmarkIcon } from './icons';
+import { STYLE_PRESETS } from './shared/presets';
+import { initialGenerationSettings } from './CreateModel';
 import GlobalControls from './GlobalControls';
 import WardrobeLibrary from './WardrobeLibrary';
 import ProjectSelectorPanel from './ProjectSelectorPanel';
 import PromptPanel from './PromptPanel';
+import CollapsibleSection from './shared/CollapsibleSection';
+import OptionButton from './shared/OptionButton';
 
 interface ModelGalleryPanelProps {
   selectedStylingModel: SelectedStylingModel | null;
@@ -190,6 +194,54 @@ const ModelGalleryPanel: React.FC<ModelGalleryPanelProps> = (props) => {
             onDeleteCategory={onDeleteCategory}
             onDeleteProduct={onDeleteProduct}
           />
+        </div>
+
+        {/* Style Presets */}
+        <div className={`transition-opacity ${isCompositeMode ? 'opacity-30 pointer-events-none grayscale' : 'opacity-100'}`}>
+          <CollapsibleSection
+            title="Style Presets"
+            icon={<BookmarkIcon className="w-3.5 h-3.5" />}
+            isOpen={openSections.presets}
+            onToggle={() => onToggleSection('presets')}
+          >
+            <div className="grid grid-cols-2 gap-1.5">
+              {STYLE_PRESETS.map(p => {
+                // Check if this preset is currently active
+                const isActive = JSON.stringify(p.settings) === JSON.stringify(Object.keys(p.settings).reduce((acc, key) => ({ ...acc, [key]: generationSettings[key as keyof GenerationSettings] }), {}));
+
+                return (
+                  <OptionButton
+                    key={p.label}
+                    onClick={() => {
+                      if (isActive) {
+                        // Reset settings that were in this preset to their initial values
+                        const resetSettings: Partial<GenerationSettings> = {};
+                        Object.keys(p.settings).forEach(key => {
+                          const settingsKey = key as keyof GenerationSettings;
+                          (resetSettings as any)[settingsKey] = initialGenerationSettings[settingsKey];
+                        });
+                        onSettingsChange(gs => ({ ...gs, ...resetSettings }));
+                      } else {
+                        // Apply the preset settings with deep merge for panelToggles
+                        onSettingsChange(gs => {
+                          const newSettings = { ...gs, ...p.settings };
+                          // Deep merge panelToggles to preserve user's existing enabled toggles
+                          if (p.settings.panelToggles) {
+                            newSettings.panelToggles = { ...gs.panelToggles, ...p.settings.panelToggles };
+                          }
+                          return newSettings;
+                        });
+                      }
+                    }}
+                    isActive={isActive}
+                    disabled={isGenerating}
+                  >
+                    {p.label}
+                  </OptionButton>
+                );
+              })}
+            </div>
+          </CollapsibleSection>
         </div>
 
         <div className="pt-4 border-t border-white/5">

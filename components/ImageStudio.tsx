@@ -475,7 +475,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             imageUrl: request.outputUrl,
             prompt: `Upscaled to ${resolution.toUpperCase()}`,
             settings: deepCopy(generationSettings),
-            modelName: "Nano Banana",
+            modelName: "Nano Banana Pro",
             isStarred: false,
             type: 'try-on-revision', // Treat as a revision
             baseModelId: selectedStylingModel!.baseModelId,
@@ -693,7 +693,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
             imageUrl: selectedStylingModel.url,
             prompt: "Initial Model",
             settings: initialGenerationSettings,
-            modelName: "Nano Banana",
+            modelName: "Nano Banana Pro",
             isStarred: true,
             name: selectedStylingModel.name,
             type: 'try-on',
@@ -1715,10 +1715,14 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       let promptForHistory = '';
 
       // Step 1: Apply outfit changes first if they exist
-      if (hasOutfit) {
+      // Check both the flag AND if visible garments exist in the stack
+      // This ensures outfits are applied even if hasPendingStackChanges was reset
+      const visibleGarmentLayers = outfitStack.filter(l => l.isVisible && l.garment);
+      const hasOutfitToApply = hasOutfit || visibleGarmentLayers.length > 0;
+
+      if (hasOutfitToApply) {
         setLoadingMessage('Applying outfit changes...');
         const resolvedBaseImage = await resolveImageUrl(modelImageUrl || displayImageUrl);
-        const visibleGarmentLayers = outfitStack.filter(l => l.isVisible && l.garment);
 
         if (visibleGarmentLayers.length > 0) {
           const modelInfo = generationModels.find(m => m.name === selectedGenerationModel);

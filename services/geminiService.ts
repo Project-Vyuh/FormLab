@@ -319,9 +319,10 @@ export const getStudioEnvironmentPrompt = (environment: StudioEnvironment, sculp
 
     switch (environment.type) {
         case 'high-key':
-            prompt += ` The scene is a professional high-key white studio environment. The seamless background is exposed to be pure white (brightness ${environment.brightness.toFixed(2)}).`;
-            prompt += ' IMPORTANT: The white background must extend to ALL edges of the output frame. Any areas from the reference image that were transparent padding should be seamlessly filled with this white background.';
-            if (environment.reflectionStrength > 0.1) prompt += ` Faint, soft floor reflections are visible under the model's feet (strength ${environment.reflectionStrength.toFixed(2)}).`;
+            prompt += ` The scene is a professional high-key white studio environment with an INFINITY COVE background. The background is pure white (brightness ${environment.brightness.toFixed(2)}).`;
+            prompt += ' IMPORTANT: The white background must be absolutely SEAMLESS with NO VISIBLE HORIZON LINE. The floor and wall must merge imperceptibly into a single pure white field with NO separation, NO shadows at the horizon, and NO texture difference.';
+            prompt += ' Ensure the pure white background extends to ALL edges of the output frame. Any transparent padding from the reference must be filled with this seamless white.';
+            if (environment.reflectionStrength > 0.05) prompt += ` Faint, soft floor reflections are visible under the model's feet (strength ${environment.reflectionStrength.toFixed(2)}).`;
             break;
         case 'mid-gray':
             prompt += ' The scene is a professional studio with a perfectly neutral, 18% gray seamless background, ensuring accurate color and exposure.';
@@ -349,12 +350,18 @@ export const getStudioEnvironmentPrompt = (environment: StudioEnvironment, sculp
             break;
     }
 
-    if (environment.type !== 'transparent' && environment.type !== 'custom' && environment.cycloramaCurve > 0.1) {
+    if (environment.type !== 'transparent' && environment.type !== 'custom' && environment.type !== 'high-key' && environment.cycloramaCurve > 0.1) {
         prompt += ` The wall curves seamlessly into the floor with a radius of ${environment.cycloramaCurve.toFixed(2)}, creating an infinity cyc wall effect.`;
     }
 
-    if (floor) {
+    // For high-key environments, we want to suppress the default floor materials (like concrete)
+    // to ensure the seamless white background extends to the floor.
+    // The high-key case in getStudioEnvironmentPrompt already handles floor reflections.
+    if (floor && environment.type !== 'high-key') {
         prompt += getFloorPrompt(floor);
+    } else if (floor && environment.type === 'high-key') {
+        // For high-key, we explicitly deny floor visibility to prevent horizon lines.
+        prompt += " The floor is invisible, merging perfectly with the white background to create a void-like infinity space.";
     }
 
     if (sculpting.flags.left) {
