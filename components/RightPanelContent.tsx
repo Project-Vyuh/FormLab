@@ -51,6 +51,7 @@ interface RightPanelContentProps {
 
 
 import CompositesSection from './CompositesSection';
+import BrandMarketingSection from './BrandMarketingSection';
 
 const PanelMainContent: React.FC<Omit<RightPanelContentProps, 'isSheet' | 'isSheetCollapsed' | 'onToggleSheet'>> = (props) => {
   const isProModel = props.selectedGenerationModel === 'Nano Banana Pro';
@@ -100,6 +101,9 @@ const PanelMainContent: React.FC<Omit<RightPanelContentProps, 'isSheet' | 'isShe
         onSelectCompositeHistoryItem={props.onSelectCompositeHistoryItem}
         onDeleteComposite={props.onDeleteComposite}
       />
+
+      {/* Brand Marketing Section */}
+      <BrandMarketingSection />
 
       {!props.isCompositeMode && (
         <div className="flex flex-col gap-3 mt-auto pt-6 border-t border-white/5">

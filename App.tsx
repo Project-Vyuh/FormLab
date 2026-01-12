@@ -26,6 +26,7 @@ import { loadAllUserProjectsFromFirestore, loadProjectFromFirestore, deleteProje
 import { deleteFolderContents } from './services/storageService';
 import { auth } from './services/firebase';
 import { SyncProvider } from './contexts/SyncContext';
+import { LogoBrandingProvider } from './contexts/LogoBrandingContext';
 
 
 export type View = 'createModel' | 'imageStudio' | 'videoCreator' | 'templates' | 'projects';
@@ -800,104 +801,106 @@ const App: React.FC = () => {
 
 
   return (
-    <SyncProvider>
-      <div className="font-sans flex flex-col h-screen bg-[#1a1a1a]">
-        <Header
-          activeView={activeView}
-          onNavigate={handleNavigate}
-          notifications={notifications}
-          currentUser={currentUser}
-          onLogout={handleLogout}
-          hasProjects={projectList.length > 0}
-        />
-        <div className="flex-grow min-h-0 relative">
-          {needsOnboarding ? (
-            <div className="absolute inset-0 z-10 bg-[#1a1a1a]">
-              <ProjectOnboarding onProjectCreated={handleFirstProjectCreated} />
-            </div>
-          ) : (
-            <>
-              <div className={`${activeView === 'createModel' ? 'block' : 'hidden'} absolute inset-0 bg-[#1a1a1a]`}>
-                <CreateModel
-                  onModelFinalized={handleModelCreated}
-                  onSaveModelInstance={handleSaveModel}
-                  projectList={projectList}
-                  currentProjectId={currentProjectId}
-                  onProjectChange={handleProjectChange}
-                  onOpenProjectModal={handleOpenProjectModal}
-                  currentUser={currentUser}
-                  modelGallery={modelGallery}
-                  onSelectModel={handleSelectModelFromGallery}
-                  onModelAdded={handleModelAdded}
-                  onModelUpdated={handleModelUpdated}
-                  onModelDeleted={handleDeleteModel}
-                  onRenameModel={handleRenameModel}
-                  selectedHistoryItemId={selectedHistoryItemId}
-                  onHistoryItemLoaded={() => setSelectedHistoryItemId(null)}
-                  onOpenCollectionsModal={() => setIsCollectionsModalOpen(true)}
-                  lastExternalUpdate={projectUpdateTrigger}
-                  onDeleteProject={handleDeleteProject}
-                />
+    <LogoBrandingProvider>
+      <SyncProvider>
+        <div className="font-sans flex flex-col h-screen bg-[#1a1a1a]">
+          <Header
+            activeView={activeView}
+            onNavigate={handleNavigate}
+            notifications={notifications}
+            currentUser={currentUser}
+            onLogout={handleLogout}
+            hasProjects={projectList.length > 0}
+          />
+          <div className="flex-grow min-h-0 relative">
+            {needsOnboarding ? (
+              <div className="absolute inset-0 z-10 bg-[#1a1a1a]">
+                <ProjectOnboarding onProjectCreated={handleFirstProjectCreated} />
               </div>
-              <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>
-                <ImageStudio
-                  selectedStylingModel={selectedStylingModel}
-                  onNavigateToVideoCreator={handleUseAsVideoReference}
-                  onNavigateToCreateModel={() => handleNavigate('createModel')}
-                  projectList={projectList}
-                  currentProjectId={currentProjectId}
-                  onProjectChange={handleProjectChange}
-                  onOpenProjectModal={handleOpenProjectModal}
-                  currentUser={currentUser}
-                  onCategoriesChange={setWardrobeCategories}
-                  onSaveStylingHistory={handleSaveStylingHistory}
-                />
-              </div>
-              <div className={`${activeView === 'videoCreator' ? 'block' : 'hidden'} absolute inset-0`}>
-                <VideoCreator
-                  referenceImageUrl={videoReferenceImageUrl}
-                  projectList={projectList}
-                  currentProjectId={currentProjectId}
-                  onProjectChange={handleProjectChange}
-                  onOpenProjectModal={handleOpenProjectModal}
-                  currentUser={currentUser}
-                />
-              </div>
-              <div className={`${activeView === 'templates' ? 'block' : 'hidden'} absolute inset-0`}>
-                <Templates wardrobeCategories={wardrobeCategories} currentUser={currentUser} />
-              </div>
-              <div className={`${activeView === 'projects' ? 'block' : 'hidden'} absolute inset-0`}>
-                <Projects />
-              </div>
-            </>
-          )}
+            ) : (
+              <>
+                <div className={`${activeView === 'createModel' ? 'block' : 'hidden'} absolute inset-0 bg-[#1a1a1a]`}>
+                  <CreateModel
+                    onModelFinalized={handleModelCreated}
+                    onSaveModelInstance={handleSaveModel}
+                    projectList={projectList}
+                    currentProjectId={currentProjectId}
+                    onProjectChange={handleProjectChange}
+                    onOpenProjectModal={handleOpenProjectModal}
+                    currentUser={currentUser}
+                    modelGallery={modelGallery}
+                    onSelectModel={handleSelectModelFromGallery}
+                    onModelAdded={handleModelAdded}
+                    onModelUpdated={handleModelUpdated}
+                    onModelDeleted={handleDeleteModel}
+                    onRenameModel={handleRenameModel}
+                    selectedHistoryItemId={selectedHistoryItemId}
+                    onHistoryItemLoaded={() => setSelectedHistoryItemId(null)}
+                    onOpenCollectionsModal={() => setIsCollectionsModalOpen(true)}
+                    lastExternalUpdate={projectUpdateTrigger}
+                    onDeleteProject={handleDeleteProject}
+                  />
+                </div>
+                <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>
+                  <ImageStudio
+                    selectedStylingModel={selectedStylingModel}
+                    onNavigateToVideoCreator={handleUseAsVideoReference}
+                    onNavigateToCreateModel={() => handleNavigate('createModel')}
+                    projectList={projectList}
+                    currentProjectId={currentProjectId}
+                    onProjectChange={handleProjectChange}
+                    onOpenProjectModal={handleOpenProjectModal}
+                    currentUser={currentUser}
+                    onCategoriesChange={setWardrobeCategories}
+                    onSaveStylingHistory={handleSaveStylingHistory}
+                  />
+                </div>
+                <div className={`${activeView === 'videoCreator' ? 'block' : 'hidden'} absolute inset-0`}>
+                  <VideoCreator
+                    referenceImageUrl={videoReferenceImageUrl}
+                    projectList={projectList}
+                    currentProjectId={currentProjectId}
+                    onProjectChange={handleProjectChange}
+                    onOpenProjectModal={handleOpenProjectModal}
+                    currentUser={currentUser}
+                  />
+                </div>
+                <div className={`${activeView === 'templates' ? 'block' : 'hidden'} absolute inset-0`}>
+                  <Templates wardrobeCategories={wardrobeCategories} currentUser={currentUser} />
+                </div>
+                <div className={`${activeView === 'projects' ? 'block' : 'hidden'} absolute inset-0`}>
+                  <Projects />
+                </div>
+              </>
+            )}
+          </div>
+
+          <CreateProjectModal
+            isOpen={isCreateProjectModalOpen}
+            onClose={() => setIsCreateProjectModalOpen(false)}
+            onCreate={handleCreateProject}
+          />
+
+          <CollectionsModal
+            isOpen={isCollectionsModalOpen}
+            onClose={() => setIsCollectionsModalOpen(false)}
+            onUseTemplate={handleUseTemplate}
+            onNavigateToCollections={handleNavigateToCollections}
+            onStartBlankCanvas={handleStartBlankCanvas}
+            currentUser={currentUser}
+            projects={projectList}
+            currentProjectId={currentProjectId}
+            showUserContent={false}
+          />
+
+          {/* Real-time Sync Listener (invisible component) */}
+          <ProjectSyncListener projectId={currentProjectId} currentUser={currentUser} />
+
+          {/* Sync Conflict Resolution Modal */}
+          <ConflictResolutionModal />
         </div>
-
-        <CreateProjectModal
-          isOpen={isCreateProjectModalOpen}
-          onClose={() => setIsCreateProjectModalOpen(false)}
-          onCreate={handleCreateProject}
-        />
-
-        <CollectionsModal
-          isOpen={isCollectionsModalOpen}
-          onClose={() => setIsCollectionsModalOpen(false)}
-          onUseTemplate={handleUseTemplate}
-          onNavigateToCollections={handleNavigateToCollections}
-          onStartBlankCanvas={handleStartBlankCanvas}
-          currentUser={currentUser}
-          projects={projectList}
-          currentProjectId={currentProjectId}
-          showUserContent={false}
-        />
-
-        {/* Real-time Sync Listener (invisible component) */}
-        <ProjectSyncListener projectId={currentProjectId} currentUser={currentUser} />
-
-        {/* Sync Conflict Resolution Modal */}
-        <ConflictResolutionModal />
-      </div>
-    </SyncProvider>
+      </SyncProvider>
+    </LogoBrandingProvider>
   );
 };
 

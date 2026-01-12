@@ -24,6 +24,26 @@ export interface CompositeSubject {
   name: string;
 }
 
+export interface BrandLogo {
+  id: string;
+  url: string; // Firebase Storage URL
+  name: string;
+  createdAt: number;
+  projectId?: string; // Optional: associate with project
+}
+
+// Logo branding configuration (project-level)
+export interface LogoBrandingConfig {
+  selectedLogoId: string | null;
+  mode: 'position' | 'watermark' | null;
+  position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | null;
+  watermarkStyle: 'tiled' | 'center'; // For watermark mode
+  size: 'small' | 'medium' | 'large';
+  opacity: number; // 40-100
+  offsetX: number; // -20 to +20 (percentage of image width)
+  offsetY: number; // -20 to +20 (percentage of image height)
+}
+
 export type WardrobeCategory = string;
 
 export interface WardrobeItem {
@@ -446,6 +466,7 @@ export interface Project {
   selectedForStyling?: string | null; // History item ID selected for Image Studio
   stylingHistory?: Record<string, HistoryItem[]>; // Try-on history indexed by baseModelId
   updatedAt?: string;
+  logoBranding?: LogoBrandingConfig; // Logo branding configuration
 }
 
 export interface Notification {

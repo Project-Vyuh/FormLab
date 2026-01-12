@@ -1247,17 +1247,25 @@ const CreateModel: React.FC<CreateModelProps> = ({
     );
   }, [modelGallery, currentProjectId]);
 
-  const handleWheel = (e: React.WheelEvent) => {
-    if (!generatedModelUrl || isMaskingMode) return;
-    e.preventDefault();
-    const newZoom = zoom - e.deltaY * 0.005;
-    const clampedZoom = Math.max(1, Math.min(newZoom, 5));
-    setZoom(clampedZoom);
+  // Use non-passive wheel listener to allow preventDefault for zoom
+  useEffect(() => {
+    const container = imageContainerRef.current;
+    if (!container) return;
 
-    if (clampedZoom <= 1) {
-      setPan({ x: 0, y: 0 });
-    }
-  };
+    const handleWheel = (e: WheelEvent) => {
+      if (!generatedModelUrl || isMaskingMode) return;
+      e.preventDefault();
+      const newZoom = zoom - e.deltaY * 0.005;
+      const clampedZoom = Math.max(1, Math.min(newZoom, 5));
+      setZoom(clampedZoom);
+      if (clampedZoom <= 1) {
+        setPan({ x: 0, y: 0 });
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [generatedModelUrl, isMaskingMode, zoom]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     // Don't interfere with dropdown menu clicks
@@ -1957,7 +1965,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
             </div>
           </div>
           <div className="flex-grow flex flex-col min-h-0">
-            <div className="flex-grow w-full relative overflow-hidden flex justify-center items-center p-4 min-h-0" ref={imageContainerRef} onWheel={handleWheel} onMouseDown={isDownloadMenuOpen || isUpscaleMenuOpen ? undefined : handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave} style={{ cursor: getCursor() }}>
+            <div className="flex-grow w-full relative overflow-hidden flex justify-center items-center p-4 min-h-0" ref={imageContainerRef} onMouseDown={isDownloadMenuOpen || isUpscaleMenuOpen ? undefined : handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave} style={{ cursor: getCursor() }}>
               {isGenerating && <div className="absolute inset-0 z-30 bg-black/50 backdrop-blur-sm flex flex-col items-center justify-center"><Spinner /><p className="mt-4 text-gray-300 font-medium">{loadingMessage}</p></div>}
               {!isResultView ? (
                 <div className="flex flex-col items-center justify-center text-center p-8 max-w-lg mx-auto">

@@ -47,6 +47,8 @@ import { createUpscaleRequest, listenToUpscaleRequest, UpscaleRequest } from '..
 import { auth } from '../services/firebase';
 import { loadUnifiedHistory, saveStylingHistory, saveCompositeState, loadCompositeState } from '../services/dbService';
 import { getCurrentUserId } from '../services/authService';
+import { useLogoBranding } from '../contexts/LogoBrandingContext';
+import { compositeLogoOnImage } from '../services/logoCompositingService';
 
 
 // Helper to convert data URL to File
@@ -229,6 +231,9 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   onCategoriesChange,
   onSaveStylingHistory,
 }) => {
+  // Logo Branding Context
+  const { logoBranding, brandLogos } = useLogoBranding();
+
   // Core State
   const [modelImageUrl, setModelImageUrl] = useState<string | null>(null);
   const [outfitStack, setOutfitStack] = useState<OutfitLayer[]>([]);
@@ -509,50 +514,135 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     setIsDownloadMenuOpen(false);
 
     try {
-      // Create a temporary image to draw on canvas
-      const img = new Image();
-      img.crossOrigin = "anonymous";
+      let finalBlob: Blob;
 
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = displayImageUrl;
-      });
+      // Check if logo branding is active
+      const hasLogoBranding = logoBranding?.selectedLogoId &&
+        logoBranding?.position &&
+        logoBranding?.mode === 'position';
 
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Failed to get canvas context');
+      if (hasLogoBranding) {
+        const logoUrl = brandLogos.find(l => l.id === logoBranding.selectedLogoId)?.url;
 
-      ctx.drawImage(img, 0, 0);
+        if (logoUrl) {
+          console.log('[ImageStudio] Compositing logo onto image for download');
 
-      const mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
-      const quality = format === 'png' ? undefined : 1.0;
-
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          setToastMessage('Failed to create download file');
-          return;
+          // Use logo compositing service
+          finalBlob = await compositeLogoOnImage({
+            sourceImageUrl: displayImageUrl,
+            logoUrl,
+            position: logoBranding.position,
+            size: logoBranding.size,
+            opacity: logoBranding.opacity,
+            offsetX: logoBranding.offsetX ?? 0,
+            offsetY: logoBranding.offsetY ?? 0
+          });
+        } else {
+          // Logo URL not found, fallback to original
+          console.warn('[ImageStudio] Logo URL not found, downloading without logo');
+          finalBlob = await createImageBlob(displayImageUrl, format);
         }
+      } else {
+        // No logo branding, use original image
+        finalBlob = await createImageBlob(displayImageUrl, format);
+      }
 
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `formlab-studio-${Date.now()}.${format}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+      // Convert to requested format if needed (compositeLogoOnImage returns PNG)
+      if (format !== 'png' && hasLogoBranding) {
+        finalBlob = await convertBlobFormat(finalBlob, format);
+      }
 
-        setToastMessage(`Image downloaded as ${format.toUpperCase()}!`);
-      }, mimeType, quality);
+      // Download the blob
+      const url = URL.createObjectURL(finalBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `formlab-studio-${Date.now()}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setToastMessage(`Image downloaded as ${format.toUpperCase()}!`);
 
     } catch (err) {
       console.error('Download error:', err);
       setToastMessage('Failed to download image.');
     }
-  }, [displayImageUrl]);
+  }, [displayImageUrl, logoBranding, brandLogos]);
+
+  // Helper function to create image blob without logo
+  const createImageBlob = async (imageUrl: string, format: 'png' | 'jpg' | 'webp'): Promise<Blob> => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = imageUrl;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to get canvas context');
+
+    ctx.drawImage(img, 0, 0);
+
+    const mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
+    const quality = format === 'png' ? undefined : 1.0;
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error('Failed to create blob'));
+        }
+      }, mimeType, quality);
+    });
+  };
+
+  // Helper function to convert blob format
+  const convertBlobFormat = async (blob: Blob, format: 'png' | 'jpg' | 'webp'): Promise<Blob> => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Failed to load blob'));
+      img.src = url;
+    });
+
+    URL.revokeObjectURL(url);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to get canvas context');
+
+    // For JPG, fill with white background (no transparency)
+    if (format === 'jpg') {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    ctx.drawImage(img, 0, 0);
+
+    const mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`;
+    const quality = format === 'png' ? undefined : 1.0;
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((newBlob) => {
+        if (newBlob) {
+          resolve(newBlob);
+        } else {
+          reject(new Error('Failed to convert blob format'));
+        }
+      }, mimeType, quality);
+    });
+  };
 
   const handleSelectiveEnhance = (type: string) => {
     setIsUpscaleMenuOpen(false);

@@ -31,7 +31,10 @@ service cloud.firestore {
 
       allow create: if isAuthenticated() &&
         request.resource.data.userId == request.auth.uid &&
-        request.resource.data.keys().hasAll(['userId', 'createdAt', 'updatedAt']);
+        request.resource.data.keys().hasAll(['userId', 'createdAt', 'updatedAt']) &&
+        // Allow serverTimestamp() - it resolves to request.time on the server
+        (request.resource.data.createdAt == request.time || request.resource.data.createdAt is timestamp) &&
+        (request.resource.data.updatedAt == request.time || request.resource.data.updatedAt is timestamp);
 
       allow update: if isAuthenticated() && (
         // Normal update: existing userId matches authenticated user
@@ -116,6 +119,15 @@ service cloud.firestore {
       // User Settings Collection
       match /settings/{settingId} {
         allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      }
+
+      // Brand Logos Collection
+      match /brandLogos/{logoId} {
+        allow read, write: if isAuthenticated() && request.auth.uid == userId;
+        
+        // Validate logo structure on create
+        allow create: if request.resource.data.keys().hasAll(['url', 'name', 'createdAt']) &&
+          isValidImageUrl(request.resource.data.url);
       }
     }
 

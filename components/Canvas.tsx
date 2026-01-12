@@ -4,11 +4,13 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { RotateCcwIcon, ChevronLeftIcon, ChevronRightIcon, UndoIcon, RedoIcon, UserIcon, ZoomInIcon, ZoomOutIcon } from './icons';
 import Spinner from './Spinner';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AspectRatio } from '../types';
+import { useLogoBranding } from '../contexts/LogoBrandingContext';
+import LogoPreviewOverlay from './LogoPreviewOverlay';
 
 export interface EmptyStateConfig {
   title: string;
@@ -37,11 +39,24 @@ const Canvas: React.FC<CanvasProps> = ({
   onSelectPose, poseInstructions, currentPoseIndex, availablePoseKeys,
   aspectRatio, isStudioEmpty, zoom, setZoom, emptyStateConfig
 }) => {
+  // Get logo branding from context
+  const { logoBranding, brandLogos } = useLogoBranding();
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const startPanPoint = useRef({ x: 0, y: 0 });
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+
+  // Update image size when image loads or changes
+  const handleImageLoad = useCallback(() => {
+    if (imageRef.current) {
+      setImageSize({
+        width: imageRef.current.clientWidth,
+        height: imageRef.current.clientHeight
+      });
+    }
+  }, []);
 
   useEffect(() => {
     // Reset zoom and pan when image changes
@@ -49,18 +64,25 @@ const Canvas: React.FC<CanvasProps> = ({
     setPan({ x: 0, y: 0 });
   }, [displayImageUrl, setZoom]);
 
-  const handleWheel = (e: React.WheelEvent) => {
-    if (!displayImageUrl) return;
-    e.preventDefault();
-    const newZoom = zoom - e.deltaY * 0.005;
-    const clampedZoom = Math.max(1, Math.min(newZoom, 5)); // Zoom out stops at 100%, max zoom 500%
-    setZoom(clampedZoom);
+  // Use non-passive wheel listener to allow preventDefault for zoom
+  useEffect(() => {
+    const container = imageContainerRef.current;
+    if (!container) return;
 
-    // If we zoom out fully, reset pan
-    if (clampedZoom <= 1) {
-      setPan({ x: 0, y: 0 });
-    }
-  };
+    const handleWheel = (e: WheelEvent) => {
+      if (!displayImageUrl) return;
+      e.preventDefault();
+      const newZoom = zoom - e.deltaY * 0.005;
+      const clampedZoom = Math.max(1, Math.min(newZoom, 5));
+      setZoom(clampedZoom);
+      if (clampedZoom <= 1) {
+        setPan({ x: 0, y: 0 });
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [displayImageUrl, zoom, setZoom]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (zoom <= 1) return;
@@ -124,7 +146,6 @@ const Canvas: React.FC<CanvasProps> = ({
           ref={imageContainerRef}
           className="w-full h-full flex items-center justify-center outline-none select-none"
           style={{ cursor: getCursor() }}
-          onWheel={handleWheel}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUpOrLeave}
@@ -152,18 +173,38 @@ const Canvas: React.FC<CanvasProps> = ({
             )
           ) : displayImageUrl ? (
             <div className="relative w-full h-full flex items-center justify-center">
-              <img
-                ref={imageRef}
-                key={displayImageUrl}
-                src={displayImageUrl}
-                alt="Virtual try-on model"
-                className="max-w-full max-h-full object-contain shadow-2xl rounded-sm transition-opacity duration-300"
+              {/* Wrapper that sizes to image and transforms together with logo */}
+              <div
+                className="relative inline-block"
                 style={{
                   transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
                   transition: isPanning ? 'none' : 'transform 0.1s ease-out',
                 }}
-                draggable={false}
-              />
+              >
+                <img
+                  ref={imageRef}
+                  key={displayImageUrl}
+                  src={displayImageUrl}
+                  alt="Virtual try-on model"
+                  className="max-w-full max-h-full object-contain shadow-2xl rounded-sm transition-opacity duration-300 block"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: 'calc(100vh - 200px)',
+                  }}
+                  draggable={false}
+                  onLoad={handleImageLoad}
+                />
+
+                {/* Logo Preview Overlay - positioned within image wrapper, transforms with it */}
+                {logoBranding?.selectedLogoId && logoBranding?.position && brandLogos && imageRef.current && (
+                  <LogoPreviewOverlay
+                    logoUrl={brandLogos.find(l => l.id === logoBranding.selectedLogoId)?.url || ''}
+                    config={logoBranding}
+                    imageWidth={imageRef.current.clientWidth}
+                    imageHeight={imageRef.current.clientHeight}
+                  />
+                )}
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center">
