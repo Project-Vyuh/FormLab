@@ -30,6 +30,8 @@ export interface BrandLogo {
   name: string;
   createdAt: number;
   projectId?: string; // Optional: associate with project
+  width?: number;  // Natural image width (for aspect ratio calculations)
+  height?: number; // Natural image height (for aspect ratio calculations)
 }
 
 // Logo branding configuration (project-level)

@@ -12,7 +12,7 @@ import { removeImageBackground } from '../services/backgroundRemovalService';
 interface BrandLogoUploadModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (logoBlob: Blob, fileName: string) => Promise<void>;
+    onSave: (logoBlob: Blob, fileName: string, dimensions: { width: number; height: number }) => Promise<void>;
 }
 
 export const BrandLogoUploadModal: React.FC<BrandLogoUploadModalProps> = ({
@@ -30,6 +30,7 @@ export const BrandLogoUploadModal: React.FC<BrandLogoUploadModalProps> = ({
     const [processingStatus, setProcessingStatus] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [isSvgFile, setIsSvgFile] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,6 +45,7 @@ export const BrandLogoUploadModal: React.FC<BrandLogoUploadModalProps> = ({
         setProcessingStatus('');
         setError(null);
         setIsDragging(false);
+        setIsSvgFile(false);
     }, []);
 
     const handleClose = useCallback(() => {
@@ -63,6 +65,10 @@ export const BrandLogoUploadModal: React.FC<BrandLogoUploadModalProps> = ({
             setError('Image size must be less than 10MB');
             return;
         }
+
+        // Check if it's an SVG file
+        const isSvg = file.type === 'image/svg+xml';
+        setIsSvgFile(isSvg);
 
         setError(null);
         setSelectedFile(file);
@@ -119,6 +125,23 @@ export const BrandLogoUploadModal: React.FC<BrandLogoUploadModalProps> = ({
         }
     }, [selectedFile]);
 
+    // Helper to get image dimensions from blob
+    const getImageDimensions = useCallback((blob: Blob): Promise<{ width: number; height: number }> => {
+        return new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                resolve({ width: img.naturalWidth, height: img.naturalHeight });
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                reject(new Error('Failed to load image for dimension calculation'));
+            };
+            img.src = url;
+        });
+    }, []);
+
     const handleSave = useCallback(async () => {
         if (!processedBlob || !selectedFile) return;
 
@@ -126,14 +149,38 @@ export const BrandLogoUploadModal: React.FC<BrandLogoUploadModalProps> = ({
         setError(null);
 
         try {
-            await onSave(processedBlob, selectedFile.name);
+            // Get dimensions from processed blob
+            const dimensions = await getImageDimensions(processedBlob);
+            await onSave(processedBlob, selectedFile.name, dimensions);
             handleClose();
         } catch (err) {
             console.error('[BrandLogoUploadModal] Save failed:', err);
             setError('Failed to save logo. Please try again.');
             setIsSaving(false);
         }
-    }, [processedBlob, selectedFile, onSave, handleClose]);
+    }, [processedBlob, selectedFile, onSave, handleClose, getImageDimensions]);
+
+    // Add logo directly without background removal
+    const handleAddDirectly = useCallback(async () => {
+        if (!selectedFile) return;
+
+        setIsSaving(true);
+        setError(null);
+
+        try {
+            // Convert file to blob directly
+            const blob = new Blob([selectedFile], { type: selectedFile.type });
+
+            // Get dimensions from original file
+            const dimensions = await getImageDimensions(blob);
+            await onSave(blob, selectedFile.name, dimensions);
+            handleClose();
+        } catch (err) {
+            console.error('[BrandLogoUploadModal] Direct add failed:', err);
+            setError('Failed to add logo. Please try again.');
+            setIsSaving(false);
+        }
+    }, [selectedFile, onSave, handleClose, getImageDimensions]);
 
     if (!isOpen) return null;
 
@@ -249,15 +296,38 @@ export const BrandLogoUploadModal: React.FC<BrandLogoUploadModalProps> = ({
                                     </p>
                                 </div>
 
-                                {/* Process Button */}
+                                {/* Action Buttons - Side by Side */}
                                 {!processedBlob && !isProcessing && (
-                                    <button
-                                        onClick={handleProcessBackground}
-                                        className="w-full px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2"
-                                    >
-                                        <Sparkles className="w-4 h-4" />
-                                        Remove Background
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleProcessBackground}
+                                            disabled={isSvgFile}
+                                            className={cn(
+                                                "flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2",
+                                                isSvgFile
+                                                    ? "bg-white/5 text-gray-500 cursor-not-allowed border border-white/5"
+                                                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                                            )}
+                                            title={isSvgFile ? "Background removal not available for SVG files" : "Remove background from logo"}
+                                        >
+                                            <Sparkles className="w-4 h-4" />
+                                            Remove BG
+                                        </button>
+                                        <button
+                                            onClick={handleAddDirectly}
+                                            className="flex-1 px-4 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-sm font-semibold transition-all border border-white/10 hover:border-white/20"
+                                            title="Add logo without removing background"
+                                        >
+                                            Add Directly
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* SVG Info Message */}
+                                {isSvgFile && !processedBlob && !isProcessing && (
+                                    <p className="text-[10px] text-amber-400/70 text-center">
+                                        SVG files are added directly without background removal
+                                    </p>
                                 )}
 
                                 {/* Change File Button */}

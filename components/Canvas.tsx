@@ -196,14 +196,20 @@ const Canvas: React.FC<CanvasProps> = ({
                 />
 
                 {/* Logo Preview Overlay - positioned within image wrapper, transforms with it */}
-                {logoBranding?.selectedLogoId && logoBranding?.position && brandLogos && imageRef.current && (
-                  <LogoPreviewOverlay
-                    logoUrl={brandLogos.find(l => l.id === logoBranding.selectedLogoId)?.url || ''}
-                    config={logoBranding}
-                    imageWidth={imageRef.current.clientWidth}
-                    imageHeight={imageRef.current.clientHeight}
-                  />
-                )}
+                {logoBranding?.selectedLogoId && logoBranding?.position && brandLogos && imageRef.current && (() => {
+                  const selectedLogo = brandLogos.find(l => l.id === logoBranding.selectedLogoId);
+                  if (!selectedLogo?.url) return null;
+                  return (
+                    <LogoPreviewOverlay
+                      logoUrl={selectedLogo.url}
+                      config={logoBranding}
+                      imageWidth={imageRef.current.clientWidth}
+                      imageHeight={imageRef.current.clientHeight}
+                      logoNaturalWidth={selectedLogo.width}
+                      logoNaturalHeight={selectedLogo.height}
+                    />
+                  );
+                })()}
               </div>
             </div>
           ) : (

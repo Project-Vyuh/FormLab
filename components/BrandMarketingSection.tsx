@@ -69,7 +69,7 @@ const BrandMarketingSection: React.FC<BrandMarketingSectionProps> = () => {
         }
     };
 
-    const handleSaveLogo = async (logoBlob: Blob, fileName: string): Promise<void> => {
+    const handleSaveLogo = async (logoBlob: Blob, fileName: string, dimensions: { width: number; height: number }): Promise<void> => {
         const userId = getCurrentUserId();
         if (!userId) {
             throw new Error('User not authenticated');
@@ -78,14 +78,19 @@ const BrandMarketingSection: React.FC<BrandMarketingSectionProps> = () => {
         try {
             // Generate unique ID for the logo
             const logoId = `logo-${Date.now()}`;
-            const fileExt = 'png'; // Always use PNG after background removal
+
+            // Detect file type from blob and preserve it
+            const isSvg = logoBlob.type === 'image/svg+xml';
+            const fileExt = isSvg ? 'svg' : 'png';
+            const contentType = isSvg ? 'image/svg+xml' : 'image/png';
+
             const storagePath = `brand-logos/${userId}/${logoId}.${fileExt}`;
 
-            // Convert Blob to File
-            const file = new File([logoBlob], `${logoId}.${fileExt}`, { type: 'image/png' });
+            // Convert Blob to File with correct type
+            const file = new File([logoBlob], `${logoId}.${fileExt}`, { type: contentType });
 
             // Upload directly to Firebase Storage using custom path
-            console.log('[BrandMarketingSection] Uploading logo to:', storagePath);
+            console.log('[BrandMarketingSection] Uploading logo to:', storagePath, 'as', contentType, 'dimensions:', dimensions);
 
             // Import Firebase storage functions
             const { ref: storageRef, uploadBytes, getDownloadURL } = await import('firebase/storage');
@@ -93,7 +98,7 @@ const BrandMarketingSection: React.FC<BrandMarketingSectionProps> = () => {
 
             const fileRef = storageRef(storage, storagePath);
             const snapshot = await uploadBytes(fileRef, file, {
-                contentType: 'image/png',
+                contentType: contentType,
                 customMetadata: {
                     uploadedAt: new Date().toISOString(),
                     userId: userId,
@@ -103,11 +108,13 @@ const BrandMarketingSection: React.FC<BrandMarketingSectionProps> = () => {
 
             const url = await getDownloadURL(snapshot.ref);
 
-            // Create logo metadata
+            // Create logo metadata with dimensions
             const logoData: Omit<BrandLogo, 'id'> = {
                 url,
                 name: fileName.replace(/\.[^/.]+$/, ''), // Remove file extension
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                width: dimensions.width,
+                height: dimensions.height
             };
 
             // Save to Firestore
@@ -117,7 +124,7 @@ const BrandMarketingSection: React.FC<BrandMarketingSectionProps> = () => {
             // Add to local state
             setBrandLogos((prev) => [{ id: docRef.id, ...logoData }, ...prev]);
 
-            console.log('[BrandMarketingSection] Logo saved successfully:', docRef.id);
+            console.log('[BrandMarketingSection] Logo saved successfully:', docRef.id, 'with dimensions:', dimensions);
         } catch (error) {
             console.error('[BrandMarketingSection] Failed to save logo:', error);
             throw error;
