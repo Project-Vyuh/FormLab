@@ -50,11 +50,19 @@ export interface SyncQueueItem {
 /**
  * Sanitize object for Firestore by converting undefined to null
  * Firestore doesn't support undefined values, only null
+ * IMPORTANT: Preserve Firestore FieldValue objects (like serverTimestamp())
  */
 const sanitizeForFirestore = (obj: any): any => {
     if (obj === null || obj === undefined) {
         return null;
     }
+
+    // Preserve Firestore FieldValue objects (serverTimestamp, increment, etc.)
+    // These have a special internal structure that should not be modified
+    if (obj && typeof obj === 'object' && obj._methodName) {
+        return obj; // FieldValue detected, return as-is
+    }
+
     if (Array.isArray(obj)) {
         return obj.map(sanitizeForFirestore);
     }
@@ -63,6 +71,9 @@ const sanitizeForFirestore = (obj: any): any => {
         for (const [key, value] of Object.entries(obj)) {
             if (value === undefined) {
                 sanitized[key] = null; // Convert undefined to null
+            } else if (value && typeof value === 'object' && (value as any)._methodName) {
+                // Preserve FieldValue objects
+                sanitized[key] = value;
             } else if (typeof value === 'object' && value !== null) {
                 sanitized[key] = sanitizeForFirestore(value);
             } else {
@@ -313,21 +324,26 @@ export const syncProjectToFirestore = async (
 
         if (!canReadExistingDoc || !existingDoc?.exists()) {
             // Document doesn't exist OR we can't read it
-            // Use merge: true to handle migration case where document exists but we can't read it
-            console.log('[firestoreSync] Creating/updating project document (cannot verify existence due to permissions)');
-            console.log('[firestoreSync] Document data keys:', Object.keys(sanitizedMetadata));
-            console.log('[firestoreSync] Document data (sanitized):', {
-                hasUserId: 'userId' in sanitizedMetadata,
-                hasCreatedAt: 'createdAt' in sanitizedMetadata,
-                hasUpdatedAt: 'updatedAt' in sanitizedMetadata,
-                userIdValue: sanitizedMetadata.userId,
-                createdAtValue: sanitizedMetadata.createdAt,
-                updatedAtValue: sanitizedMetadata.updatedAt,
-                createdAtType: typeof sanitizedMetadata.createdAt,
-                updatedAtType: typeof sanitizedMetadata.updatedAt
-            });
-            // Use merge: true to trigger UPDATE rule which now allows migration
-            await setDoc(projectRef, sanitizedMetadata, { merge: true });
+            // Try CREATE operation first (without merge), fall back to UPDATE if it fails
+            console.log('[firestoreSync] Attempting to create new project document');
+
+            try {
+                // First attempt: CREATE without merge (triggers create rules)
+                await setDoc(projectRef, sanitizedMetadata);
+                console.log('[firestoreSync] Project document created successfully');
+            } catch (createError: any) {
+                // If create fails, the document might already exist (migration scenario)
+                if (createError?.code === 'permission-denied' || createError?.code === 'already-exists') {
+                    console.log('[firestoreSync] Create failed, attempting UPDATE with merge (migration case)');
+                    // Second attempt: UPDATE with merge (triggers update rules for migration)
+                    const { createdAt, ...updateData } = sanitizedMetadata;
+                    await setDoc(projectRef, updateData, { merge: true });
+                    console.log('[firestoreSync] Project document updated via merge (migration)');
+                } else {
+                    // Some other error - rethrow
+                    throw createError;
+                }
+            }
         } else {
             // Document exists and we can read it - use UPDATE operation (triggers update rules)
             // Remove createdAt from update to preserve original creation timestamp

@@ -36,8 +36,10 @@ import SwitchProjectModal from './SwitchProjectModal';
 import PromptPanel from './PromptPanel';
 import ContextMenu from './ContextMenu';
 import UserModelsModal from './UserModelsModal';
+import OptimizedImage from './shared/OptimizedImage';
 import { ReferenceUploadModal } from './ReferenceUploadModal';
-import { loadPredefinedModels, saveGlobalModel, checkModelExists, subscribeToGlobalModels } from '../services/firestoreService';
+import { loadPredefinedModels, PredefinedModel, saveGlobalModel, checkModelExists, subscribeToGlobalModels } from '../services/firestoreService';
+import { generateAndUploadThumbnail } from '../services/thumbnailService';
 
 
 interface CreateModelProps {
@@ -58,6 +60,8 @@ interface CreateModelProps {
   onOpenCollectionsModal: () => void; // Callback to open collections modal
   lastExternalUpdate?: number; // Trigger to reload project state
   onDeleteProject: (projectId: string) => void;
+  pendingTemplate?: PredefinedModel | null; // Template passed from CollectionsModal
+  onPendingTemplateHandled?: () => void; // Callback when pending template has been processed
 }
 
 type GenerationModel = 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview';
@@ -255,7 +259,9 @@ const CreateModel: React.FC<CreateModelProps> = ({
   onHistoryItemLoaded,
   onOpenCollectionsModal,
   lastExternalUpdate,
-  onDeleteProject
+  onDeleteProject,
+  pendingTemplate,
+  onPendingTemplateHandled
 }) => {
   // Loading & App State
   const [isLoaded, setIsLoaded] = useState(false);
@@ -627,9 +633,22 @@ const CreateModel: React.FC<CreateModelProps> = ({
       let firestoreModelId: string | undefined;
       if (currentUser) {
         try {
+          // Generate thumbnail for the new model
+          let thumbnailUrl: string | undefined;
+          try {
+            thumbnailUrl = await generateAndUploadThumbnail(
+              finalImageUrl,
+              currentUser.uid,
+              `model-${newId}`
+            );
+          } catch (thumbError) {
+            console.warn('Failed to generate thumbnail, saving without:', thumbError);
+          }
+
           firestoreModelId = await saveGlobalModel(currentUser.uid, {
             url: finalImageUrl,
             name: newItem.prompt || 'Generated Model',
+            thumbnail: thumbnailUrl, // Include generated thumbnail
             projectId: currentProjectId,
             historyItemId: newId,
           });
@@ -1066,7 +1085,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
             firestoreModelId = await saveGlobalModel(currentUser.uid, {
               url: finalImageUrl,
               name: `${template.name || 'Template'} - Copy`,
-              thumbnail: finalImageUrl,
+              thumbnail: template.thumbnail || finalImageUrl, // Reuse template's optimized thumbnail
               projectId: currentProjectId,
               historyItemId: newHistoryItemId,
               sourceTemplateId: template.id || null // Ensure it's not undefined
@@ -1102,6 +1121,28 @@ const CreateModel: React.FC<CreateModelProps> = ({
       setIsSavingTemplate(false);
     }
   }, [currentProjectId, currentUser, onModelAdded, generatedModelHistory]);
+
+  // Handle template passed from CollectionsModal
+  // This effect is placed after handleSaveTemplateFromModal to avoid hoisting issues
+  useEffect(() => {
+    if (pendingTemplate && !isSavingTemplate && isLoaded) {
+      console.log('[CreateModel] Processing pending template from CollectionsModal:', pendingTemplate.name);
+
+      // Convert PredefinedModel to Model type for handleSaveTemplateFromModal
+      const templateAsModel: Model = {
+        id: pendingTemplate.id,
+        url: pendingTemplate.url,
+        name: pendingTemplate.name,
+        thumbnail: pendingTemplate.thumbnail,
+        source: 'predefined',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      handleSaveTemplateFromModal(templateAsModel);
+      onPendingTemplateHandled?.();
+    }
+  }, [pendingTemplate, isSavingTemplate, isLoaded, handleSaveTemplateFromModal, onPendingTemplateHandled]);
 
   // Context menu handlers
   const handleContextMenu = useCallback((e: React.MouseEvent, model: Model) => {
@@ -1552,7 +1593,12 @@ const CreateModel: React.FC<CreateModelProps> = ({
                         }`}
                       aria-label={`Select model ${model.id}`}
                     >
-                      <img src={model.url} alt={`Model ${model.id}`} className="w-full h-full object-cover" />
+                      <OptimizedImage
+                        thumbnailUrl={model.thumbnail}
+                        fullUrl={model.url}
+                        alt={`Model ${model.id}`}
+                        className="w-full h-full object-cover"
+                      />
                     </button>
                   </div>
                 );
@@ -1602,14 +1648,6 @@ const CreateModel: React.FC<CreateModelProps> = ({
                   <>
                     <div className="grid grid-cols-[repeat(auto-fill,72px)] gap-2">
                       {predefinedModels.slice(0, 9).map(template => {
-                        // DEBUG: Log first template check
-                        if (template.id === predefinedModels[0].id) {
-                          console.log('[CreateModel] Checking duplicates for project:', currentProjectId);
-                          console.log('[CreateModel] Gallery size:', modelGallery.length);
-                          const match = modelGallery.find(m => m.sourceTemplateId === template.id && m.projectId === currentProjectId);
-                          if (match) console.log('[CreateModel] Found match:', match);
-                        }
-
                         const isDuplicate = modelGallery.some(m =>
                           m.sourceTemplateId === template.id && m.projectId === currentProjectId
                         );

@@ -511,6 +511,24 @@ export async function renameGlobalModel(userId: string, modelId: string, newName
   }
 }
 
+export async function updateGlobalModel(
+  userId: string,
+  modelId: string,
+  updates: Partial<Pick<GlobalModel, 'thumbnail' | 'name' | 'url'>>
+): Promise<void> {
+  try {
+    const modelRef = doc(db, 'users', userId, 'models', modelId);
+    await updateDoc(modelRef, {
+      ...updates,
+      updatedAt: new Date().toISOString()
+    });
+    console.log('Global model updated:', modelId, Object.keys(updates));
+  } catch (error) {
+    console.error('Error updating global model:', error);
+    throw error;
+  }
+}
+
 // --- Global Wardrobe Functions ---
 
 export async function saveGlobalWardrobeItem(userId: string, item: Omit<GlobalWardrobeItem, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'source'>): Promise<string> {

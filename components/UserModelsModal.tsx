@@ -3,9 +3,11 @@ import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { XIcon, UserIcon } from './icons';
 import { Model } from '../types';
-import { getGlobalModels, deleteGlobalModel, renameGlobalModel } from '../services/firestoreService';
+import { getGlobalModels, deleteGlobalModel, renameGlobalModel, updateGlobalModel } from '../services/firestoreService';
 import { getCurrentUserId } from '../services/authService';
+import { generateAndUploadThumbnail } from '../services/thumbnailService';
 import ConfirmationModal from './ConfirmationModal';
+import OptimizedImage from './shared/OptimizedImage';
 
 interface UserModelsModalProps {
     isOpen: boolean;
@@ -57,6 +59,7 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
             const formattedModels: Model[] = models.map(m => ({
                 id: m.id,
                 url: m.url,
+                thumbnail: m.thumbnail, // Include thumbnail for OptimizedImage
                 name: m.name,
                 source: 'user',
                 projectId: m.projectId,
@@ -71,6 +74,36 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
             setIsLoading(false);
         }
     };
+
+    // Lazy generate thumbnails for models that don't have them
+    useEffect(() => {
+        const userId = getCurrentUserId();
+        if (!userId || globalModels.length === 0) return;
+
+        const modelsWithoutThumbnails = globalModels.filter(m => !m.thumbnail);
+        if (modelsWithoutThumbnails.length === 0) return;
+
+        // Generate thumbnails for first 3 models without them (in background)
+        const generateMissing = async () => {
+            for (const model of modelsWithoutThumbnails.slice(0, 3)) {
+                try {
+                    console.log('[UserModelsModal] Generating thumbnail for:', model.id);
+                    const thumbUrl = await generateAndUploadThumbnail(model.url, userId, `thumb-${model.id}`);
+                    await updateGlobalModel(userId, model.id, { thumbnail: thumbUrl });
+                    // Update local state
+                    setGlobalModels(prev => prev.map(m =>
+                        m.id === model.id ? { ...m, thumbnail: thumbUrl } : m
+                    ));
+                } catch (error) {
+                    console.warn('[UserModelsModal] Failed to generate thumbnail for', model.id, error);
+                }
+            }
+        };
+
+        // Run in background after a short delay
+        const timeoutId = setTimeout(generateMissing, 1000);
+        return () => clearTimeout(timeoutId);
+    }, [globalModels.length]); // Only run when models list changes
 
     // Ref for context menu to detect clicks outside
     const menuRef = useRef<HTMLDivElement>(null);
@@ -216,8 +249,9 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
                                                     : 'border-white/10 hover:border-white/30'
                                                     }`}
                                             >
-                                                <img
-                                                    src={model.url}
+                                                <OptimizedImage
+                                                    thumbnailUrl={model.thumbnail}
+                                                    fullUrl={model.url}
                                                     alt={model.name || 'Model'}
                                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                                 />

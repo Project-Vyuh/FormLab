@@ -71,6 +71,9 @@ const App: React.FC = () => {
   // Model selection state for CreateModel
   const [selectedHistoryItemId, setSelectedHistoryItemId] = useState<string | null>(null);
 
+  // Pending template from CollectionsModal to be handled by CreateModel
+  const [pendingTemplateForCreateModel, setPendingTemplateForCreateModel] = useState<PredefinedModel | null>(null);
+
   // Selected styling model state for Image Studio
   const [selectedStylingModel, setSelectedStylingModel] = useState<SelectedStylingModel | null>(null);
 
@@ -696,71 +699,18 @@ const App: React.FC = () => {
     }
   }, [currentProjectId]);
 
-  const handleUseTemplate = useCallback(async (template: PredefinedModel) => {
-    if (!currentProjectId) return;
+  // Simplified: Delegate template handling to CreateModel for unified flow
+  const handleUseTemplate = useCallback((template: PredefinedModel) => {
+    // Close modal first for instant feedback
+    setIsCollectionsModalOpen(false);
 
-    try {
-      // 1. Load current project state
-      const projectState = await loadProjectState(currentProjectId) || {};
-      const currentHistory = projectState.generatedModelHistory || [];
+    // Pass template to CreateModel for unified handling
+    // This ensures Firestore persistence, thumbnail reuse, and proper canvas loading
+    setPendingTemplateForCreateModel(template);
 
-      // 2. Check if already saved (optional, but good for avoiding duplicates)
-      // For now, we'll allow duplicates as "copies" like CreateModel does
-
-      // 3. Create new HistoryItem
-      const newHistoryItemId = `rev-${Date.now()}`;
-      const newHistoryItem: HistoryItem = {
-        id: newHistoryItemId,
-        parentId: null, // Base model
-        imageUrl: template.url,
-        prompt: `Saved from template: ${template.name || template.id}`,
-        settings: initialGenerationSettings, // Use default settings
-        modelName: 'Nano Banana', // Default model
-        name: `${template.name || 'Template'} - Copy`,
-        isStarred: true,
-        type: 'model-generation',
-        baseModelId: newHistoryItemId,
-      };
-
-      // 4. Update Project State
-      const updatedHistory = [...currentHistory, newHistoryItem];
-      const updatedState = {
-        ...projectState,
-        generatedModelHistory: updatedHistory,
-        // We don't set currentHistoryItemId here in DB necessarily, 
-        // but we want CreateModel to load it.
-      };
-
-      await saveProjectState(currentProjectId, updatedState);
-
-      // 5. Update Gallery (App state)
-      const timestamp = Date.now();
-      const newModel: Model = {
-        id: `${currentProjectId}-${newHistoryItemId}`,
-        url: template.url,
-        source: 'user',
-        projectId: currentProjectId,
-        historyItemId: newHistoryItemId,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
-
-      setModelGallery(prev => [newModel, ...prev]);
-
-      // 6. Select and Navigate
-      // Set the selected history item ID so CreateModel loads it
-      setSelectedHistoryItemId(newHistoryItemId);
-
-      // Trigger reload in CreateModel
-      setProjectUpdateTrigger(prev => prev + 1);
-
-      // Switch view
-      setActiveView('createModel');
-
-    } catch (error) {
-      console.error("Failed to use template:", error);
-    }
-  }, [currentProjectId]);
+    // Ensure we're on the CreateModel view
+    setActiveView('createModel');
+  }, []);
 
   const handleNavigateToCollections = useCallback(() => {
     setActiveView('templates');
@@ -839,6 +789,8 @@ const App: React.FC = () => {
                     onOpenCollectionsModal={() => setIsCollectionsModalOpen(true)}
                     lastExternalUpdate={projectUpdateTrigger}
                     onDeleteProject={handleDeleteProject}
+                    pendingTemplate={pendingTemplateForCreateModel}
+                    onPendingTemplateHandled={() => setPendingTemplateForCreateModel(null)}
                   />
                 </div>
                 <div className={`${activeView === 'imageStudio' ? 'block' : 'hidden'} absolute inset-0`}>
