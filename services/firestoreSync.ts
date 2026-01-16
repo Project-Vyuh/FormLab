@@ -633,7 +633,12 @@ export const loadHistoryItems = async (
             const bTime = parseInt(b.id.split('-').pop() || '0');
             return aTime - bTime;
         });
-    } catch (error) {
+    } catch (error: any) {
+        // Silently handle permission errors - project may be deleted or not yet synced
+        if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+            // Don't log - this is expected when project doesn't exist in Firestore
+            return [];
+        }
         console.error('[firestoreSync] Error loading history items:', error);
         return [];
     }
@@ -683,7 +688,11 @@ const loadWardrobeItems = async (projectId: string): Promise<any[]> => {
         });
 
         return wardrobeItems;
-    } catch (error) {
+    } catch (error: any) {
+        // Silently handle permission errors - project may be deleted or not yet synced
+        if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+            return [];
+        }
         console.error('[firestoreSync] Error loading wardrobe items:', error);
         return [];
     }
