@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { XIcon, UserIcon } from './icons';
+import { XIcon, UserIcon, Trash2Icon } from './icons';
+import { CheckSquare, Square } from 'lucide-react';
 import { Model } from '../types';
 import { getGlobalModels, deleteGlobalModel, renameGlobalModel, updateGlobalModel } from '../services/firestoreService';
 import { getCurrentUserId } from '../services/authService';
 import { generateAndUploadThumbnail } from '../services/thumbnailService';
 import ConfirmationModal from './ConfirmationModal';
 import OptimizedImage from './shared/OptimizedImage';
+import Spinner from './Spinner';
 
 interface UserModelsModalProps {
     isOpen: boolean;
@@ -39,6 +41,12 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
     const [globalModels, setGlobalModels] = useState<Model[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Selection mode state
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [selectedModelIds, setSelectedModelIds] = useState<Set<string>>(new Set());
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
     useEffect(() => {
         if (isOpen) {
             loadGlobalModels();
@@ -46,6 +54,9 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
             setSearchTerm('');
             setContextMenuModel(null);
             setContextMenuPosition(null);
+            // Reset selection mode when modal closes
+            setIsSelectionMode(false);
+            setSelectedModelIds(new Set());
         }
     }, [isOpen, currentProjectId]);
 
@@ -176,6 +187,7 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
 
     const handleDeleteClick = (model: Model) => {
         setModelToDelete(model);
+        setContextMenuPosition(null); // Close context menu
     };
 
     const handleDeleteConfirm = async () => {
@@ -184,15 +196,99 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
             if (userId) {
                 try {
                     await deleteGlobalModel(userId, modelToDelete.id);
-                    await loadGlobalModels(); // Refresh list
+                    await loadGlobalModels(); // Refresh list - modal stays open!
                     if (onDeleteModel) onDeleteModel(modelToDelete);
                 } catch (error) {
                     console.error('Failed to delete model:', error);
                 }
             }
             setModelToDelete(null);
+            // Note: Modal stays open, no onClose() call
         }
     };
+
+    // =================== SELECTION MODE HANDLERS ===================
+
+    const toggleSelectionMode = useCallback(() => {
+        setIsSelectionMode(prev => !prev);
+        setSelectedModelIds(new Set()); // Clear selection when toggling
+    }, []);
+
+    const toggleModelSelection = useCallback((modelId: string) => {
+        setSelectedModelIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(modelId)) {
+                newSet.delete(modelId);
+            } else {
+                newSet.add(modelId);
+            }
+            return newSet;
+        });
+    }, []);
+
+    const selectAllModels = useCallback(() => {
+        const allIds = new Set(filteredModels.map(m => m.id));
+        setSelectedModelIds(allIds);
+    }, [filteredModels]);
+
+    const deselectAllModels = useCallback(() => {
+        setSelectedModelIds(new Set());
+    }, []);
+
+    const handleBulkDeleteClick = useCallback(() => {
+        if (selectedModelIds.size > 0) {
+            setShowBulkDeleteConfirm(true);
+        }
+    }, [selectedModelIds.size]);
+
+    const handleBulkDeleteConfirm = async () => {
+        const userId = getCurrentUserId();
+        if (!userId || selectedModelIds.size === 0) return;
+
+        setIsDeleting(true);
+        setShowBulkDeleteConfirm(false);
+
+        try {
+            // Delete all selected models in parallel
+            const modelIdsToDelete = Array.from(selectedModelIds) as string[];
+            const deletePromises = modelIdsToDelete.map(async (modelId) => {
+                try {
+                    await deleteGlobalModel(userId, modelId);
+                    return { id: modelId, success: true };
+                } catch (error) {
+                    console.error(`Failed to delete model ${modelId}:`, error);
+                    return { id: modelId, success: false };
+                }
+            });
+
+            const results = await Promise.all(deletePromises);
+            const successCount = results.filter(r => r.success).length;
+            const failCount = results.filter(r => !r.success).length;
+
+            console.log(`[UserModelsModal] Bulk delete: ${successCount} succeeded, ${failCount} failed`);
+
+            // Notify parent about deleted models
+            if (onDeleteModel) {
+                const deletedModels = globalModels.filter(m =>
+                    results.some(r => r.id === m.id && r.success)
+                );
+                deletedModels.forEach(m => onDeleteModel(m));
+            }
+
+            // Refresh list and reset selection
+            await loadGlobalModels();
+            setSelectedModelIds(new Set());
+            setIsSelectionMode(false);
+        } catch (error) {
+            console.error('Bulk delete failed:', error);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    // Derived state for UI
+    const selectedCount = selectedModelIds.size;
+    const allSelected = filteredModels.length > 0 && selectedCount === filteredModels.length;
 
     return (
         <>
@@ -215,65 +311,181 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
                                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
                             }}
                         >
-                            {/* Header */}
-                            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5">
-                                <div>
-                                    <h2 className="text-lg font-semibold text-white tracking-tight flex items-center gap-2">
-                                        <UserIcon className="w-5 h-5 text-gray-400" />
-                                        Your Models
-                                    </h2>
-                                    <p className="text-xs text-gray-400 mt-0.5">Manage and select from your created models</p>
+                            {/* Header with Selection Toolbar */}
+                            <div className="flex flex-col border-b border-white/5 bg-white/5">
+                                {/* Title Row */}
+                                <div className="flex items-center justify-between px-6 py-4">
+                                    <div>
+                                        <h2 className="text-lg font-semibold text-white tracking-tight flex items-center gap-2">
+                                            {isSelectionMode ? (
+                                                <>
+                                                    <CheckSquare className="w-5 h-5 text-blue-400" />
+                                                    {selectedCount > 0
+                                                        ? `${selectedCount} model${selectedCount > 1 ? 's' : ''} selected`
+                                                        : 'Select models to delete'}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <UserIcon className="w-5 h-5 text-gray-400" />
+                                                    Your Models
+                                                </>
+                                            )}
+                                        </h2>
+                                        {!isSelectionMode && (
+                                            <p className="text-xs text-gray-400 mt-0.5">
+                                                Manage and select from your created models
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {!isSelectionMode ? (
+                                            <>
+                                                {filteredModels.length > 0 && (
+                                                    <button
+                                                        onClick={toggleSelectionMode}
+                                                        className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors flex items-center gap-2"
+                                                    >
+                                                        <Square className="w-4 h-4" />
+                                                        Select
+                                                    </button>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <>
+                                                {/* Select All / Deselect All */}
+                                                {allSelected ? (
+                                                    <button
+                                                        onClick={deselectAllModels}
+                                                        className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                                                    >
+                                                        Deselect All
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={selectAllModels}
+                                                        className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                                                    >
+                                                        Select All
+                                                    </button>
+                                                )}
+
+                                                {/* Deselect (N) / Cancel */}
+                                                <button
+                                                    onClick={toggleSelectionMode}
+                                                    className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                                                >
+                                                    {selectedCount > 0 ? `Deselect (${selectedCount})` : 'Cancel'}
+                                                </button>
+
+                                                {/* Delete Selected */}
+                                                {selectedCount > 0 && (
+                                                    <button
+                                                        onClick={handleBulkDeleteClick}
+                                                        disabled={isDeleting}
+                                                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                                                    >
+                                                        {isDeleting ? (
+                                                            <>
+                                                                <Spinner size="sm" />
+                                                                Deleting...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Trash2Icon className="w-4 h-4" />
+                                                                Delete Selected
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+                                        <button
+                                            onClick={onClose}
+                                            className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white ml-2"
+                                        >
+                                            <XIcon className="h-5 w-5" />
+                                        </button>
+                                    </div>
                                 </div>
-                                <button
-                                    onClick={onClose}
-                                    className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-                                >
-                                    <XIcon className="h-5 w-5" />
-                                </button>
                             </div>
 
                             {/* Content */}
                             <div className="flex-grow p-6 overflow-y-auto">
                                 {filteredModels.length > 0 ? (
                                     <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                                        {filteredModels.map((model) => (
-                                            <div
-                                                key={model.id}
-                                                onClick={() => {
-                                                    onSelectModel(model);
-                                                    onClose();
-                                                }}
-                                                onContextMenu={(e) => handleContextMenu(e, model)}
-                                                className={`group relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer border transition-all ${currentModelUrl === model.url
-                                                    ? 'border-blue-500 ring-2 ring-blue-500/20'
-                                                    : 'border-white/10 hover:border-white/30'
-                                                    }`}
-                                            >
-                                                <OptimizedImage
-                                                    thumbnailUrl={model.thumbnail}
-                                                    fullUrl={model.url}
-                                                    alt={model.name || 'Model'}
-                                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                                />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                                                    <p className="text-xs font-medium text-white truncate">{model.name || 'Untitled Model'}</p>
-                                                    <p className="text-[10px] text-gray-400 truncate">
-                                                        {model.updatedAt || model.createdAt
-                                                            ? new Date(model.updatedAt || model.createdAt || 0).toLocaleString()
-                                                            : 'Unknown Date'}
-                                                    </p>
-                                                </div>
-                                                {currentModelUrl === model.url && (
-                                                    <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center">
-                                                        <div className="bg-blue-500 rounded-full p-1">
-                                                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                            </svg>
+                                        {filteredModels.map((model) => {
+                                            const isSelected = selectedModelIds.has(model.id);
+                                            return (
+                                                <div
+                                                    key={model.id}
+                                                    onClick={() => {
+                                                        if (isSelectionMode) {
+                                                            toggleModelSelection(model.id);
+                                                        } else {
+                                                            onSelectModel(model);
+                                                            onClose();
+                                                        }
+                                                    }}
+                                                    onContextMenu={(e) => !isSelectionMode && handleContextMenu(e, model)}
+                                                    className={`group relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer border transition-all ${isSelectionMode && isSelected
+                                                        ? 'border-blue-500 ring-2 ring-blue-500/30'
+                                                        : currentModelUrl === model.url
+                                                            ? 'border-blue-500 ring-2 ring-blue-500/20'
+                                                            : 'border-white/10 hover:border-white/30'
+                                                        }`}
+                                                >
+                                                    <OptimizedImage
+                                                        thumbnailUrl={model.thumbnail}
+                                                        fullUrl={model.url}
+                                                        alt={model.name || 'Model'}
+                                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                    />
+
+                                                    {/* Selection Mode Checkbox Overlay */}
+                                                    {isSelectionMode && (
+                                                        <div className="absolute top-2 left-2 z-10">
+                                                            <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-all ${isSelected
+                                                                ? 'bg-blue-500 text-white'
+                                                                : 'bg-black/50 text-white/60 group-hover:bg-black/70'
+                                                                }`}>
+                                                                {isSelected ? (
+                                                                    <CheckSquare className="w-4 h-4" />
+                                                                ) : (
+                                                                    <Square className="w-4 h-4" />
+                                                                )}
+                                                            </div>
                                                         </div>
+                                                    )}
+
+                                                    {/* Hover Info Overlay */}
+                                                    <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent transition-opacity flex flex-col justify-end p-3 ${isSelectionMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                                        }`}>
+                                                        <p className="text-xs font-medium text-white truncate">{model.name || 'Untitled Model'}</p>
+                                                        <p className="text-[10px] text-gray-400 truncate">
+                                                            {model.updatedAt || model.createdAt
+                                                                ? new Date(model.updatedAt || model.createdAt || 0).toLocaleString()
+                                                                : 'Unknown Date'}
+                                                        </p>
                                                     </div>
-                                                )}
-                                            </div>
-                                        ))}
+
+                                                    {/* Current Model Indicator (non-selection mode) */}
+                                                    {!isSelectionMode && currentModelUrl === model.url && (
+                                                        <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center">
+                                                            <div className="bg-blue-500 rounded-full p-1">
+                                                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Selected Overlay (selection mode) */}
+                                                    {isSelectionMode && isSelected && (
+                                                        <div className="absolute inset-0 bg-blue-500/10 pointer-events-none" />
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-center justify-center h-full text-gray-500">
@@ -416,6 +628,19 @@ const UserModelsModal: React.FC<UserModelsModalProps> = ({
                     title="Delete Model"
                     message="Are you sure you want to delete this model? This action cannot be undone."
                     confirmText="Delete Model"
+                />,
+                document.body
+            )}
+
+            {/* Bulk Delete Confirmation Modal */}
+            {showBulkDeleteConfirm && ReactDOM.createPortal(
+                <ConfirmationModal
+                    isOpen={true}
+                    onClose={() => setShowBulkDeleteConfirm(false)}
+                    onConfirm={handleBulkDeleteConfirm}
+                    title={`Delete ${selectedCount} Model${selectedCount > 1 ? 's' : ''}`}
+                    message={`Are you sure you want to delete ${selectedCount} selected model${selectedCount > 1 ? 's' : ''}? This action cannot be undone.`}
+                    confirmText={`Delete ${selectedCount} Model${selectedCount > 1 ? 's' : ''}`}
                 />,
                 document.body
             )}
