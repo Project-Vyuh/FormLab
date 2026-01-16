@@ -1624,7 +1624,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
                               }`}
                             aria-label={`Preview template: ${template.name || template.id}`}
                           >
-                            <img src={template.thumbnail || template.url} alt={template.name || 'Template'} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                            <img src={template.thumbnail || template.url} alt={template.name || 'Template'} loading="lazy" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                             {isDuplicate && (
                               <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                                 <div className="bg-green-500 rounded-full p-1">

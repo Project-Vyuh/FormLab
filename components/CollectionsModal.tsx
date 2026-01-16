@@ -273,11 +273,15 @@ const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose, on
                                                                 : 'border-white/10 hover:border-white/30'
                                                             }`}
                                                     >
-                                                        <img
-                                                            src={model.url}
-                                                            alt={model.name}
-                                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                                        />
+                                                        <div className="w-full h-full bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 animate-pulse">
+                                                            <img
+                                                                src={model.thumbnail || model.url}
+                                                                alt={model.name}
+                                                                loading="lazy"
+                                                                onLoad={(e) => (e.target as HTMLImageElement).parentElement?.classList.remove('animate-pulse', 'bg-gradient-to-r', 'from-gray-800', 'via-gray-700', 'to-gray-800')}
+                                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                            />
+                                                        </div>
                                                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
                                                             <p className="text-xs font-medium text-white truncate">{model.name}</p>
                                                         </div>

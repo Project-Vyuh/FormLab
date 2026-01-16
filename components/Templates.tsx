@@ -563,6 +563,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
                               <img
                                 src={model.thumbnail || model.url}
                                 alt={model.name}
+                                loading="lazy"
                                 className="w-full h-full object-cover"
                               />
                             </div>
