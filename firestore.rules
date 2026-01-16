@@ -48,7 +48,12 @@ service cloud.firestore {
          request.resource.data.userId == request.auth.uid)
       );
 
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Allow delete for: owner, or orphaned projects (null/missing userId)
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.userId == null ||
+        !resource.data.keys().hasAny(['userId'])
+      );
 
       // Generated Model History - Direct collection for Create Model workflow
       match /generatedModelHistory/{historyId} {
