@@ -10,7 +10,7 @@ import CreateTemplateModal from './CreateTemplateModal';
 import CreateFolderModal from './CreateFolderModal';
 import AddTemplateItemModal from './AddTemplateItemModal';
 import { loadPredefinedTemplates, loadUserTemplates, PredefinedTemplate, UserTemplate, loadPredefinedModels, PredefinedModel } from '../services/firestoreService';
-import { createTemplate } from '../services/templateService';
+import { createTemplate, importTemplate } from '../services/templateService';
 import { User } from '../types';
 import UserModelsCollectionView from './UserModelsCollectionView';
 
@@ -68,6 +68,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
 
   // Custom collections (folders) state
   const [customCollections, setCustomCollections] = useState<string[]>([]);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const filterDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -123,6 +124,14 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
     loadTemplates();
   }, [currentUser]);
 
+  useEffect(() => {
+    if (!currentUser) return;
+    const saved = localStorage.getItem(`formlab:collections:${currentUser.uid}`);
+    if (saved) {
+      try { setCustomCollections(JSON.parse(saved)); } catch { setCustomCollections([]); }
+    }
+  }, [currentUser]);
+
   const handleCreateTemplate = () => {
     setIsCreateTemplateModalOpen(true);
   };
@@ -165,14 +174,48 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
   };
 
   const handleSaveFolder = (folderData: any) => {
-    console.log('Folder created:', folderData);
-    setCustomCollections(prev => [...prev, folderData.name]);
-    // TODO: Save folder to database/storage
+    if (!currentUser || !folderData.name?.trim()) return;
+    setCustomCollections(prev => {
+      const next = Array.from(new Set([...prev, folderData.name.trim()]));
+      localStorage.setItem(`formlab:collections:${currentUser.uid}`, JSON.stringify(next));
+      return next;
+    });
+    setActionMessage('Collection created.');
   };
 
-  const handleAddTemplateItem = (templateData: any) => {
-    console.log('Template item added:', templateData);
-    // TODO: Process imported template
+  const handleAddTemplateItem = async (templateData: { file?: File; jsonData?: string }) => {
+    if (!currentUser) return;
+    try {
+      if (templateData.jsonData) {
+        const imported = importTemplate(templateData.jsonData);
+        if (!imported) throw new Error('The template JSON is missing required fields.');
+        await createTemplate(currentUser.uid, {
+          name: imported.name,
+          description: imported.description || '',
+          type: imported.category,
+          gender: imported.gender,
+          category: imported.wardrobeCategory,
+          thumbnail: imported.thumbnail,
+          modelId: imported.modelId,
+          wardrobeItemIds: imported.wardrobeItemIds,
+          tags: imported.tags || [],
+        });
+      } else if (templateData.file?.type.startsWith('image/')) {
+        await createTemplate(currentUser.uid, {
+          name: templateData.file.name.replace(/\.[^.]+$/, ''),
+          description: 'Imported image template',
+          type: activeCategory,
+          thumbnail: templateData.file,
+          tags: ['imported'],
+        });
+      } else {
+        throw new Error('Choose an image or valid template JSON file.');
+      }
+      setUserTemplates(await loadUserTemplates(currentUser.uid));
+      setActionMessage('Template imported.');
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : 'Template import failed.');
+    }
   };
 
   const handleGenderFilterToggle = (gender: GenderFilter) => {
@@ -229,6 +272,7 @@ const Templates: React.FC<TemplatesProps> = ({ wardrobeCategories = [], currentU
       {/* Header */}
       <div className="h-14 border-b border-white/5 bg-[#1a1a1a]/80 backdrop-blur-md flex items-center justify-between px-6 flex-shrink-0 z-20">
         <h1 className="text-[15px] font-medium text-white/90">Collections</h1>
+        {actionMessage && <button onClick={() => setActionMessage(null)} className="text-xs text-gray-300 bg-white/5 rounded-md px-3 py-1.5">{actionMessage} ×</button>}
       </div>
 
       {/* Main Content Area */}

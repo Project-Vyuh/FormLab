@@ -6,6 +6,8 @@
 import { Project, ProjectState } from '../types';
 import { syncProjectToFirestore, loadProjectFromFirestore, mergeProjectStates } from './firestoreSync';
 import { uploadBase64Image, isBase64Url } from './storageService';
+import { isLocalMode } from './runtimeConfig';
+import { readDocument, writeDocument, listDocuments, removeDocument } from './localDocuments';
 
 // --- IndexedDB Service for Project Persistence ---
 const DB_NAME = 'FormLabProjectsDB';
@@ -41,6 +43,7 @@ export const clearSyncQueue = () => {
  * Always reloads fresh state from IndexedDB before syncing to ensure migrated data is used
  */
 const queueFirestoreSync = (projectId: string, state: any) => {
+    if (isLocalMode) return;
     // Skip if no user logged in
     if (!currentUserId) {
         console.warn('[dbService] Skipping Firestore sync - user not authenticated yet. Project:', projectId);
@@ -129,6 +132,7 @@ const queueFirestoreSync = (projectId: string, state: any) => {
  * Use for critical operations like project creation to prevent data loss
  */
 export const forceImmediateSync = async (projectId: string, state: any): Promise<void> => {
+    if (isLocalMode) return;
     if (!currentUserId) {
         console.warn('[dbService] Cannot force sync - no user logged in');
         return;
@@ -195,6 +199,7 @@ export const initDB = (): Promise<boolean> => {
 
 export const saveProjectState = async (id: string, state: object) => {
     if (!id.trim()) return;
+    if (isLocalMode) { await writeDocument('project-state', id, { ...state, id }); return; }
     if (!db) await initDB();
 
     // Save to IndexedDB (instant, no network latency)
@@ -212,6 +217,7 @@ export const saveProjectState = async (id: string, state: object) => {
 
 export const saveProjectMetadata = async (project: Project) => {
     if (!project.id.trim()) return;
+    if (isLocalMode) return writeDocument('project-metadata', project.id, project);
     if (!db) await initDB();
     return new Promise<void>((resolve, reject) => {
         const transaction = db.transaction([METADATA_STORE_NAME], 'readwrite');
@@ -223,6 +229,7 @@ export const saveProjectMetadata = async (project: Project) => {
 };
 
 export const loadProjectState = async (id: string): Promise<any | null> => {
+    if (isLocalMode) return currentUserId ? readDocument('project-state', id) : null;
     if (!db) await initDB();
 
     // Load from IndexedDB first (instant)
@@ -267,6 +274,7 @@ export const loadProjectState = async (id: string): Promise<any | null> => {
 };
 
 export const getAllProjectMetadata = async (): Promise<Project[]> => {
+    if (isLocalMode) return currentUserId ? listDocuments<Project>('project-metadata') : [];
     if (!db) await initDB();
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([METADATA_STORE_NAME], 'readonly');
@@ -278,6 +286,7 @@ export const getAllProjectMetadata = async (): Promise<Project[]> => {
 };
 
 export const deleteProjectState = async (id: string) => {
+    if (isLocalMode) return removeDocument('project-state', id);
     if (!db) await initDB();
     return new Promise<void>((resolve, reject) => {
         const transaction = db.transaction([STATE_STORE_NAME], 'readwrite');
@@ -289,6 +298,7 @@ export const deleteProjectState = async (id: string) => {
 };
 
 export const deleteProjectMetadata = async (id: string) => {
+    if (isLocalMode) return removeDocument('project-metadata', id);
     if (!db) await initDB();
     return new Promise<void>((resolve, reject) => {
         const transaction = db.transaction([METADATA_STORE_NAME], 'readwrite');

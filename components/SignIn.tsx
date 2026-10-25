@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { signInWithEmail, signInWithGoogle } from '../services/authService';
 import Spinner from './Spinner';
 
+import {isLocalMode} from '../services/runtimeConfig';
 interface SignInProps {
     onSwitchToSignUp: () => void;
     onForgotPassword: (email: string) => void;
@@ -74,6 +75,7 @@ const SignIn: React.FC<SignInProps> = ({ onSwitchToSignUp, onForgotPassword }) =
             )}
 
             {/* Google Sign In Button */}
+            {!isLocalMode&&<>
             <button
                 onClick={handleGoogleSignIn}
                 disabled={isLoading}
@@ -96,6 +98,7 @@ const SignIn: React.FC<SignInProps> = ({ onSwitchToSignUp, onForgotPassword }) =
             </div>
 
             {/* Email/Password Form */}
+            </>}
             <form onSubmit={showPasswordField ? handleSubmit : handleContinue} className="space-y-3">
                 {/* Email Field */}
                 <div className="relative">
@@ -162,6 +165,8 @@ const SignIn: React.FC<SignInProps> = ({ onSwitchToSignUp, onForgotPassword }) =
                             <button
                                 type="button"
                                 onClick={() => onForgotPassword(email)}
+                                disabled={isLocalMode}
+                                title={isLocalMode?'Local accounts do not have email recovery':undefined}
                                 className="text-xs text-[#318CE7] hover:text-[#2a7bc9]"
                             >
                                 Forgot Password?

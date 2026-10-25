@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloudIcon, XIcon, PlusIcon, ImageIcon, CheckCircle2Icon, Loader2Icon, FileIcon, ChevronDownIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { AspectRatio } from '../types';
+import {isLocalMode} from '../services/runtimeConfig';
 
 interface ReferenceUploadModalProps {
     isOpen: boolean;
@@ -283,7 +284,7 @@ export const ReferenceUploadModal: React.FC<ReferenceUploadModalProps> = ({
                             <div className="flex flex-col items-center gap-1.5 w-full">
                                 <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold">Output Resolution</span>
                                 <div className="flex gap-1 p-1 bg-black/40 rounded-lg border border-white/5">
-                                    {['1K', '2K', '4K'].map((res) => (
+                                    {(isLocalMode?['1K','2K']:['1K','2K','4K']).map((res) => (
                                         <button
                                             key={res}
                                             onClick={() => onResolutionChange(res)}

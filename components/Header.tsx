@@ -8,8 +8,10 @@ import { View } from '../App';
 import { Notification, User } from '../types';
 import NotificationDropdown from './NotificationDropdown';
 import SyncStatusIndicator from './SyncStatusIndicator';
+import LocalActivity from './LocalActivity';
 import { ChevronDownIcon, UserIcon, ZapIcon } from './icons';
 import { migrateAssetsToGlobalLibrary } from '../services/migrationService';
+import { isLocalMode } from '../services/runtimeConfig';
 
 interface HeaderProps {
     activeView: View;
@@ -81,7 +83,7 @@ const UserMenu: React.FC<{ user: User; onLogout: () => void; onNavigateToProject
                             >
                                 Projects
                             </button>
-                            <button
+                            {!isLocalMode && <button
                                 onClick={async () => {
                                     if (confirm('Migrate all project assets to Global Library? This may take a moment.')) {
                                         try {
@@ -97,7 +99,7 @@ const UserMenu: React.FC<{ user: User; onLogout: () => void; onNavigateToProject
                             >
                                 <ZapIcon className="w-3.5 h-3.5" />
                                 Migrate Assets
-                            </button>
+                            </button>}
                             <button
                                 onClick={onLogout}
                                 className="w-full text-left px-3 py-2 text-[13px] font-medium text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
@@ -158,7 +160,7 @@ const Header: React.FC<HeaderProps> = ({ activeView, onNavigate, notifications, 
                     Collections
                 </button>
                 <NotificationDropdown notifications={notifications} />
-                <SyncStatusIndicator />
+                {isLocalMode ? <LocalActivity /> : <SyncStatusIndicator />}
                 <div className="w-px h-5 bg-white/10 mx-1"></div>
                 <UserMenu user={currentUser} onLogout={onLogout} onNavigateToProjects={() => onNavigate('projects')} />
             </nav>

@@ -5,6 +5,17 @@
 
 import { collection, getDocs, doc, setDoc, getDoc, query, where, DocumentData, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import { isLocalMode } from './runtimeConfig';
+import { readDocument, writeDocument } from './localDocuments';
+
+const localKey = (userId: string, collectionName: string) => `formlab-local-${userId}-${collectionName}`;
+const readLocal = async <T>(userId: string, collectionName: string): Promise<T[]> => {
+  return await readDocument<T[]>('library', collectionName) || [];
+};
+const writeLocal = async <T>(userId: string, collectionName: string, value: T[]) => {
+  await writeDocument('library', collectionName, value);
+  window.dispatchEvent(new CustomEvent(`formlab:${collectionName}`, { detail: { userId } }));
+};
 
 // Collection names
 export const PREDEFINED_MODELS_COLLECTION = 'predefined_models';
@@ -75,6 +86,7 @@ export async function loadPredefinedModels(): Promise<PredefinedModel[]> {
     console.log('Loading pre-defined models from cache');
     return cached;
   }
+  if (isLocalMode) return [];
 
   try {
     console.log('Fetching pre-defined models from Firestore');
@@ -96,6 +108,7 @@ export async function loadPredefinedModels(): Promise<PredefinedModel[]> {
 }
 
 export async function loadPredefinedModelsByGender(gender: 'male' | 'female' | 'non-binary'): Promise<PredefinedModel[]> {
+  if (isLocalMode) return (await loadPredefinedModels()).filter(model => model.gender === gender);
   try {
     const q = query(collection(db, PREDEFINED_MODELS_COLLECTION), where('gender', '==', gender));
     const querySnapshot = await getDocs(q);
@@ -145,6 +158,7 @@ export async function loadPredefinedWardrobe(): Promise<PredefinedWardrobeItem[]
     console.log('Loading pre-defined wardrobe from cache');
     return cached;
   }
+  if (isLocalMode) return [];
 
   try {
     console.log('Fetching pre-defined wardrobe from Firestore');
@@ -166,6 +180,7 @@ export async function loadPredefinedWardrobe(): Promise<PredefinedWardrobeItem[]
 }
 
 export async function loadPredefinedWardrobeByCategory(category: string): Promise<PredefinedWardrobeItem[]> {
+  if (isLocalMode) return (await loadPredefinedWardrobe()).filter(item => item.category === category);
   try {
     const q = query(collection(db, PREDEFINED_WARDROBE_COLLECTION), where('category', '==', category));
     const querySnapshot = await getDocs(q);
@@ -212,6 +227,7 @@ export async function loadPredefinedTemplates(): Promise<PredefinedTemplate[]> {
     console.log('Loading pre-defined templates from cache');
     return cached;
   }
+  if (isLocalMode) return [];
 
   try {
     console.log('Fetching pre-defined templates from Firestore');
@@ -252,6 +268,10 @@ export async function saveUserTemplate(userId: string, template: Omit<UserTempla
       createdAt: new Date().toISOString(),
       source: 'user',
     };
+    if (isLocalMode) {
+      await writeLocal(userId, 'templates', [...await readLocal<UserTemplate>(userId, 'templates'), templateData]);
+      return templateId;
+    }
 
     await setDoc(doc(db, USER_TEMPLATES_COLLECTION, `${userId}_${templateId}`), templateData);
     console.log('User template saved:', templateId);
@@ -263,6 +283,7 @@ export async function saveUserTemplate(userId: string, template: Omit<UserTempla
 }
 
 export async function loadUserTemplates(userId: string): Promise<UserTemplate[]> {
+  if (isLocalMode) return readLocal<UserTemplate>(userId, 'templates');
   try {
     const q = query(collection(db, USER_TEMPLATES_COLLECTION), where('userId', '==', userId));
     const querySnapshot = await getDocs(q);
@@ -274,6 +295,7 @@ export async function loadUserTemplates(userId: string): Promise<UserTemplate[]>
 }
 
 export async function getUserTemplate(userId: string, templateId: string): Promise<UserTemplate | null> {
+  if (isLocalMode) return (await readLocal<UserTemplate>(userId, 'templates')).find(template => template.id === templateId) || null;
   try {
     const docRef = doc(db, USER_TEMPLATES_COLLECTION, `${userId}_${templateId}`);
     const docSnap = await getDoc(docRef);
@@ -409,6 +431,10 @@ export async function saveGlobalModel(userId: string, model: Omit<GlobalModel, '
       updatedAt: new Date().toISOString(),
       source: 'user-global',
     };
+    if (isLocalMode) {
+      await writeLocal(userId, 'models', [...await readLocal<GlobalModel>(userId, 'models'), modelData]);
+      return modelId;
+    }
 
     await setDoc(doc(db, 'users', userId, 'models', modelId), modelData);
     console.log('Global model saved:', modelId);
@@ -420,6 +446,10 @@ export async function saveGlobalModel(userId: string, model: Omit<GlobalModel, '
 }
 
 export async function getGlobalModels(userId: string, projectId?: string): Promise<GlobalModel[]> {
+  if (isLocalMode) {
+    const models = await readLocal<GlobalModel>(userId, 'models');
+    return projectId ? models.filter(model => model.projectId === projectId) : models;
+  }
   try {
     let q = query(collection(db, 'users', userId, 'models'));
     if (projectId) {
@@ -434,6 +464,10 @@ export async function getGlobalModels(userId: string, projectId?: string): Promi
 }
 
 export async function deleteGlobalModel(userId: string, modelId: string): Promise<void> {
+  if (isLocalMode) {
+    await writeLocal(userId, 'models', (await readLocal<GlobalModel>(userId, 'models')).filter(model => model.id !== modelId && model.historyItemId !== modelId));
+    return;
+  }
   try {
     console.log('[deleteGlobalModel] Attempting to delete model:', { userId, modelId });
 
@@ -498,6 +532,10 @@ export async function deleteGlobalModel(userId: string, modelId: string): Promis
 }
 
 export async function renameGlobalModel(userId: string, modelId: string, newName: string): Promise<void> {
+  if (isLocalMode) {
+    await writeLocal(userId, 'models', (await readLocal<GlobalModel>(userId, 'models')).map(model => model.id === modelId ? { ...model, name: newName, updatedAt: new Date().toISOString() } : model));
+    return;
+  }
   try {
     const modelRef = doc(db, 'users', userId, 'models', modelId);
     await updateDoc(modelRef, {
@@ -516,6 +554,10 @@ export async function updateGlobalModel(
   modelId: string,
   updates: Partial<Pick<GlobalModel, 'thumbnail' | 'name' | 'url'>>
 ): Promise<void> {
+  if (isLocalMode) {
+    await writeLocal(userId, 'models', (await readLocal<GlobalModel>(userId, 'models')).map(model => model.id === modelId ? { ...model, ...updates, updatedAt: new Date().toISOString() } : model));
+    return;
+  }
   try {
     const modelRef = doc(db, 'users', userId, 'models', modelId);
     await updateDoc(modelRef, {
@@ -542,6 +584,10 @@ export async function saveGlobalWardrobeItem(userId: string, item: Omit<GlobalWa
       updatedAt: new Date().toISOString(),
       source: 'user-global',
     };
+    if (isLocalMode) {
+      await writeLocal(userId, 'wardrobe', [...await readLocal<GlobalWardrobeItem>(userId, 'wardrobe'), itemData]);
+      return itemId;
+    }
 
     await setDoc(doc(db, 'users', userId, 'wardrobe', itemId), itemData);
     console.log('Global wardrobe item saved:', itemId);
@@ -553,6 +599,10 @@ export async function saveGlobalWardrobeItem(userId: string, item: Omit<GlobalWa
 }
 
 export async function getGlobalWardrobeItems(userId: string, projectId?: string): Promise<GlobalWardrobeItem[]> {
+  if (isLocalMode) {
+    const items = await readLocal<GlobalWardrobeItem>(userId, 'wardrobe');
+    return projectId ? items.filter(item => item.projectId === projectId) : items;
+  }
   try {
     let q = query(collection(db, 'users', userId, 'wardrobe'));
     if (projectId) {
@@ -572,6 +622,10 @@ export async function getGlobalWardrobeItems(userId: string, projectId?: string)
  * @param itemId - Wardrobe item ID
  */
 export async function deleteGlobalWardrobeItem(userId: string, itemId: string): Promise<void> {
+  if (isLocalMode) {
+    await writeLocal(userId, 'wardrobe', (await readLocal<GlobalWardrobeItem>(userId, 'wardrobe')).filter(item => item.id !== itemId));
+    return;
+  }
   try {
     console.log('[deleteGlobalWardrobeItem] Deleting item:', { userId, itemId });
 
@@ -599,6 +653,13 @@ export function subscribeToGlobalWardrobe(
   projectId: string | undefined,
   onUpdate: (items: GlobalWardrobeItem[]) => void
 ): () => void {
+  if (isLocalMode) {
+    const publish = () => void getGlobalWardrobeItems(userId, projectId).then(onUpdate);
+    const event = 'formlab:wardrobe';
+    window.addEventListener(event, publish);
+    publish();
+    return () => window.removeEventListener(event, publish);
+  }
   let q = query(collection(db, 'users', userId, 'wardrobe'));
   if (projectId) {
     q = query(q, where('projectId', '==', projectId));
@@ -624,6 +685,13 @@ export function subscribeToGlobalModels(
   projectId: string | undefined,
   onUpdate: (models: GlobalModel[]) => void
 ): () => void {
+  if (isLocalMode) {
+    const publish = () => void getGlobalModels(userId, projectId).then(onUpdate);
+    const event = 'formlab:models';
+    window.addEventListener(event, publish);
+    publish();
+    return () => window.removeEventListener(event, publish);
+  }
   let q = query(collection(db, 'users', userId, 'models'));
   if (projectId) {
     q = query(q, where('projectId', '==', projectId));
@@ -650,6 +718,7 @@ export async function checkModelExists(
   projectId: string,
   historyItemId: string
 ): Promise<boolean> {
+  if (isLocalMode) return (await readLocal<GlobalModel>(userId, 'models')).some(model => model.projectId === projectId && model.historyItemId === historyItemId);
   try {
     const q = query(
       collection(db, 'users', userId, 'models'),
@@ -674,6 +743,7 @@ export async function checkWardrobeItemExists(
   userId: string,
   itemId: string
 ): Promise<boolean> {
+  if (isLocalMode) return (await readLocal<GlobalWardrobeItem>(userId, 'wardrobe')).some(item => item.id === itemId);
   try {
     const docRef = doc(db, 'users', userId, 'wardrobe', itemId);
     const docSnap = await getDoc(docRef);

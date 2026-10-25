@@ -3,9 +3,23 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.mjs",
+    "dev:fake": "FORMLAB_AI_PROVIDER=fake FORMLAB_VIDEO_ENABLED=true node scripts/dev.mjs",
+    "dev:web": "vite",
+    "server": "node server/index.mjs",
     "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "test:load": "node scripts/load-local.mjs",
+    "data:backup": "node scripts/data.mjs backup",
+    "data:inspect": "node scripts/data.mjs inspect",
+    "data:cleanup": "node scripts/data.mjs cleanup",
+    "data:recover": "node scripts/data.mjs recover",
+    "check": "npm run typecheck && npm test && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -22,13 +36,17 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-image-crop": "^11.0.6",
+    "sharp": "^0.35.5",
     "tailwind-merge": "^2.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.6.1",
+    "fake-indexeddb": "^6.2.6",
     "firebase-admin": "^13.6.0",
-    "sharp": "^0.34.5",
+    "postcss": "^8.5.31",
+    "tailwindcss": "^3.4.17",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

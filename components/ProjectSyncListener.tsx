@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useSync } from '../contexts/SyncContext';
 import { subscribeToProject, detectConflicts, mergeProjectStates } from '../services/firestoreSync';
 import { loadProjectState, saveProjectState } from '../services/dbService';
 import { User } from '../types';
+import { isLocalMode } from '../services/runtimeConfig';
 
 interface ProjectSyncListenerProps {
   projectId: string | null;
@@ -22,6 +23,10 @@ const ProjectSyncListener: React.FC<ProjectSyncListenerProps> = ({ projectId, cu
   const { setConflictData, setSyncStatus, setLastSyncTime } = useSync();
 
   useEffect(() => {
+    if (isLocalMode) {
+      setSyncStatus('synced');
+      return;
+    }
     if (!projectId || !currentUser) return;
 
     console.log('[ProjectSyncListener] Setting up real-time listener for project:', projectId);

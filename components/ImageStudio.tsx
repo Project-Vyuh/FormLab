@@ -6,6 +6,11 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Canvas from './Canvas';
+import {useCapabilities} from '../hooks/useCapabilities';
+import {isLocalMode} from '../services/runtimeConfig';
+import {runLocalImageWorkflow} from '../services/localImageWorkflow';
+import {loadProjectState} from '../services/dbService';
+import {deleteProjectHistory} from '../services/localDocuments';
 import ModelGalleryPanel from './ModelGalleryPanel';
 import RightPanelContent from './RightPanelContent';
 import ResizeHandle from './ResizeHandle';
@@ -27,7 +32,9 @@ import {
   analyzeGarmentDetailed,
   generateModelImage,
   reviseGeneratedImage,
-  enhanceRevisionPrompt
+  enhanceRevisionPrompt,
+  upscaleImage,
+  selectivelyEnhanceImage
 } from '../services/geminiService';
 import {
   reviseGeneratedImagePro,
@@ -43,8 +50,6 @@ import { uploadFile, uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } 
 import { convertToSquare } from '../lib/imageProcessing';
 import { loadPredefinedWardrobe, getGlobalWardrobeItems, saveGlobalWardrobeItem, deleteGlobalWardrobeItem, subscribeToGlobalWardrobe, checkWardrobeItemExists } from '../services/firestoreService';
 import { deleteHistoryItemFromFirestore, subscribeToStylingHistory, loadHistoryItems } from '../services/firestoreSync';
-import { createUpscaleRequest, listenToUpscaleRequest, UpscaleRequest } from '../services/firestoreService';
-import { auth } from '../services/firebase';
 import { loadUnifiedHistory, saveStylingHistory, saveCompositeState, loadCompositeState } from '../services/dbService';
 import { getCurrentUserId } from '../services/authService';
 import { useLogoBranding } from '../contexts/LogoBrandingContext';
@@ -238,6 +243,9 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   const [modelImageUrl, setModelImageUrl] = useState<string | null>(null);
   const [outfitStack, setOutfitStack] = useState<OutfitLayer[]>([]);
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(initialGenerationSettings);
+  const capabilities=useCapabilities();
+  const activeLocalProject=useRef(currentProjectId);activeLocalProject.current=currentProjectId;
+  useEffect(()=>{if(isLocalMode)setGenerationSettings(s=>s.imageSize&&!capabilities.imageSizes.includes(s.imageSize)?{...s,imageSize:'2K'}:s);},[capabilities.imageSizes,generationSettings.imageSize]);
 
   // UI Interaction State
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
@@ -462,52 +470,29 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     setLoadingMessage(`Upscaling to ${resolution.toUpperCase()}...`);
 
     try {
-      // Create the upscale request in Firestore
-      const requestId = await createUpscaleRequest(currentUser.uid, displayImageUrl, resolution);
-      console.log('Upscale request created:', requestId);
-
-      // Listen for updates
-      const unsubscribe = listenToUpscaleRequest(requestId, async (request: UpscaleRequest) => {
-        if (request.status === 'completed' && request.outputUrl) {
-          // Upscale successful!
-          unsubscribe(); // Stop listening
-
-          // Add to history
-          const garmentIds = outfitStack.filter(l => l.isVisible && l.garment).map(l => l.garment!.id);
-          const newHistoryItem: HistoryItem = {
-            id: `hist-${Date.now()}`,
-            parentId: currentHistoryItemId,
-            imageUrl: request.outputUrl,
-            prompt: `Upscaled to ${resolution.toUpperCase()}`,
-            settings: deepCopy(generationSettings),
-            modelName: "Nano Banana Pro",
-            isStarred: false,
-            type: 'try-on-revision', // Treat as a revision
-            baseModelId: selectedStylingModel!.baseModelId,
-            outfitGarmentIds: garmentIds,
-          };
-
-          setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
-          setCurrentHistoryItemId(newHistoryItem.id);
-          setRedoStack([]);
-
-          setIsLoading(false);
-          setLoadingMessage('');
-          setToastMessage(`Image upscaled to ${resolution.toUpperCase()}!`);
-        } else if (request.status === 'failed') {
-          unsubscribe();
-          setIsLoading(false);
-          setLoadingMessage('');
-          setError(request.error || 'Upscale failed');
-        }
-      });
+      if(isLocalMode){if(resolution!=='2k')throw Error('Local server supports up to 2K');await localStyleRevision('Refine and upscale to the requested 2K output without changing identity, outfit or composition.',{...generationSettings,imageSize:'2K'});setToastMessage('2K revision saved.');return;}
+      const generated = await upscaleImage(displayImageUrl, resolution);
+      const outputUrl = await uploadBase64Image(generated, currentUser.uid, 'tryons', `upscale-${Date.now()}.png`, currentProjectId);
+      const newHistoryItem: HistoryItem = {
+        id: `hist-${Date.now()}`, parentId: currentHistoryItemId, imageUrl: outputUrl,
+        prompt: `Upscaled to ${resolution.toUpperCase()}`, settings: deepCopy(generationSettings),
+        modelName: 'Gemini', isStarred: false, type: 'try-on-revision',
+        baseModelId: selectedStylingModel?.baseModelId || currentHistoryItem?.baseModelId || 'base-model',
+        outfitGarmentIds: outfitStack.filter(l => l.isVisible && l.garment).map(l => l.garment!.id),
+      };
+      setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
+      setCurrentHistoryItemId(newHistoryItem.id);
+      setRedoStack([]);
+      setToastMessage(`Image upscaled to ${resolution.toUpperCase()}!`);
 
     } catch (err) {
       setIsLoading(false);
       setLoadingMessage('');
       setError(getFriendlyErrorMessage(err, "Failed to upscale image"));
+    }finally{
+      setIsLoading(false);setLoadingMessage('');
     }
-  }, [displayImageUrl, currentUser, currentProjectId, currentHistoryItemId, generationSettings, selectedStylingModel]);
+  }, [displayImageUrl, currentUser, currentProjectId, currentHistoryItemId, currentHistoryItem, generationSettings, selectedStylingModel, outfitStack,selectedGenerationModel]);
 
   const handleDownload = useCallback(async (format: 'png' | 'jpg' | 'webp') => {
     if (!displayImageUrl) return;
@@ -644,9 +629,35 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     });
   };
 
-  const handleSelectiveEnhance = (type: string) => {
+  async function localStyleRevision(prompt:string,settings=generationSettings){
+    if(!currentProjectId||!displayImageUrl)throw Error('Select a saved project image first');
+    const projectId=currentProjectId,baseModelId=selectedStylingModel?.baseModelId||currentHistoryItem?.baseModelId||'',info=generationModels.find(m=>m.name===selectedGenerationModel);
+    const result=await runLocalImageWorkflow({projectId,type:'try-on-revision',parentId:currentHistoryItemId,baseModelId,prompt,settings,model:info?.id||'gemini-2.5-flash-image',modelName:selectedGenerationModel,references:[displayImageUrl]});
+    const saved=await loadProjectState(projectId);if(activeLocalProject.current!==projectId)return;setGeneratedModelHistory([...(saved.generatedModelHistory||[]),...(saved.stylingHistory?.[baseModelId]||[])]);setCurrentHistoryItemId(result.historyId);setRedoStack([]);
+  }
+  const handleSelectiveEnhance = async (type: 'face' | 'fabric' | 'accessories') => {
     setIsUpscaleMenuOpen(false);
-    setToastMessage(`Enhancing ${type}... (Coming Soon)`);
+    if (!displayImageUrl || !currentUser || !currentProjectId) return;
+    setIsLoading(true);
+    setLoadingMessage(`Enhancing ${type}…`);
+    try {
+      if(isLocalMode){await localStyleRevision(`Refine the ${type} details only. Preserve identity, outfit, pose and all other composition.`);setToastMessage(`${type} enhanced.`);return;}
+      const generated = await selectivelyEnhanceImage(displayImageUrl, type);
+      const outputUrl = await uploadBase64Image(generated, currentUser.uid, 'tryons', `enhance-${type}-${Date.now()}.png`, currentProjectId);
+      const newHistoryItem: HistoryItem = {
+        id: `hist-${Date.now()}`, parentId: currentHistoryItemId, imageUrl: outputUrl,
+        prompt: `Enhanced ${type}`, settings: deepCopy(generationSettings), modelName: 'Gemini',
+        isStarred: false, type: 'try-on-revision',
+        baseModelId: selectedStylingModel?.baseModelId || currentHistoryItem?.baseModelId || 'base-model',
+        outfitGarmentIds: outfitStack.filter(l => l.isVisible && l.garment).map(l => l.garment!.id),
+      };
+      setGeneratedModelHistory(prev => [...prev, newHistoryItem]);
+      setCurrentHistoryItemId(newHistoryItem.id);
+      setRedoStack([]);
+      setToastMessage(`${type[0].toUpperCase()}${type.slice(1)} enhanced.`);
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, `Failed to enhance ${type}`));
+    } finally { setIsLoading(false); setLoadingMessage(''); }
   };
 
   // Notify parent when categories change
@@ -1050,6 +1061,13 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
     setError(null);
 
     try {
+      if(isLocalMode&&currentProjectId&&selectedStylingModel){
+        const layers=outfitStack.filter(l=>l.isVisible&&l.garment);
+        if(!layers.length){handleStartOver();return;}
+        const info=generationModels.find(m=>m.name===selectedGenerationModel);
+        const result=await runLocalImageWorkflow({projectId:currentProjectId,type:'try-on',parentId:currentHistoryItemId,baseModelId:selectedStylingModel.baseModelId,prompt:`Dress the subject in all of these garments together, preserving their appearance and layering order: ${layers.map(l=>l.garment!.name).join(', ')}. Preserve the original face and identity.`,settings:generationSettings,model:info?.id||'gemini-2.5-flash-image',modelName:selectedGenerationModel,references:[modelImageUrl,...layers.map(l=>l.garment!.url)]});
+        const saved=await loadProjectState(currentProjectId);if(activeLocalProject.current!==currentProjectId)return;setGeneratedModelHistory([...(saved.generatedModelHistory||[]),...(saved.stylingHistory?.[selectedStylingModel.baseModelId]||[])]);setCurrentHistoryItemId(result.historyId);setRedoStack([]);setHasPendingStackChanges(false);return;
+      }
       const resolvedBaseImage = await resolveImageUrl(modelImageUrl);
       const visibleGarmentLayers = outfitStack.filter(l => l.isVisible && l.garment);
 
@@ -1295,6 +1313,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
   };
 
   const handleDeleteVersion = async (id: string) => {
+    if(isLocalMode&&currentProjectId)await deleteProjectHistory(currentProjectId,id);
     const list = isCompositeMode ? compositeHistory : generatedModelHistory;
     const itemToDelete = list.find(i => i.id === id);
     if (!itemToDelete) return;
@@ -1312,7 +1331,6 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
       }
 
       // 2. Delete from Firestore
-      const currentUser = auth.currentUser;
       if (currentUser && currentProjectId) {
         try {
           // Determine collection path based on item type
@@ -1561,7 +1579,6 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
         }
 
         // 2. Delete from global wardrobe in Firestore (if user-created and saved globally)
-        const currentUser = auth.currentUser;
         if (currentUser && (productToDelete.source === 'user-global' || productToDelete.source === 'user')) {
           try {
             await deleteGlobalWardrobeItem(currentUser.uid, productToDelete.id);
@@ -1688,6 +1705,24 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
 
   // Unified handler that intelligently applies changes based on what the user has modified
   const handleApplyChanges = useCallback(async () => {
+    if(isLocalMode&&currentProjectId){
+      if(isLoading)return;setIsLoading(true);setError(null);setLoadingMessage('Generating and saving project result...');
+      try{
+        const priorComposite=compositeHistory.find(h=>h.id===currentCompositeHistoryId);
+        const layers=outfitStack.filter(l=>l.isVisible&&l.garment);
+        const references=isCompositeMode?(priorComposite?[priorComposite.imageUrl]:compositeSubjects.map(s=>s.url)):[displayImageUrl||modelImageUrl!,...layers.map(l=>l.garment!.url)];
+        if(!references.length||references.some(url=>!url))throw Error('Choose the source images first');
+        const info=generationModels.find(m=>m.name===selectedGenerationModel);
+        const prompt=isCompositeMode?`Compose all reference subjects into one realistic studio photograph, preserving each identity. ${compositePrompt||'Apply the selected creative controls.'}`:`${revisionPrompt||'Apply the selected creative controls.'} ${layers.length?`Dress the subject in all referenced garments together: ${layers.map(l=>l.garment!.name).join(', ')}.`:'Preserve the existing outfit.'}`;
+        const result=await runLocalImageWorkflow({projectId:currentProjectId,type:isCompositeMode?'composite-generation':'try-on-revision',parentId:isCompositeMode?currentCompositeHistoryId:currentHistoryItemId,baseModelId:selectedStylingModel?.baseModelId||'',prompt,settings:generationSettings,model:info?.id||'gemini-2.5-flash-image',modelName:selectedGenerationModel,references});
+        const saved=await loadProjectState(currentProjectId);
+        if(activeLocalProject.current!==currentProjectId)return;
+        if(isCompositeMode){setCompositeHistory(saved.compositeHistory||[]);setCurrentCompositeHistoryId(result.historyId);setCompositePrompt('');}
+        else{setGeneratedModelHistory([...(saved.generatedModelHistory||[]),...(saved.stylingHistory?.[selectedStylingModel?.baseModelId||'']||[])]);setCurrentHistoryItemId(result.historyId);setRevisionPrompt('');setHasPendingStackChanges(false);setRedoStack([]);}
+      }catch(error){setError(getFriendlyErrorMessage(error,'Generation failed'));}
+      finally{setIsLoading(false);setLoadingMessage('');}
+      return;
+    }
     // 1. Composite Generation Logic
     if (isCompositeMode) {
       // Logic for initial composite or revision
@@ -2100,7 +2135,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                   {generationModels.find(m => m.name === selectedGenerationModel)?.id === 'gemini-3-pro-image-preview' && (
                     <div className="flex items-center gap-2 mr-2">
                       <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/5">
-                        {(['1K', '2K', '4K'] as const).map((size) => (
+                        {capabilities.imageSizes.map((size:'1K'|'2K'|'4K') => (
                           <button
                             key={size}
                             onClick={() => setGenerationSettings(gs => ({ ...gs, imageSize: size }))}
@@ -2170,7 +2205,7 @@ const ImageStudio: React.FC<ImageStudioProps> = ({
                           <button onClick={() => handleUpscale('2k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span> Upscale to 2K
                           </button>
-                          <button onClick={() => handleUpscale('4k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
+                          <button disabled={isLocalMode} title={isLocalMode?'Local server supports up to 2K':undefined} onClick={() => handleUpscale('4k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40" style={{ cursor: 'pointer' }}>
                             <span className="w-1.5 h-1.5 rounded-full bg-purple-500/50"></span> Upscale to 4K
                           </button>
                           <div className="h-px bg-white/5 my-1 mx-2"></div>

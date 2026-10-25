@@ -15,7 +15,6 @@ import { convertToSquare } from '../lib/imageProcessing';
 import { Loader2Icon, UndoIcon, RedoIcon, PenLineIcon, ZapIcon, RotateCcwIcon } from "lucide-react";
 import { GenerationSettings, UpscaleResolution, ShotFraming, AspectRatio, LightingRig, Light, LightRole, HdriMap, LightType, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, StudioEnvironmentType, GradientType, TextureType, FloorMaterial, AmbientBounceSettings, AmbientOcclusionSettings, FloorSettings, StudioVignetting, Project, PanelToggles, HistoryItemType, User, Model, HistoryItem, SelectedStylingModel } from '../types';
 import { STYLE_PRESETS } from './shared/presets';
-import { createUpscaleRequest, listenToUpscaleRequest, UpscaleRequest } from '../services/firestoreService';
 import ConfirmationModal from './ConfirmationModal';
 import ResizeHandle from './ResizeHandle';
 import { useDebouncedEffect } from '../hooks/useDebouncedEffect';
@@ -26,7 +25,6 @@ import {
 import { uploadBase64Image, isBase64Url, deleteFile, isStorageUrl } from '../services/storageService';
 import { deleteStylingHistory } from '../services/dbService';
 import { deleteHistoryItemFromFirestore } from '../services/firestoreSync';
-import { auth } from '../services/firebase';
 import GlobalControls from './GlobalControls';
 import CollapsibleSection from './shared/CollapsibleSection';
 import OptionButton from './shared/OptionButton';
@@ -40,6 +38,11 @@ import OptimizedImage from './shared/OptimizedImage';
 import { ReferenceUploadModal } from './ReferenceUploadModal';
 import { loadPredefinedModels, PredefinedModel, saveGlobalModel, checkModelExists, subscribeToGlobalModels } from '../services/firestoreService';
 import { generateAndUploadThumbnail } from '../services/thumbnailService';
+import {isLocalMode} from '../services/runtimeConfig';
+import {GenerationAttachment} from '../services/aiGateway';
+import {useCapabilities} from '../hooks/useCapabilities';
+import {deleteProjectHistory} from '../services/localDocuments';
+import {runLocalImageWorkflow} from '../services/localImageWorkflow';
 
 
 interface CreateModelProps {
@@ -277,10 +280,13 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
   // History & Settings State
   const [generatedModelHistory, setGeneratedModelHistory] = useState<HistoryItem[]>([]);
+  const capabilities=useCapabilities();
+  const activeProject=useRef(currentProjectId);activeProject.current=currentProjectId;
   const [currentHistoryItemId, setCurrentHistoryItemId] = useState<string | null>(null);
   const [pendingHistoryItemId, setPendingHistoryItemId] = useState<string | null>(null); // For gallery selection
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(initialGenerationSettings);
+  useEffect(()=>{if(isLocalMode)setGenerationSettings(s=>s.imageSize&&!capabilities.imageSizes.includes(s.imageSize)?{...s,imageSize:'2K'}:s);},[capabilities.imageSizes,generationSettings.imageSize]);
   const [openSections, setOpenSections] = useState({ project: true, prompt: true, presets: true, composition: false, camera: false, lighting: false, environment: false, finishing: false, advanced: false });
 
 
@@ -712,6 +718,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
   const handleGenerate = async (fileOrFiles?: File | File[]) => {
     const files = Array.isArray(fileOrFiles) ? fileOrFiles : (fileOrFiles ? [fileOrFiles] : []);
     const hasFiles = files.length > 0;
+    if(isLocalMode&&(files.length>12||files.some(file=>file.size>20*1024*1024)||files.reduce((bytes,file)=>bytes+file.size,0)>24*1024*1024)){setToastMessage('Use at most 12 reference images, 20 MiB per file and 24 MiB total.');return;}
 
     if (!hasFiles && !modelDescription.trim()) {
       setToastMessage('Please enter a description or upload a photo.');
@@ -728,13 +735,14 @@ const CreateModel: React.FC<CreateModelProps> = ({
     try {
       // Convert reference photo(s) to 1:1 aspect ratio with background matching studio environment
       let processedFiles: File[] = [];
-      if (hasFiles) {
+      if (hasFiles&&isLocalMode)processedFiles=files;
+      else if (hasFiles) {
         try {
           setLoadingMessage(files.length > 1 ? `Normalizing ${files.length} photos...` : 'Normalizing reference photo...');
           // Extract background color from settings to ensure padding matches studio environment
           const backgroundColor = getBackgroundColorFromSettings(generationSettings);
 
-          processedFiles = await Promise.all(files.map(f => convertToSquare(f, backgroundColor)));
+          for(const file of files)processedFiles.push(await convertToSquare(file,backgroundColor));
           console.log(`✓ Converted ${processedFiles.length} photo(s) to 1:1 with background: ${backgroundColor}`);
         } catch (error) {
           console.error('Failed to convert reference photo(s), using original(s):', error);
@@ -747,22 +755,28 @@ const CreateModel: React.FC<CreateModelProps> = ({
       if (!modelInfo || !modelInfo.id) throw new Error("Invalid model selected.");
 
       setLoadingMessage(hasFiles ? 'Generating model from photo(s)...' : 'Generating model from description...');
-
+      const historyId=`rev-${crypto.randomUUID()}`;
+      const attachment:GenerationAttachment|undefined=isLocalMode&&currentProjectId?{projectId:currentProjectId,history:{id:historyId,parentId:null,baseModelId:historyId,type:'model-generation',prompt,settings:generationSettings,modelName:selectedModelName}}:undefined;
+      if(attachment&&!await loadProjectState(attachment.projectId))await saveProjectState(attachment.projectId,{id:attachment.projectId,generatedModelHistory:[]});
       let result;
       if (modelInfo.id === 'gemini-3-pro-image-preview') {
         // Pro model generation
         result = hasFiles
-          ? await generateModelImagePro(processedFiles, generationSettings)
-          : await generateModelFromDescriptionPro(modelDescription, generationSettings);
+          ? await generateModelImagePro(processedFiles, generationSettings,attachment)
+          : await generateModelFromDescriptionPro(modelDescription, generationSettings,attachment);
       } else {
         // Standard model generation (uses only the first file if multiple provided)
         result = hasFiles
-          ? await generateModelImage(processedFiles[0], generationSettings, 'gemini-2.5-flash-image')
-          : await generateModelFromDescription(modelDescription, generationSettings, 'gemini-2.5-flash-image');
+          ? await generateModelImage(processedFiles[0], generationSettings, 'gemini-2.5-flash-image',attachment)
+          : await generateModelFromDescription(modelDescription, generationSettings, 'gemini-2.5-flash-image',attachment);
       }
       const imageUrl = typeof result === 'string' ? result : result.imageUrl;
       const thoughts = typeof result === 'string' ? undefined : result.thoughts;
-      await addHistoryItem({ prompt, settings: generationSettings, modelName: selectedModelName }, imageUrl, thoughts);
+      if(attachment){
+        if(activeProject.current!==attachment.projectId)return;
+        const saved=await loadProjectState(attachment.projectId);setGeneratedModelHistory(saved.generatedModelHistory||[]);setCurrentHistoryItemId(historyId);setRedoStack([]);
+        onModelAdded?.({id:`model-${historyId}`,url:imageUrl,source:'user',projectId:attachment.projectId,historyItemId:historyId,createdAt:Date.now(),updatedAt:Date.now()});
+      }else await addHistoryItem({ prompt, settings: generationSettings, modelName: selectedModelName }, imageUrl, thoughts);
     } catch (err) {
       setToastMessage(getFriendlyErrorMessage(err, 'Failed to create model'));
     } finally {
@@ -802,24 +816,26 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
       const modelInfo = generationModels.find(m => m.name === selectedModelName);
       if (!modelInfo || !modelInfo.id) throw new Error("Invalid model selected.");
-
+      const historyId=`rev-${crypto.randomUUID()}`;
+      const attachment:GenerationAttachment|undefined=isLocalMode&&currentProjectId?{projectId:currentProjectId,history:{id:historyId,parentId:currentHistoryItemId,baseModelId:findRootAncestor(currentHistoryItemId),type:'model-revision',prompt:promptForHistory,settings:currentSettings,modelName:selectedModelName}}:undefined;
       let result;
       if (modelInfo.id === 'gemini-3-pro-image-preview') {
         // Pro model revision
         const isMasked = isMaskingMode && maskDataUrl;
         result = isMasked
-          ? await reviseMaskedImagePro(generatedModelUrl, maskDataUrl!, revisionInstruction, currentSettings)
-          : await reviseGeneratedImagePro(generatedModelUrl, revisionInstruction, currentSettings);
+          ? await reviseMaskedImagePro(generatedModelUrl, maskDataUrl!, revisionInstruction, currentSettings,attachment)
+          : await reviseGeneratedImagePro(generatedModelUrl, revisionInstruction, currentSettings,undefined,attachment);
       } else {
         const isMasked = isMaskingMode && maskDataUrl;
         result = isMasked
-          ? await reviseMaskedImage(generatedModelUrl, maskDataUrl!, revisionInstruction, currentSettings)
-          : await reviseGeneratedImage(generatedModelUrl, revisionInstruction, currentSettings, 'gemini-2.5-flash-image');
+          ? await reviseMaskedImage(generatedModelUrl, maskDataUrl!, revisionInstruction, currentSettings,attachment)
+          : await reviseGeneratedImage(generatedModelUrl, revisionInstruction, currentSettings, 'gemini-2.5-flash-image',undefined,attachment);
       }
 
       const imageUrl = typeof result === 'string' ? result : result.imageUrl;
       const thoughts = typeof result === 'string' ? undefined : result.thoughts;
-      await addHistoryItem({ prompt: promptForHistory, settings: currentSettings, modelName: selectedModelName }, imageUrl, thoughts);
+      if(attachment){if(activeProject.current!==attachment.projectId)return;const saved=await loadProjectState(attachment.projectId);setGeneratedModelHistory(saved.generatedModelHistory||[]);setCurrentHistoryItemId(historyId);setRedoStack([]);}
+      else await addHistoryItem({ prompt: promptForHistory, settings: currentSettings, modelName: selectedModelName }, imageUrl, thoughts);
       setRevisionPrompt('');
       if (isMaskingMode) {
         setIsMaskingMode(false);
@@ -834,12 +850,19 @@ const CreateModel: React.FC<CreateModelProps> = ({
   };
 
 
+  const localRevision=async(prompt:string,settings=generationSettings)=>{
+    if(!currentProjectId||!generatedModelUrl)throw Error('Select a saved project model first');
+    const projectId=currentProjectId,info=generationModels.find(m=>m.name===selectedModelName);
+    const result=await runLocalImageWorkflow({projectId,type:'model-revision',parentId:currentHistoryItemId,baseModelId:findRootAncestor(currentHistoryItemId)||'',prompt,settings,model:info?.id||'gemini-2.5-flash-image',modelName:selectedModelName,references:[generatedModelUrl]});
+    const saved=await loadProjectState(projectId);if(activeProject.current!==projectId)return;setGeneratedModelHistory(saved.generatedModelHistory||[]);setCurrentHistoryItemId(result.historyId);setRedoStack([]);
+  };
   const handleSelectiveEnhance = async (target: 'face' | 'fabric' | 'accessories') => {
     if (!generatedModelUrl) return;
     setIsGenerating(true);
     setLoadingMessage(`Enhancing ${target}...`);
     setIsUpscaleMenuOpen(false);
     try {
+      if(isLocalMode){await localRevision(`Refine the ${target} details only. Preserve the identity, outfit, pose, background and composition.`);setToastMessage(`${target} enhanced.`);return;}
       const result = await selectivelyEnhanceImage(generatedModelUrl, target);
       await addHistoryItem({ prompt: `Enhanced ${target}`, settings: generationSettings, modelName: selectedModelName }, result);
       setToastMessage(`${target.charAt(0).toUpperCase() + target.slice(1)} enhanced!`);
@@ -859,6 +882,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
 
     try {
       // 1. Upload current image to Storage (if it's a blob/data URL)
+      if(isLocalMode){if(resolution!=='2k')throw Error('Local server supports up to 2K');await localRevision('Refine and upscale the image to the requested 2K output, preserving all subjects, outfits and composition.',{...generationSettings,imageSize:'2K'});setToastMessage('2K revision saved.');return;}
       let imageUrl = generatedModelUrl;
       if (generatedModelUrl.startsWith('data:') || generatedModelUrl.startsWith('blob:')) {
         setLoadingMessage('Uploading source image...');
@@ -874,32 +898,20 @@ const CreateModel: React.FC<CreateModelProps> = ({
         imageUrl = await uploadBase64Image(base64Data, currentUser.uid, 'models', `source-for-upscale-${Date.now()}.png`, currentProjectId || undefined);
       }
 
-      // 2. Create Upscale Request
-      setLoadingMessage('Queueing upscale job...');
-      const requestId = await createUpscaleRequest(currentUser.uid, imageUrl, resolution);
-
-      // 3. Listen for completion
+      // Run through the configured server-side AI provider.
       setLoadingMessage(`Upscaling to ${resolution} (this may take a moment)...`);
-      const unsubscribe = listenToUpscaleRequest(requestId, async (request: UpscaleRequest) => {
-        if (request.status === 'completed' && request.outputUrl) {
-          unsubscribe();
-          await addHistoryItem({ prompt: `Upscaled to ${resolution}`, settings: generationSettings, modelName: selectedModelName }, request.outputUrl);
-          setToastMessage(`Image upscaled to ${resolution}!`);
-          setIsGenerating(false);
-          setLoadingMessage('');
-        } else if (request.status === 'failed') {
-          unsubscribe();
-          setToastMessage(request.error || 'Upscale failed');
-          setIsGenerating(false);
-          setLoadingMessage('');
-        }
-      });
+      const generated = await upscaleImage(imageUrl, resolution);
+      const outputUrl = await uploadBase64Image(generated, currentUser.uid, 'models', `upscale-${Date.now()}.png`, currentProjectId || undefined);
+      await addHistoryItem({ prompt: `Upscaled to ${resolution}`, settings: generationSettings, modelName: selectedModelName }, outputUrl);
+      setToastMessage(`Image upscaled to ${resolution}!`);
 
     } catch (err) {
       console.error('Upscale error:', err);
       setToastMessage(getFriendlyErrorMessage(err, 'Upscale failed'));
       setIsGenerating(false);
       setLoadingMessage('');
+    }finally{
+      setIsGenerating(false);setLoadingMessage('');
     }
   };
 
@@ -1168,6 +1180,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
     const modelToDelete = deleteConfirmModal.model;
 
     try {
+      if(isLocalMode&&modelToDelete.historyItemId)await deleteProjectHistory(currentProjectId,modelToDelete.historyItemId);
       console.log('[CreateModel] Deleting model:', modelToDelete.id);
 
       // 1. Delete image from Firebase Storage (only for user-uploaded models)
@@ -1511,7 +1524,6 @@ const CreateModel: React.FC<CreateModelProps> = ({
       }
 
       // 2. Delete from Firestore
-      const currentUser = auth.currentUser;
       if (currentUser && currentProjectId) {
         try {
           await deleteHistoryItemFromFirestore(currentProjectId, 'generatedModelHistory', id);
@@ -1898,7 +1910,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
                   <>
                     <div className="flex items-center gap-2">
                       <div className="h-8 flex items-center gap-1 bg-black/40 px-1 py-0.5 rounded-lg border border-white/5">
-                        {(['1K', '2K', '4K'] as const).map((size) => (
+                        {capabilities.imageSizes.map((size:'1K'|'2K'|'4K') => (
                           <button
                             key={size}
                             onClick={() => setGenerationSettings(prev => ({ ...prev, imageSize: size }))}
@@ -1964,7 +1976,7 @@ const CreateModel: React.FC<CreateModelProps> = ({
                         <button onClick={() => handleUpscale('2k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
                           <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span> Upscale to 2K
                         </button>
-                        <button onClick={() => handleUpscale('4k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2" style={{ cursor: 'pointer' }}>
+                        <button disabled={isLocalMode} title={isLocalMode?'Local server supports up to 2K':undefined} onClick={() => handleUpscale('4k')} className="w-full text-left px-3 py-2 text-[11px] font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40" style={{ cursor: 'pointer' }}>
                           <span className="w-1.5 h-1.5 rounded-full bg-purple-500/50"></span> Upscale to 4K
                         </button>
                         <div className="h-px bg-white/5 my-1 mx-2"></div>

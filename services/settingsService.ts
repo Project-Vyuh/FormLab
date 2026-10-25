@@ -5,6 +5,8 @@
 
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import { isLocalMode } from './runtimeConfig';
+import { readDocument, writeDocument } from './localDocuments';
 
 export interface UserSettings {
     theme: 'light' | 'dark' | 'system';
@@ -31,6 +33,11 @@ const DEFAULT_SETTINGS: UserSettings = {
  * Save user settings
  */
 export async function saveUserSettings(userId: string, settings: Partial<UserSettings>): Promise<void> {
+    if (isLocalMode) {
+        const current = await getUserSettings(userId);
+        await writeDocument('settings', 'preferences', { ...current, ...settings, updatedAt: new Date().toISOString() });
+        return;
+    }
     try {
         const settingsRef = doc(db, 'users', userId, 'settings', 'preferences');
 
@@ -61,6 +68,9 @@ export async function saveUserSettings(userId: string, settings: Partial<UserSet
  * Get user settings
  */
 export async function getUserSettings(userId: string): Promise<UserSettings> {
+    if (isLocalMode) {
+        return { ...DEFAULT_SETTINGS, ...await readDocument<Partial<UserSettings>>('settings', 'preferences') };
+    }
     try {
         const settingsRef = doc(db, 'users', userId, 'settings', 'preferences');
         const docSnap = await getDoc(settingsRef);

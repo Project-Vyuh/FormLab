@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback,useRef } from 'react';
 import VideoControlPanel from './VideoControlPanel';
 import VideoCanvas from './VideoCanvas';
 import VideoRightPanel from './VideoRightPanel';
@@ -12,6 +12,9 @@ import { getFriendlyErrorMessage } from '../lib/utils';
 import { VideoGenerationSettings, Project, User } from '../types';
 import { DownloadIcon } from './icons';
 import { uploadVideoBlob } from '../services/storageService';
+import {isLocalMode} from '../services/runtimeConfig';
+import {useCapabilities} from '../hooks/useCapabilities';
+import {loadProjectState,saveProjectState} from '../services/dbService';
 
 interface VideoCreatorProps {
   referenceImageUrl: string | null;
@@ -47,6 +50,8 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isApiKeySelected, setIsApiKeySelected] = useState(false);
+  const capabilities=useCapabilities();
+  const activeProject=useRef(currentProjectId);activeProject.current=currentProjectId;
 
   const [leftPanelWidth, setLeftPanelWidth] = useState(320);
   const [rightPanelWidth, setRightPanelWidth] = useState(288);
@@ -54,6 +59,7 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
   useEffect(() => {
     // Check for API key when component mounts
     const checkApiKey = async () => {
+      if(isLocalMode){setIsApiKeySelected(true);return;}
       // Check if aistudio API is available
       if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
         try {
@@ -76,6 +82,7 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
     setError(null);
     setSettings(initialVideoSettings);
   }, [referenceImageUrl]);
+  useEffect(()=>{if(isLocalMode&&currentProjectId)void loadProjectState(currentProjectId).then(state=>{const videos=state?.videoHistory||[];if(videos.length&&activeProject.current===currentProjectId)setVideoUrl(videos[videos.length-1].videoUrl);}).catch(()=>{});},[currentProjectId]);
 
   const handleSettingsChange = useCallback((newSettings: Partial<VideoGenerationSettings>) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
@@ -105,11 +112,16 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
 
   const handleGenerateVideo = async () => {
     if (!referenceImageUrl || !settings.prompt || isLoading) return;
+    if(isLocalMode&&!capabilities.videoEnabled){setError('Video is disabled on the server. Enable it only after provider access is configured.');return;}
     setIsLoading(true);
     setError(null);
     setVideoUrl(null);
     try {
-      const resultUrl = await generateVideoFromImage(referenceImageUrl, settings);
+      const id=`video-${crypto.randomUUID()}`;
+      const attachment=isLocalMode&&currentProjectId?{projectId:currentProjectId,history:{id,parentId:null,baseModelId:id,type:'video-generation',prompt:settings.prompt,settings,modelName:settings.model}}:undefined;
+      if(attachment&&!await loadProjectState(attachment.projectId))await saveProjectState(attachment.projectId,{id:attachment.projectId});
+      const resultUrl = await generateVideoFromImage(referenceImageUrl, settings,attachment);
+      if(isLocalMode&&activeProject.current!==currentProjectId)return;
 
       // Upload to Firebase Storage if user is logged in and result is a blob URL
       let finalVideoUrl = resultUrl;
@@ -195,7 +207,8 @@ const VideoCreator: React.FC<VideoCreatorProps> = ({
             onSettingsChange={handleSettingsChange}
             onGenerate={handleGenerateVideo}
             isLoading={isLoading}
-            isApiKeySelected={isApiKeySelected}
+            isApiKeySelected={isLocalMode?true:isApiKeySelected}
+            disabledReason={isLocalMode&&!capabilities.videoEnabled?'Video generation is disabled in the server configuration.':undefined}
             onSelectApiKey={handleSelectApiKey}
             projectList={projectList}
             currentProjectId={currentProjectId}

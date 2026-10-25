@@ -17,6 +17,17 @@ import {
 } from "firebase/auth";
 import { auth } from "./firebase";
 import { createUserDocument, checkUserExists, updateLastLogin } from "./userService";
+import { isLocalMode } from './runtimeConfig';
+import { localRequest, setSessionOwner } from './localApi';
+
+let localUser: FirebaseUser | null = null;
+const localListeners = new Set<(user: FirebaseUser | null) => void>();
+const publishLocalUser = (user: FirebaseUser | null) => {
+    localUser = user;
+    setSessionOwner(user?.uid||null);
+    window.dispatchEvent(new Event('formlab:session'));
+    localListeners.forEach(listener => listener(user));
+};
 
 export interface AuthError {
     code: string;
@@ -33,6 +44,12 @@ export const signUpWithEmail = async (
     displayName?: string,
     photoURL?: string
 ): Promise<string> => {
+    if (isLocalMode) {
+        setSessionOwner(null);window.dispatchEvent(new Event('formlab:session'));
+        const result = await localRequest<{user: FirebaseUser}>('/api/auth/register', {method: 'POST', body: JSON.stringify({email, password, displayName})});
+        publishLocalUser(result.user);
+        return email;
+    }
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
@@ -76,6 +93,12 @@ export const signInWithEmail = async (
     email: string,
     password: string
 ): Promise<FirebaseUser> => {
+    if (isLocalMode) {
+        setSessionOwner(null);window.dispatchEvent(new Event('formlab:session'));
+        const result = await localRequest<{user: FirebaseUser}>('/api/auth/login', {method: 'POST', body: JSON.stringify({email, password})});
+        publishLocalUser(result.user);
+        return result.user;
+    }
     try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         return userCredential.user;
@@ -93,6 +116,7 @@ export const signInWithEmail = async (
  * Sign out the current user
  */
 export const signOutUser = async (): Promise<void> => {
+    if (isLocalMode) { setSessionOwner(null);window.dispatchEvent(new Event('formlab:session')); await localRequest('/api/auth/logout', {method: 'POST'}); publishLocalUser(null); return; }
     await signOut(auth);
 };
 
@@ -100,6 +124,13 @@ export const signOutUser = async (): Promise<void> => {
  * Listen to authentication state changes
  */
 export const onAuthStateChanged = (callback: (user: FirebaseUser | null) => void) => {
+    if (isLocalMode) {
+        localListeners.add(callback);
+        void localRequest<{user: FirebaseUser | null}>('/api/auth/session').then(result => {
+            if (localListeners.has(callback)) { setSessionOwner(result.user?.uid||null);localUser = result.user;callback(result.user);window.dispatchEvent(new Event('formlab:recovery')); }
+        }).catch(() => { if (localListeners.has(callback)) callback(null); });
+        return () => { localListeners.delete(callback); };
+    }
     return firebaseOnAuthStateChanged(auth, callback);
 };
 
@@ -107,6 +138,7 @@ export const onAuthStateChanged = (callback: (user: FirebaseUser | null) => void
  * Send password reset email
  */
 export const resetPassword = async (email: string): Promise<void> => {
+    if (isLocalMode) throw new Error('Local mode has no email delivery. Use your local account password.');
     try {
         await sendPasswordResetEmail(auth, email);
     } catch (error: any) {
@@ -121,6 +153,7 @@ export const resetPassword = async (email: string): Promise<void> => {
  * Sign in with Google
  */
 export const signInWithGoogle = async (): Promise<FirebaseUser> => {
+    if (isLocalMode) throw new Error('Use email and password in local mode. Google sign-in requires a configured identity provider.');
     try {
         const provider = new GoogleAuthProvider();
         const result = await signInWithPopup(auth, provider);
@@ -154,5 +187,6 @@ export const signInWithGoogle = async (): Promise<FirebaseUser> => {
     }
 };
 export const getCurrentUserId = () => {
+    if (isLocalMode) return localUser?.uid || null;
     return auth.currentUser?.uid || null;
 };

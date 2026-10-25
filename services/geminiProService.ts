@@ -3,10 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GoogleGenAI, GenerateContentResponse, Modality, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { GenerateContentResponse, Modality, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { GenerationSettings, GarmentAnalysis, ShotFraming } from "../types";
 import { storage } from "./firebase";
 import { ref, getBlob } from "firebase/storage";
+import { aiGateway,deliveryGateway,GenerationAttachment } from './aiGateway';
+import { uploadAsset, localAssetId, mediaFetchOptions } from './localApi';
+import { isLocalMode } from './runtimeConfig';
 import {
     getGenerationPromptSuffix,
     getStudioEnvironmentPrompt,
@@ -31,6 +34,7 @@ export interface GenerationResult {
 
 // Helper for file to part conversion (duplicated to avoid circular dependency issues if not exported)
 const fileToPart = async (file: File) => {
+    if (isLocalMode) return { assetId: (await uploadAsset(file)).id };
     const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -66,7 +70,7 @@ const urlToDataUrl = async (url: string): Promise<string> => {
                 throw new Error('Invalid Firebase Storage URL format');
             }
         } else {
-            const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+            const response = await fetch(url, mediaFetchOptions(url));
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             blob = await response.blob();
         }
@@ -84,6 +88,7 @@ const urlToDataUrl = async (url: string): Promise<string> => {
 }
 
 const dataUrlToPart = async (url: string) => {
+    if (isLocalMode && localAssetId(url)) return {assetId:localAssetId(url)};
     const dataUrl = await urlToDataUrl(url);
     const { mimeType, data } = dataUrlToParts(dataUrl);
     return { inlineData: { mimeType, data } };
@@ -167,6 +172,8 @@ const handleApiResponse = (response: GenerateContentResponse): GenerationResult 
         }
 
         // Capture image (IMAGE modality)
+        const stored = candidate.content?.parts?.find(part => part.fileData?.fileUri)?.fileData?.fileUri;
+        if (stored) imageUrl = stored;
         const imagePart = candidate.content?.parts?.find(part => part.inlineData);
         if (imagePart?.inlineData) {
             const { mimeType, data } = imagePart.inlineData;
@@ -186,7 +193,7 @@ const handleApiResponse = (response: GenerateContentResponse): GenerationResult 
     throw new Error(`The AI model did not return an image. ` + (textFeedback ? `Response: "${textFeedback}"` : "Please try again."));
 };
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+const ai = aiGateway;
 const MODEL_NAME = 'gemini-3-pro-image-preview'; // Nano Banana Pro
 
 const REALISM_TOKENS = "8k resolution, raw photo, cinematic lighting, sharp focus, Fujifilm GFX 100, Kodak Portra 400, hyper-detailed skin texture, visible pores, vellus hair, subsurface scattering, natural complexion imperfections, slight skin unevenness, realistic eyes, moist lips, no airbrushing, highly detailed, micro-details, peach fuzz, natural skin oils, imperfect skin texture, Phase One XF IQ4, Profoto studio lighting";
@@ -278,7 +285,8 @@ const getPoseAndExpressionPrompt = (settings: GenerationSettings): string => {
 
 // --- Main Generation Functions for Gemini 3 Pro ---
 
-export const generateModelImagePro = async (userImages: File[], settings: GenerationSettings): Promise<GenerationResult> => {
+export const generateModelImagePro = async (userImages: File[], settings: GenerationSettings,attachment?:GenerationAttachment): Promise<GenerationResult> => {
+    const ai=deliveryGateway(attachment);
     const imageParts = await Promise.all(userImages.map(fileToPart));
 
     // Use the EXACT same prompt construction as Nano Banana (geminiService.ts generateModelImage)
@@ -381,7 +389,8 @@ Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distort
     return handleApiResponse(response);
 };
 
-export const generateModelFromDescriptionPro = async (description: string, settings: GenerationSettings): Promise<GenerationResult> => {
+export const generateModelFromDescriptionPro = async (description: string, settings: GenerationSettings,attachment?:GenerationAttachment): Promise<GenerationResult> => {
+    const ai=deliveryGateway(attachment);
     // Use the EXACT same prompt construction as Nano Banana (geminiService.ts generateModelFromDescription)
     // Conditionally apply Global Controls based on panel toggles
     const lightingPrompt = settings.panelToggles.lighting
@@ -453,8 +462,10 @@ export const reviseGeneratedImagePro = async (
     baseImageUrl: string,
     revisionInstruction: string,
     settings: GenerationSettings,
-    outfitInstruction?: string
+    outfitInstruction?: string,
+    attachment?:GenerationAttachment
 ): Promise<GenerationResult> => {
+    const ai=deliveryGateway(attachment);
     const baseImagePart = await dataUrlToPart(baseImageUrl);
     const promptSuffix = getGenerationPromptSuffix(settings);
 
@@ -698,8 +709,10 @@ export const reviseMaskedImagePro = async (
     baseImageUrl: string,
     maskDataUrl: string,
     revisionPrompt: string,
-    settings: GenerationSettings
+    settings: GenerationSettings,
+    attachment?:GenerationAttachment
 ): Promise<GenerationResult> => {
+    const ai=deliveryGateway(attachment);
     const baseImagePart = await dataUrlToPart(baseImageUrl);
     const maskImagePart = await dataUrlToPart(maskDataUrl);
 

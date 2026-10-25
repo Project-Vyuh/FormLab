@@ -28,16 +28,17 @@ service firebase.storage {
       allow create, update: if isOwner(userId) &&
         isValidSize() &&
         isValidImageOrVideo() &&
-        category in ['models', 'wardrobe', 'tryons', 'videos', 'products'];
+        category in ['models', 'wardrobe', 'tryons', 'videos', 'products', 'composites', 'templates'];
 
       // Allow users to delete their own files (no validation needed for deletion)
       allow delete: if isOwner(userId) &&
-        category in ['models', 'wardrobe', 'tryons', 'videos', 'products'];
+        category in ['models', 'wardrobe', 'tryons', 'videos', 'products', 'composites', 'templates'];
     }
 
     // Temporary uploads (e.g., for processing)
     match /temp/{userId}/{allPaths=**} {
-      allow read, write: if isOwner(userId) &&
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId) &&
         isValidSize() &&
         isValidImageOrVideo();
 

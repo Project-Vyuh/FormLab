@@ -79,7 +79,7 @@ Before deploying, ensure:
 
 **API Key Location:** `functions/.env`
 ```
-GEMINI_API_KEY=AIzaSyCIwx3VrQFAVAd4yS7qABqAswMw3-jtmyg
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 **Firebase Project:** formlab-42fae
@@ -147,7 +147,7 @@ After deployment, restrict your Gemini API key:
 
 1. Go to Google Cloud Console: https://console.cloud.google.com
 2. Navigate to **APIs & Services → Credentials**
-3. Find your API key: `AIzaSyCIwx3VrQFAVAd4yS7qABqAswMw3-jtmyg`
+3. Copy your API key from Google AI Studio and place it only in `.env.local`.
 4. Click Edit
 5. Under **API restrictions**, select "Restrict key"
 6. Enable only:

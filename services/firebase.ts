@@ -8,31 +8,39 @@ import { getAuth } from "firebase/auth";
 import { getAnalytics } from "firebase/analytics";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { isLocalMode } from './runtimeConfig';
 
 // Your web app's Firebase configuration
-const firebaseConfig = {
-    apiKey: "AIzaSyB2C3HxOgPrh8zFatrHCW4RdZXQlMTHhZc",
-    authDomain: "formlab-42fae.firebaseapp.com",
-    projectId: "formlab-42fae",
-    storageBucket: "formlab-42fae.firebasestorage.app",
-    messagingSenderId: "753589341990",
-    appId: "1:753589341990:web:f0fbdaed9c6c4f77e6fbe7",
-    measurementId: "G-6120V7NC94"
+const firebaseConfig = isLocalMode ? {
+    apiKey: 'local-mode', authDomain: 'localhost', projectId: 'formlab-local',
+    storageBucket: 'formlab-local.invalid', messagingSenderId: '0', appId: 'local-mode',
+} : {
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
+if (!isLocalMode && Object.entries(firebaseConfig).some(([key, value]) => key !== 'measurementId' && !value)) {
+    throw new Error('Firebase mode requires all VITE_FIREBASE_* values in .env.local');
+}
+
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = isLocalMode ? null : initializeApp(firebaseConfig);
 
 // Initialize Firebase Authentication and get a reference to the service
-export const auth = getAuth(app);
+export const auth = (app ? getAuth(app) : null) as ReturnType<typeof getAuth>;
 
 // Initialize Analytics
-export const analytics = getAnalytics(app);
+export const analytics = !isLocalMode && typeof window !== 'undefined' ? getAnalytics(app) : null;
 
 // Initialize Firestore and get a reference to the service
-export const db = getFirestore(app);
+export const db = (app ? getFirestore(app) : null) as ReturnType<typeof getFirestore>;
 
 // Initialize Firebase Storage and get a reference to the service
-export const storage = getStorage(app);
+export const storage = (app ? getStorage(app) : null) as ReturnType<typeof getStorage>;
 
 export default app;

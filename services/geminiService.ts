@@ -3,12 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import { GoogleGenAI, GenerateContentResponse, Modality, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { GenerateContentResponse, Modality, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { GenerationSettings, VideoGenerationSettings, AspectRatio, GarmentAnalysis, UpscaleResolution, Light, LightingRig, SceneAtmosphere, ImageProcessingSettings, LensProfile, ApertureSettings, BokehShape, ShutterSettings, SensorSize, CameraPositionSettings, FocusPlaneSettings, CameraProfile, NoiseAndGrainSettings, StudioEnvironment, ShadowSculptingSettings, FloorSettings, AmbientBounceSettings, AmbientOcclusionSettings, DigitalDarkroomSettings, ShotFraming } from "../types";
 import { storage } from "./firebase";
 import { ref, getBlob } from "firebase/storage";
+import { aiGateway, getGenerationJob, startVideoGeneration,waitForGeneration,deliveryGateway,GenerationAttachment } from './aiGateway';
+import { uploadAsset, localAssetId, mediaFetchOptions } from './localApi';
+import { isLocalMode } from './runtimeConfig';
 
 const fileToPart = async (file: File) => {
+    if (isLocalMode) return { assetId: (await uploadAsset(file)).id };
     const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -68,7 +72,7 @@ const urlToDataUrl = async (url: string): Promise<string> => {
         } else {
             // For non-Firebase URLs (blob URLs, etc.), use regular fetch
             console.log('Non-Firebase URL, using regular fetch');
-            const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+            const response = await fetch(url, mediaFetchOptions(url));
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             blob = await response.blob();
         }
@@ -87,6 +91,7 @@ const urlToDataUrl = async (url: string): Promise<string> => {
 }
 
 const dataUrlToPart = async (url: string) => {
+    if (isLocalMode && localAssetId(url)) return {assetId:localAssetId(url)};
     // Convert any URL type to data URL first
     const dataUrl = await urlToDataUrl(url);
     const { mimeType, data } = dataUrlToParts(dataUrl);
@@ -862,6 +867,8 @@ const handleApiResponse = (response: GenerateContentResponse): string => {
     }
 
     for (const candidate of response.candidates ?? []) {
+        const stored = candidate.content?.parts?.find(part => part.fileData?.fileUri)?.fileData?.fileUri;
+        if (stored) return stored;
         const imagePart = candidate.content?.parts?.find(part => part.inlineData);
         if (imagePart?.inlineData) {
             const { mimeType, data } = imagePart.inlineData;
@@ -879,7 +886,7 @@ const handleApiResponse = (response: GenerateContentResponse): string => {
     throw new Error(errorMessage);
 };
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+const ai = aiGateway;
 
 const REALISM_TOKENS = "8k resolution, raw photo, cinematic lighting, sharp focus, Fujifilm GFX 100, Kodak Portra 400, hyper-detailed skin texture, visible pores, vellus hair, subsurface scattering, natural complexion imperfections, slight skin unevenness, realistic eyes, moist lips, no airbrushing, highly detailed, micro-details, peach fuzz, natural skin oils, imperfect skin texture, Phase One XF IQ4, Profoto studio lighting";
 const ANATOMY_TOKENS = "perfectly rendered hands, anatomically correct fingers, symmetrical facial features, natural eyes with corneal reflections, realistic muscle definition, natural posture, micro-expressions";
@@ -953,7 +960,8 @@ const getPoseAndExpressionPrompt = (settings: GenerationSettings): string => {
     return `**Dynamic Pose:** ${randomPose}. **Expression:** ${randomExpression}. The model should look alive, with engaging eyes and natural micro-expressions. Avoid stiff, robotic, or mannequin-like poses.`;
 };
 
-export const generateModelImage = async (userImage: File, settings: GenerationSettings, model: string): Promise<string> => {
+export const generateModelImage = async (userImage: File, settings: GenerationSettings, model: string,attachment?:GenerationAttachment): Promise<string> => {
+    const ai=deliveryGateway(attachment);
     const userImagePart = await fileToPart(userImage);
 
     // Conditionally apply Global Controls based on panel toggles
@@ -1052,7 +1060,8 @@ Do not generate: cropped head, cropped feet, missing limbs, extra limbs, distort
     return handleApiResponse(response);
 };
 
-export const generateModelFromDescription = async (description: string, settings: GenerationSettings, model: string): Promise<string> => {
+export const generateModelFromDescription = async (description: string, settings: GenerationSettings, model: string,attachment?:GenerationAttachment): Promise<string> => {
+    const ai=deliveryGateway(attachment);
     // Conditionally apply Global Controls based on panel toggles
     const lightingPrompt = settings.panelToggles.lighting
         ? getLightingPrompt(settings.lightingRig, settings.accessoryPrompt)
@@ -1669,7 +1678,7 @@ CRITICAL INSTRUCTIONS:
         console.error('Response text preview:', response.text?.substring(0, 500));
 
         // Retry with simplified prompt if we haven't exceeded max retries
-        if (retryCount < maxRetries) {
+        if (!isLocalMode && retryCount < maxRetries) {
             console.log(`Retrying garment analysis (attempt ${retryCount + 1}/${maxRetries})...`);
             await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
             return analyzeGarmentDetailed(garmentImage, retryCount + 1);
@@ -1866,7 +1875,8 @@ ${promptSuffix}`;
     return handleApiResponse(response);
 };
 
-export const reviseGeneratedImage = async (baseImageUrl: string, revisionPrompt: string, settings: GenerationSettings, model: string, outfitInstruction?: string): Promise<string> => {
+export const reviseGeneratedImage = async (baseImageUrl: string, revisionPrompt: string, settings: GenerationSettings, model: string, outfitInstruction?: string,attachment?:GenerationAttachment): Promise<string> => {
+    const ai=deliveryGateway(attachment);
     const baseImagePart = await dataUrlToPart(baseImageUrl);
     const promptSuffix = getGenerationPromptSuffix(settings);
 
@@ -1913,7 +1923,8 @@ ${QA_NEGATIVE_PROMPT}`;
     return handleApiResponse(response);
 };
 
-export const reviseMaskedImage = async (baseImageUrl: string, maskDataUrl: string, revisionPrompt: string, settings: GenerationSettings): Promise<string> => {
+export const reviseMaskedImage = async (baseImageUrl: string, maskDataUrl: string, revisionPrompt: string, settings: GenerationSettings,attachment?:GenerationAttachment): Promise<string> => {
+    const ai=deliveryGateway(attachment);
     const model = 'gemini-2.5-flash-image';
     const baseImagePart = await dataUrlToPart(baseImageUrl);
     const maskImagePart = await dataUrlToPart(maskDataUrl);
@@ -2017,17 +2028,15 @@ export const analyzeGarment = async (garmentImage: File): Promise<GarmentAnalysi
     }
 };
 
-export const generateVideoFromImage = async (referenceImageUrl: string, settings: VideoGenerationSettings): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-
-    const { mimeType, data } = dataUrlToParts(referenceImageUrl);
-
-    let operation = await ai.models.generateVideos({
+export const generateVideoFromImage = async (referenceImageUrl: string, settings: VideoGenerationSettings,attachment?:GenerationAttachment): Promise<string> => {
+    const storedId = /^\/assets\/([a-f0-9-]{36})$/.exec(referenceImageUrl)?.[1];
+    const assetId = storedId || (await uploadAsset(await (await fetch(referenceImageUrl)).blob())).id;
+    const { jobId } = await startVideoGeneration({
+        ...(attachment?{attachment}:{}),
         model: settings.model,
         prompt: settings.prompt,
         image: {
-            imageBytes: data,
-            mimeType: mimeType,
+            assetId,
         },
         config: {
             numberOfVideos: 1,
@@ -2035,26 +2044,6 @@ export const generateVideoFromImage = async (referenceImageUrl: string, settings
             aspectRatio: settings.aspectRatio,
         }
     });
-
-    while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 10000));
-        operation = await ai.operations.getVideosOperation({ operation: operation });
-    }
-
-    if (operation.error) {
-        throw new Error(`Video generation failed: ${operation.error.message}`);
-    }
-
-    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) {
-        throw new Error("Video generation completed, but no download link was found.");
-    }
-
-    const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY!}`);
-    if (!videoResponse.ok) {
-        throw new Error(`Failed to download the generated video.`);
-    }
-    const videoBlob = await videoResponse.blob();
-
-    return URL.createObjectURL(videoBlob);
+    const job=await waitForGeneration(jobId);
+    if(!job.outputUrl)throw Error('Video output is missing');return job.outputUrl;
 };

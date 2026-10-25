@@ -3,13 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useState, useCallback, useEffect, useMemo } from 'react';
 import Header from './components/Header';
 import CreateModel, { initialGenerationSettings } from './components/CreateModel';
-import ImageStudio from './components/ImageStudio';
-import VideoCreator from './components/VideoCreator';
-import Templates from './components/Templates';
-import Projects from './components/Projects';
 import Auth from './components/Auth';
 import EmailVerification from './components/EmailVerification';
 import ProjectOnboarding from './components/ProjectOnboarding';
@@ -24,9 +20,14 @@ import { getUserDocument, updateLastLogin, createUserDocument } from './services
 import { loadPredefinedModels, PredefinedModel, getGlobalModels, subscribeToGlobalModels } from './services/firestoreService';
 import { loadAllUserProjectsFromFirestore, loadProjectFromFirestore, deleteProjectFromFirestore } from './services/firestoreSync';
 import { deleteFolderContents } from './services/storageService';
-import { auth } from './services/firebase';
+import { isLocalMode } from './services/runtimeConfig';
 import { SyncProvider } from './contexts/SyncContext';
 import { LogoBrandingProvider } from './contexts/LogoBrandingContext';
+
+const ImageStudio = lazy(() => import('./components/ImageStudio'));
+const VideoCreator = lazy(() => import('./components/VideoCreator'));
+const Templates = lazy(() => import('./components/Templates'));
+const Projects = lazy(() => import('./components/Projects'));
 
 
 export type View = 'createModel' | 'imageStudio' | 'videoCreator' | 'templates' | 'projects';
@@ -99,6 +100,19 @@ const App: React.FC = () => {
         }
 
         try {
+          if (isLocalMode) {
+            const user: User = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+            };
+            setCurrentUser(user);
+            setUnverifiedEmail(null);
+            setAuthLoading(false);
+            setCurrentUserId(user.uid);
+            return;
+          }
           // Fetch user data from Firestore
           let userData = await getUserDocument(firebaseUser.uid);
 
@@ -172,7 +186,7 @@ const App: React.FC = () => {
   // Migrate IndexedDB to Firestore when user logs in
   useEffect(() => {
     const runFirestoreMigration = async () => {
-      if (!currentUser) return;
+      if (!currentUser || isLocalMode) return;
 
       // Check if migrations have already been run for this user
       const base64MigrationKey = `formlab-base64-migration-${currentUser.uid}`;
@@ -233,24 +247,22 @@ const App: React.FC = () => {
         console.log(`[App] Loaded ${projects.length} projects from IndexedDB`);
 
         // Step 2: ALWAYS load from Firestore to ensure sync across devices
-        console.log('[App] Checking Firestore for project updates...');
-        try {
-          const firestoreProjects = await loadAllUserProjectsFromFirestore(currentUser.uid);
-          console.log(`[App] Loaded ${firestoreProjects.length} projects from Firestore`);
+        if (!isLocalMode) {
+          console.log('[App] Checking Firestore for project updates...');
+          try {
+            const firestoreProjects = await loadAllUserProjectsFromFirestore(currentUser.uid);
+            console.log(`[App] Loaded ${firestoreProjects.length} projects from Firestore`);
 
-          if (firestoreProjects.length > 0) {
-            // Merge strategy: Firestore is the source of truth for existence.
-            // 1. Save all Firestore projects to IndexedDB (updating existing ones)
-            for (const project of firestoreProjects) {
-              await saveProjectMetadata(project);
+            if (firestoreProjects.length > 0) {
+              for (const project of firestoreProjects) {
+                await saveProjectMetadata(project);
+              }
+
+              projects = await dbGetAllProjectMetadata();
             }
-
-            // 2. Update local projects list to reflect Firestore data
-            projects = await dbGetAllProjectMetadata();
+          } catch (err) {
+            console.error("[App] Failed to sync projects from Firestore:", err);
           }
-        } catch (err) {
-          console.error("[App] Failed to sync projects from Firestore:", err);
-          // Fallback to local projects if offline
         }
 
         // Step 3: If still no projects (new user), create default
@@ -647,7 +659,6 @@ const App: React.FC = () => {
       console.log('[App] Starting project deletion:', projectId);
 
       // Get current user for storage paths
-      const currentUser = auth.currentUser;
       const userId = currentUser?.uid;
 
       // 1. Delete from Firebase Storage (all project files)
@@ -662,12 +673,13 @@ const App: React.FC = () => {
         }
 
         // 2. Delete from Firestore
-        try {
-          await deleteProjectFromFirestore(projectId, userId);
-          console.log('[App] Deleted project from Firestore');
-        } catch (firestoreError) {
-          console.warn('[App] Failed to delete from Firestore:', firestoreError);
-          // Continue with other deletions
+        if (!isLocalMode) {
+          try {
+            await deleteProjectFromFirestore(projectId, userId);
+            console.log('[App] Deleted project from Firestore');
+          } catch (firestoreError) {
+            console.warn('[App] Failed to delete from Firestore:', firestoreError);
+          }
         }
       } else {
         console.warn('[App] No user logged in, skipping Firebase deletion');
@@ -768,7 +780,7 @@ const App: React.FC = () => {
                 <ProjectOnboarding onProjectCreated={handleFirstProjectCreated} />
               </div>
             ) : (
-              <>
+              <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center text-gray-400">Loading workspace…</div>}>
                 <div className={`${activeView === 'createModel' ? 'block' : 'hidden'} absolute inset-0 bg-[#1a1a1a]`}>
                   <CreateModel
                     onModelFinalized={handleModelCreated}
@@ -821,9 +833,16 @@ const App: React.FC = () => {
                   <Templates wardrobeCategories={wardrobeCategories} currentUser={currentUser} />
                 </div>
                 <div className={`${activeView === 'projects' ? 'block' : 'hidden'} absolute inset-0`}>
-                  <Projects />
+                  <Projects
+                    projects={projectList}
+                    currentProjectId={currentProjectId}
+                    onSelect={id => void handleProjectChange(id)}
+                    onCreate={() => handleOpenProjectModal('create')}
+                    onDelete={handleDeleteProject}
+                    onOpen={() => setActiveView('createModel')}
+                  />
                 </div>
-              </>
+              </Suspense>
             )}
           </div>
 

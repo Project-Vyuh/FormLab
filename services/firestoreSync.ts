@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {isLocalMode} from './runtimeConfig';
+import {deleteProjectHistory} from './localDocuments';
 import {
     doc,
     setDoc,
@@ -709,6 +711,7 @@ export const deleteHistoryItemFromFirestore = async (
     collectionPath: string,
     itemId: string
 ): Promise<void> => {
+    if(isLocalMode){await deleteProjectHistory(projectId,itemId);return;}
     try {
         const itemRef = doc(db, 'projects', projectId, collectionPath, itemId);
         await deleteDoc(itemRef);

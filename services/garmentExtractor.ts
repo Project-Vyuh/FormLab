@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GoogleGenAI, GenerateContentResponse, Modality, Type } from "@google/genai";
+import { GenerateContentResponse, Modality, Type } from "@google/genai";
+import { aiGateway } from './aiGateway';
+import { uploadAsset } from './localApi';
+import { isLocalMode } from './runtimeConfig';
 
-const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+const genAI = aiGateway;
 
 export interface GarmentExtractionResult {
     extractedImageUrl: string;
@@ -30,6 +33,7 @@ async function fileToDataUrl(file: File): Promise<string> {
  * Convert File to Part object for Gemini API
  */
 async function fileToPart(file: File) {
+    if (isLocalMode) return { assetId: (await uploadAsset(file)).id };
     const dataUrl = await fileToDataUrl(file);
     const arr = dataUrl.split(',');
     if (arr.length < 2) throw new Error("Invalid data URL");

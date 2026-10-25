@@ -1,0 +1,1 @@
+export default {darkMode:'class',content:['./index.html','./App.tsx','./components/**/*.{ts,tsx}','./hooks/**/*.{ts,tsx}'],theme:{extend:{fontFamily:{sans:['Inter','sans-serif'],serif:['Instrument Serif','serif']}}},plugins:[]};

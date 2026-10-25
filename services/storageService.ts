@@ -11,6 +11,20 @@ import {
     UploadMetadata,
 } from "firebase/storage";
 import { storage } from "./firebase";
+import { isLocalMode, runtimeConfig } from './runtimeConfig';
+import { uploadAsset, localRequest } from './localApi';
+
+const blobToDataUrl = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+});
+
+async function uploadLocalAsset(blob: Blob): Promise<string> {
+    const payload = await uploadAsset(blob);
+    return `${runtimeConfig.apiBaseUrl}${payload.url}`;
+}
 
 /**
  * Convert base64 data URL to Blob
@@ -42,7 +56,7 @@ function base64ToBlob(base64Data: string): Blob {
  */
 function generateFilePath(
     userId: string,
-    category: 'models' | 'wardrobe' | 'tryons' | 'videos' | 'products' | 'composites',
+    category: 'models' | 'wardrobe' | 'tryons' | 'videos' | 'products' | 'composites' | 'templates',
     fileName: string,
     projectId?: string
 ): string {
@@ -68,10 +82,12 @@ function generateFilePath(
 export async function uploadBase64Image(
     base64Data: string,
     userId: string,
-    category: 'models' | 'wardrobe' | 'tryons' | 'products' | 'composites',
+    category: 'models' | 'wardrobe' | 'tryons' | 'products' | 'composites' | 'templates',
     fileName: string = 'image.jpg',
     projectId?: string
 ): Promise<string> {
+    if (isLocalMode && /^\/assets\/[a-f0-9-]{36}$/.test(base64Data)) return base64Data;
+    if (isLocalMode) return uploadLocalAsset(base64ToBlob(base64Data));
     try {
         // Convert base64 to Blob
         const blob = base64ToBlob(base64Data);
@@ -117,9 +133,10 @@ export async function uploadBase64Image(
 export async function uploadFile(
     file: File,
     userId: string,
-    category: 'models' | 'wardrobe' | 'tryons' | 'products' | 'composites',
+    category: 'models' | 'wardrobe' | 'tryons' | 'products' | 'composites' | 'templates',
     projectId?: string
 ): Promise<string> {
+    if (isLocalMode) return uploadLocalAsset(file);
     try {
         // Generate file path
         const filePath = generateFilePath(userId, category, file.name, projectId);
@@ -164,6 +181,7 @@ export async function uploadVideoBlob(
     userId: string,
     fileName: string = 'video.mp4'
 ): Promise<string> {
+    if (isLocalMode) return uploadLocalAsset(blob);
     try {
         // Generate file path
         const filePath = generateFilePath(userId, 'videos', fileName);
@@ -200,6 +218,13 @@ export async function uploadVideoBlob(
  * @param fileUrl - Full download URL or storage path
  */
 export async function deleteFile(fileUrl: string): Promise<void> {
+    if (isLocalMode) {
+        const base = new URL(runtimeConfig.apiBaseUrl || window.location.origin, window.location.origin);
+        const parsed = new URL(fileUrl, base);
+        if (parsed.origin !== base.origin || !parsed.pathname.startsWith('/assets/')) return;
+        await localRequest(`/api${parsed.pathname}`, { method: 'DELETE' });
+        return;
+    }
     try {
         // Extract path from URL if it's a full download URL
         let filePath = fileUrl;
@@ -230,6 +255,7 @@ export async function deleteFile(fileUrl: string): Promise<void> {
  * @param folderPath - Path to the folder (e.g., 'users/userId/models/projectId')
  */
 export async function deleteFolderContents(folderPath: string): Promise<void> {
+    if (isLocalMode) return;
     try {
         const { listAll } = await import('firebase/storage');
         const folderRef = ref(storage, folderPath);
@@ -265,6 +291,7 @@ export async function deleteFolderContents(folderPath: string): Promise<void> {
  * @returns Download URL
  */
 export async function getFileUrl(filePath: string): Promise<string> {
+    if (isLocalMode) return filePath;
     try {
         const storageRef = ref(storage, filePath);
         const downloadURL = await getDownloadURL(storageRef);
@@ -281,6 +308,7 @@ export async function getFileUrl(filePath: string): Promise<string> {
  * @returns True if it's a Firebase Storage URL
  */
 export function isStorageUrl(url: string): boolean {
+    if (isLocalMode) return url.startsWith(`${runtimeConfig.apiBaseUrl}/assets/`) || url.startsWith('data:') || url.startsWith('blob:');
     return url.includes('firebasestorage.googleapis.com') ||
         url.startsWith('gs://');
 }

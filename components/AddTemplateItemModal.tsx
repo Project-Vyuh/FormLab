@@ -98,7 +98,7 @@ const AddTemplateItemModal: React.FC<AddTemplateItemModalProps> = ({ isOpen, onC
 
     onAdd({
       file: importMethod === 'file' ? file || undefined : undefined,
-      jsonData: importMethod === 'json' ? jsonData : undefined,
+      jsonData: jsonData.trim() ? jsonData : undefined,
       method: importMethod,
     });
     onClose();

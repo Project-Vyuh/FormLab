@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { isLocalMode } from '../services/runtimeConfig';
 import { signUpWithEmail, signInWithGoogle } from '../services/authService';
 import Spinner from './Spinner';
 import EmailVerification from './EmailVerification';
@@ -50,8 +51,8 @@ const SignUp: React.FC<SignUpProps> = ({ onSwitchToSignIn }) => {
         }
 
         // Validate password length
-        if (password.length < 6) {
-            setError('Password must be at least 6 characters');
+        if (password.length < (isLocalMode ? 12 : 6)) {
+            setError(`Password must be at least ${isLocalMode ? 12 : 6} characters`);
             return;
         }
 
@@ -60,6 +61,7 @@ const SignUp: React.FC<SignUpProps> = ({ onSwitchToSignIn }) => {
         try {
             const fullName = `${firstName} ${lastName}`;
             const userEmail = await signUpWithEmail(email, password, fullName);
+            if (isLocalMode) return;
             // Show verification screen
             setRegisteredEmail(userEmail);
             setShowVerification(true);
@@ -117,6 +119,7 @@ const SignUp: React.FC<SignUpProps> = ({ onSwitchToSignIn }) => {
             )}
 
             {/* Google Sign Up Button */}
+            {!isLocalMode&&<>
             <button
                 onClick={handleGoogleSignUp}
                 disabled={isLoading}
@@ -139,6 +142,7 @@ const SignUp: React.FC<SignUpProps> = ({ onSwitchToSignIn }) => {
             </div>
 
             {/* Multi-step Form */}
+            </>}
             <form onSubmit={showPasswordFields ? handleSubmit : (showEmailField ? handleEmailContinue : handleNameContinue)} className="space-y-3">
                 {/* Name Field(s) */}
                 {!showEmailField ? (

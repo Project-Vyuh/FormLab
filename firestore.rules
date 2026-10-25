@@ -48,20 +48,18 @@ service cloud.firestore {
          request.resource.data.userId == request.auth.uid)
       );
 
-      // Allow delete for: owner, or orphaned projects (null/missing userId)
-      allow delete: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid ||
-        resource.data.userId == null ||
-        !resource.data.keys().hasAny(['userId'])
-      );
+      // Client deletion is owner-only. Orphan cleanup belongs in trusted admin tooling.
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
 
       // Generated Model History - Direct collection for Create Model workflow
       match /generatedModelHistory/{historyId} {
-        allow read, write: if isAuthenticated() &&
+        allow read, delete: if isAuthenticated() &&
           isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
 
         // Validate history item structure (createdAt optional as it can be serverTimestamp)
-        allow create: if request.resource.data.keys().hasAll(['type', 'imageUrl']) &&
+        allow create, update: if isAuthenticated() &&
+          isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId) &&
+          request.resource.data.keys().hasAll(['type', 'imageUrl']) &&
           request.resource.data.type in ['model-generation', 'model-revision'] &&
           isValidImageUrl(request.resource.data.imageUrl);
       }
@@ -69,27 +67,34 @@ service cloud.firestore {
       // Styling History - Per-baseModel collections for Image Studio workflow
       // This allows dynamic collection names based on baseModelId (e.g., /projects/{projectId}/rev-123/{historyId})
       match /{baseModelId}/{historyId} {
-        allow read, write: if isAuthenticated() &&
+        allow read, delete: if isAuthenticated() &&
           isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
 
         // Validate try-on history item structure (createdAt optional)
-        allow create: if request.resource.data.keys().hasAll(['type', 'imageUrl']) &&
+        allow create, update: if isAuthenticated() &&
+          isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId) &&
+          request.resource.data.keys().hasAll(['type', 'imageUrl']) &&
           request.resource.data.type in ['try-on', 'try-on-revision'] &&
           isValidImageUrl(request.resource.data.imageUrl);
       }
 
       // Models Subcollection - Unified history for Create Model and Image Studio (legacy/alternative structure)
       match /models/{baseModelId} {
-        allow read, write: if isAuthenticated() &&
+        allow read, delete: if isAuthenticated() &&
+          isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
+
+        allow create, update: if isAuthenticated() &&
           isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
 
         // History Subcollection - model-generation, model-revision, try-on, try-on-revision
         match /history/{historyId} {
-          allow read, write: if isAuthenticated() &&
+          allow read, delete: if isAuthenticated() &&
             isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
 
           // Validate history item structure (createdAt optional as it can be serverTimestamp)
-          allow create: if request.resource.data.keys().hasAll(['type', 'imageUrl']) &&
+          allow create, update: if isAuthenticated() &&
+            isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId) &&
+            request.resource.data.keys().hasAll(['type', 'imageUrl']) &&
             request.resource.data.type in ['model-generation', 'model-revision', 'try-on', 'try-on-revision'] &&
             isValidImageUrl(request.resource.data.imageUrl);
         }
@@ -97,11 +102,13 @@ service cloud.firestore {
 
       // Wardrobe Subcollection
       match /wardrobe/{itemId} {
-        allow read, write: if isAuthenticated() &&
+        allow read, delete: if isAuthenticated() &&
           isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId);
 
         // Validate wardrobe item (relaxed for merge operations)
-        allow create, update: if request.resource.data.url == null || isValidImageUrl(request.resource.data.url);
+        allow create, update: if isAuthenticated() &&
+          isOwner(get(/databases/$(database)/documents/projects/$(projectId)).data.userId) &&
+          (request.resource.data.url == null || isValidImageUrl(request.resource.data.url));
       }
     }
 
@@ -128,10 +135,11 @@ service cloud.firestore {
 
       // Brand Logos Collection
       match /brandLogos/{logoId} {
-        allow read, write: if isAuthenticated() && request.auth.uid == userId;
+        allow read, delete: if isAuthenticated() && request.auth.uid == userId;
         
         // Validate logo structure on create
-        allow create: if request.resource.data.keys().hasAll(['url', 'name', 'createdAt']) &&
+        allow create, update: if isAuthenticated() && request.auth.uid == userId &&
+          request.resource.data.keys().hasAll(['url', 'name', 'createdAt']) &&
           isValidImageUrl(request.resource.data.url);
       }
     }
@@ -169,9 +177,10 @@ service cloud.firestore {
     // User Templates
     // ========================================
     match /user_templates/{templateId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == resource.data.userId;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
     // ========================================

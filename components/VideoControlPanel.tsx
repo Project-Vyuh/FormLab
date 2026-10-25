@@ -18,6 +18,7 @@ interface VideoControlPanelProps {
   isLoading: boolean;
   isApiKeySelected: boolean;
   onSelectApiKey: () => void;
+  disabledReason?:string;
   projectList: Project[];
   currentProjectId: string | null;
   onProjectChange: (id: string) => void;
@@ -41,7 +42,7 @@ const cinematicStyleOptions: { id: CinematicStyle; label: string }[] = [
 
 const VideoControlPanel: React.FC<VideoControlPanelProps> = (props) => {
   const {
-    referenceImageUrl, settings, onSettingsChange, onGenerate, isLoading, isApiKeySelected, onSelectApiKey,
+    referenceImageUrl, settings, onSettingsChange, onGenerate, isLoading, isApiKeySelected, onSelectApiKey,disabledReason,
     projectList, currentProjectId, onProjectChange, onOpenProjectModal
   } = props;
 
@@ -209,7 +210,8 @@ const VideoControlPanel: React.FC<VideoControlPanelProps> = (props) => {
             </p>
           </div>
         )}
-        <button onClick={onGenerate} disabled={isLoading || !settings.prompt || !referenceImageUrl || !isApiKeySelected}
+        {disabledReason&&<p className="text-xs text-yellow-200 mb-2">{disabledReason}</p>}
+        <button onClick={onGenerate} disabled={Boolean(disabledReason)||isLoading || !settings.prompt || !referenceImageUrl || !isApiKeySelected}
           className="w-full py-2 text-xs font-semibold text-black bg-white hover:bg-gray-200 rounded-lg shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-all disabled:opacity-50 disabled:shadow-none">
           {isLoading ? 'Generating...' : 'Generate Video'}
         </button>

@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 body {
   background-color: #1a1a1a; /* Dark gray background for dark mode */
   color: #d1d5db; /* Light gray text for dark mode */

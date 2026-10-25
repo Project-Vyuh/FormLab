@@ -22,6 +22,7 @@ import {
     orderBy
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { isLocalMode } from '../services/runtimeConfig';
 
 interface BrandMarketingSectionProps {
     // Placeholder props for future functionality
@@ -52,6 +53,11 @@ const BrandMarketingSection: React.FC<BrandMarketingSectionProps> = () => {
 
         setIsLoading(true);
         try {
+            if (isLocalMode) {
+                const logos = JSON.parse(localStorage.getItem(`formlab-local-${userId}-brand-logos`) || '[]') as BrandLogo[];
+                setBrandLogos(logos);
+                return;
+            }
             const logosRef = collection(db, `users/${userId}/brandLogos`);
             const q = query(logosRef, orderBy('createdAt', 'desc'));
             const snapshot = await getDocs(q);
@@ -83,6 +89,20 @@ const BrandMarketingSection: React.FC<BrandMarketingSectionProps> = () => {
             const isSvg = logoBlob.type === 'image/svg+xml';
             const fileExt = isSvg ? 'svg' : 'png';
             const contentType = isSvg ? 'image/svg+xml' : 'image/png';
+
+            if (isLocalMode) {
+                const url = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = () => reject(reader.error);
+                    reader.readAsDataURL(logoBlob);
+                });
+                const logo: BrandLogo = { id: logoId, url, name: fileName.replace(/\.[^/.]+$/, ''), createdAt: Date.now(), width: dimensions.width, height: dimensions.height };
+                const next = [logo, ...brandLogos];
+                localStorage.setItem(`formlab-local-${userId}-brand-logos`, JSON.stringify(next));
+                setBrandLogos(next);
+                return;
+            }
 
             const storagePath = `brand-logos/${userId}/${logoId}.${fileExt}`;
 
@@ -136,6 +156,12 @@ const BrandMarketingSection: React.FC<BrandMarketingSectionProps> = () => {
         if (!userId) return;
 
         try {
+            if (isLocalMode) {
+                const next = brandLogos.filter(item => item.id !== logo.id);
+                localStorage.setItem(`formlab-local-${userId}-brand-logos`, JSON.stringify(next));
+                setBrandLogos(next);
+                return;
+            }
             // Delete from Storage
             await deleteFile(logo.url);
 
@@ -413,42 +439,6 @@ const BrandMarketingSection: React.FC<BrandMarketingSectionProps> = () => {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
-
-                        {/* Watermark Toggle - Phase 2 */}
-                        {selectedLogoId && (
-                            <div className="mt-3 flex items-center justify-between pl-0">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                    Use as Watermark
-                                </span>
-                                <label
-                                    className="relative inline-flex items-center flex-shrink-0 cursor-pointer"
-                                    title="Toggle Watermark (Coming Soon)"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        className="sr-only peer"
-                                        disabled
-                                        checked={logoBranding.mode === 'watermark'}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setLogoBranding({
-                                                    ...logoBranding,
-                                                    selectedLogoId,
-                                                    mode: 'watermark',
-                                                    position: null
-                                                });
-                                            } else {
-                                                setLogoBranding({
-                                                    ...logoBranding,
-                                                    mode: null
-                                                });
-                                            }
-                                        }}
-                                    />
-                                    <div className="w-7 h-3.5 bg-white/10 rounded-full peer peer-disabled:opacity-30 peer-checked:after:translate-x-3.5 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-gray-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-white/20 peer-checked:after:bg-white"></div>
-                                </label>
                             </div>
                         )}
 
